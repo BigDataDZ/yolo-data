@@ -92,19 +92,42 @@ function openModelEditor(model = null) {
     body: modelEditorMarkup(currentModel),
     footer: `
       <button class="btn" type="button" data-model-cancel>取消</button>
+      <button class="btn btn-quiet" type="button" data-model-test>${icon('plug', '测试连通性')}测试连通性</button>
       <button class="btn btn-primary" type="button" data-model-save>${icon('saved', '保存模型')}保存模型</button>
     `,
   });
   const value = (selector) => modal.querySelector(selector).value;
+  const modelPayload = () => ({
+    ...(model?.id ? { id: model.id } : {}),
+    name: value('#modelName').trim(),
+    provider: value('#modelProvider'),
+    modelName: value('#modelIdentifier').trim(),
+    baseUrl: value('#modelBaseUrl').trim(),
+    apiKey: value('#modelApiKey').trim(),
+    apiKeyEnv: value('#modelApiKeyEnv').trim(),
+    temperature: Number(value('#modelTemperature')),
+    maxToolRounds: Number(value('#modelMaxToolRounds')),
+    timeoutMs: Number(value('#modelTimeoutMs')),
+    ...(modal.querySelector('#modelClearApiKey')?.checked ? { clearApiKey: true } : {}),
+  });
+  modal.querySelector('[data-model-test]').addEventListener('click', async (event) => {
+    setBusy(event.currentTarget, true, '测试中');
+    try {
+      const result = await api('/api/models/test', {
+        method: 'POST',
+        body: JSON.stringify(modelPayload()),
+      });
+      toast(`连通性正常（${result.latencyMs} ms${result.message ? `，${result.message}` : ''}）`);
+    } catch (error) {
+      toast(`连通性失败：${error.message}`, 'error');
+    } finally {
+      setBusy(event.currentTarget, false);
+    }
+  });
   modal.querySelector('[data-model-cancel]').addEventListener('click', closeModal);
   modal.querySelector('[data-model-save]').addEventListener('click', async (event) => {
     const payload = {
-      name: value('#modelName').trim(),
-      provider: value('#modelProvider'),
-      modelName: value('#modelIdentifier').trim(),
-      baseUrl: value('#modelBaseUrl').trim(),
-      apiKey: value('#modelApiKey').trim(),
-      apiKeyEnv: value('#modelApiKeyEnv').trim(),
+      ...modelPayload(),
       temperature: Number(value('#modelTemperature')),
       maxToolRounds: Number(value('#modelMaxToolRounds')),
       timeoutMs: Number(value('#modelTimeoutMs')),
@@ -183,6 +206,7 @@ async function renderModelsPage(root) {
                   <td><span class="muted">温度 ${model.temperature ?? 0} · ${model.maxToolRounds ?? 12} 轮</span></td>
                   <td>${escapeHtml(formatDate(model.updatedAt))}</td>
                   <td>
+                    <button class="btn btn-quiet btn-small" data-test-model="${model.id}" type="button">${icon('plug', '测试连通性')}测试</button>
                     <button class="btn btn-quiet btn-small" data-edit-model="${model.id}" type="button">${icon('edit', '编辑')}编辑</button>
                     ${!model.isDefault ? `<button class="btn btn-quiet btn-small" data-default-model="${model.id}" type="button">${icon('saved', '设为默认')}设为默认</button>` : ''}
                     <button class="btn btn-quiet btn-small" data-delete-model="${model.id}" type="button">${icon('trash', '删除')}删除</button>
@@ -202,6 +226,22 @@ async function renderModelsPage(root) {
     button.addEventListener('click', () => {
       const model = models.find((item) => Number(item.id) === Number(button.dataset.editModel));
       openModelEditor(model);
+    });
+  });
+  root.querySelectorAll('[data-test-model]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      setBusy(button, true, '测试中');
+      try {
+        const result = await api('/api/models/test', {
+          method: 'POST',
+          body: JSON.stringify({ id: Number(button.dataset.testModel) }),
+        });
+        toast(`连通性正常（${result.latencyMs} ms${result.message ? `，${result.message}` : ''}）`);
+      } catch (error) {
+        toast(`连通性失败：${error.message}`, 'error');
+      } finally {
+        setBusy(button, false);
+      }
     });
   });
   root.querySelectorAll('[data-default-model]').forEach((button) => {

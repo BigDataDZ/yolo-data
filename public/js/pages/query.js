@@ -863,6 +863,7 @@ const EXECUTION_PHASE_DEFINITIONS = [
   { code: 'VALIDATE', name: '校验门禁', description: '校验条件、权限和只读边界' },
   { code: 'EXECUTE', name: '执行查询', description: '执行指标或数据集查询' },
   { code: 'RESULT_ANALYST', name: '结果分析', description: '生成合计、TopN、趋势、异常和业务判断' },
+  { code: 'ANALYSIS_CODE', name: '代码驱动分析', description: '生成分析代码在沙箱内处理已锁定快照并产出契约化结果' },
   { code: 'RESULT_VALIDATION', name: 'Skill 结果验证', description: '按主题 Skill 验证结果和回答证据' },
   { code: 'CODE', name: '代码分析', description: '生成并运行分析代码' },
   { code: 'ANALYZE', name: '分析结果', description: '整理透视、校验和可视化' },

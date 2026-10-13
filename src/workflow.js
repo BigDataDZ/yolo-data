@@ -10,6 +10,7 @@ const BASE_STAGE_DEFINITIONS = [
   { code: 'VALIDATE', name: '校验计划', description: '校验字段白名单、数据集和数据权限' },
   { code: 'EXECUTE', name: '执行查询', description: '通过受控适配器执行只读查询' },
   { code: 'RESULT_ANALYST', name: '结果分析', description: '生成合计、TopN、趋势、异常和业务判断' },
+  { code: 'ANALYSIS_CODE', name: '代码驱动分析', description: '生成分析代码在沙箱内处理已锁定快照，产出符合分析结果契约的产物' },
   { code: 'RESULT_VALIDATION', name: 'Skill 结果验证', description: '按主题 Skill 验证结果和回答证据' },
   { code: 'ANALYZE', name: '分析结果', description: '选择可视化并提炼关键发现' },
   { code: 'RESPOND', name: '生成回答', description: '输出业务回答、证据与执行过程' },

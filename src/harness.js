@@ -26,6 +26,19 @@ function truncate(value, maxLength = 240) {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
 }
 
+function providerErrorMessage(status, payload, responseText) {
+  const text = String(responseText ?? '');
+  if (/<!doctype\s+html|<html[\s>]/i.test(text)) {
+    return `模型服务返回了 HTML 页面（HTTP ${status}），请检查 Base URL 是否包含正确的 API 路径。`;
+  }
+  const detail = payload?.error?.message ?? payload?.message ?? text;
+  const cleaned = String(detail)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `模型服务请求失败（HTTP ${status}）：${truncate(cleaned || '上游服务未返回错误信息')}`;
+}
+
 function normalizeMatchText(value) {
   return String(value ?? '').toLowerCase().replace(/\s+/g, '').trim();
 }
@@ -260,9 +273,7 @@ export class OpenAICompatibleDeepSeekHarness {
         payload = { raw: text };
       }
       if (!response.ok) {
-        throw new Error(
-          `DeepSeek request failed (${response.status}): ${payload?.error?.message ?? text}`,
-        );
+        throw new Error(providerErrorMessage(response.status, payload, text));
       }
       this.onCall?.({
         ...metadata,

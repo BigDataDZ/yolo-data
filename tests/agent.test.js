@@ -46,7 +46,7 @@ test('agent answer enforces user row policy during indicator execution', async (
   assert.ok(answer.processSteps.at(-1).title === '生成业务回答');
   assert.equal(answer.semanticParse.status, 'VALIDATED');
   assert.equal(answer.workflow.status, 'COMPLETED');
-  assert.equal(answer.workflow.progress.total, 12);
+  assert.equal(answer.workflow.progress.total, 13);
   for (const stage of answer.workflow.stages.filter((item) => item.status === 'SUCCESS')) {
     assert.ok(stage.startedAt);
     assert.ok(stage.finishedAt);
@@ -493,7 +493,10 @@ test('agent executes indicator queries only through a compiled query contract', 
   });
 
   assert.equal(answer.deterministic, true);
-  assert.match(answer.message, /查询范围/);
+  assert.doesNotMatch(answer.message, /查询范围/);
+  assert.ok(answer.processSteps.some(
+    (step) => step.name === 'query_scope_summary' && /指标/.test(step.detail),
+  ));
   assert.equal(answer.provenance.mode, 'INDICATOR_LIBRARY');
   assert.equal(answer.provenance.label, '指标库口径');
   assert.ok(answer.queryFingerprint);

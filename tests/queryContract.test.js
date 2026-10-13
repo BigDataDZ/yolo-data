@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildDeterministicSummary,
   buildQueryContract,
+  buildQueryScopeSummary,
   queryFingerprint,
   selectPublicResult,
   stabilizeQueryResult,
@@ -137,7 +138,7 @@ test('analysis pipeline keeps its projected column and row order', () => {
   );
 });
 
-test('deterministic summary contains the locked range and aggregate result', () => {
+test('deterministic summary keeps the answer focused on the aggregate result', () => {
   const contract = buildQueryContract({
     indicatorId: '2',
     metrics: ['sale_amt'],
@@ -163,8 +164,8 @@ test('deterministic summary contains the locked range and aggregate result', () 
   });
 
   assert.match(summary, /含税销售金额合计 30/);
-  assert.match(summary, /2026-09-01 至 2026-09-02/);
-  assert.match(summary, /大区/);
+  assert.doesNotMatch(summary, /查询范围/);
+  assert.doesNotMatch(summary, /2026-09-01 至 2026-09-02/);
   assert.equal(
     summary,
     buildDeterministicSummary({
@@ -268,8 +269,223 @@ test('attribution summary ranks dimension changes for two aligned periods', () =
     question: '帮我分析9月份业绩上升还是下滑，然后输出具体原因',
   });
 
-  assert.match(summary, /华东.*变化 -60.*贡献 120\.0%/);
-  assert.match(summary, /华南.*变化 \+10.*贡献 -20\.0%/);
+  assert.match(summary, /大区按含税销售金额的变动拆分/);
+  assert.match(summary, /华东（-60，占整体变动 120\.0%）/);
+  assert.match(summary, /华南（\+10，占整体变动 -20\.0%）/);
+  // 平台不再自己选择归因方法，因此不出现"贡献 / 拉动"这类方法性措辞。
+  assert.doesNotMatch(summary, /贡献/);
+});
+
+function attributionContract(dimensions) {
+  return buildQueryContract({
+    indicatorId: '2',
+    metrics: ['sale_amt'],
+    dimensions,
+    calculation: {
+      type: 'PERIOD_COMPARISON',
+      baseWindowIndex: 0,
+      compareWindowIndex: 1,
+    },
+    periodOrder: ['本期', '上期'],
+    analysisMode: 'ATTRIBUTION',
+  });
+}
+
+test('attribution movement reports every dimension instead of only the first', () => {
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '渠道', bizName: 'channel', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    rows: [
+      { region: '华东', channel: 'BBC', sale_amt: 100, __period: '本期' },
+      { region: '华南', channel: '商超', sale_amt: 60, __period: '本期' },
+      { region: '华东', channel: 'BBC', sale_amt: 40, __period: '上期' },
+      { region: '华南', channel: '商超', sale_amt: 90, __period: '上期' },
+    ],
+    contract: attributionContract(['region', 'channel', '__period']),
+    question: '本期销售额下滑的原因是什么',
+  });
+
+  assert.match(summary, /大区按含税销售金额的变动拆分/);
+  assert.match(summary, /渠道按含税销售金额的变动拆分/);
+});
+
+test('attribution movement closes the share sum with an other bucket', () => {
+  const base = [
+    ['A', 10], ['B', 20], ['C', 30], ['D', 40], ['E', 55], ['F', 58], ['G', 73],
+  ];
+  const current = [
+    ['A', 100], ['B', 90], ['C', 80], ['D', 70], ['E', 60], ['F', 50], ['G', 40],
+  ];
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    rows: [
+      ...current.map(([region, value]) => ({ region, sale_amt: value, __period: '本期' })),
+      ...base.map(([region, value]) => ({ region, sale_amt: value, __period: '上期' })),
+    ],
+    contract: attributionContract(['region', '__period']),
+    question: '本期销售额变化的构成',
+  });
+
+  // 前 5 之外的 2 个维度取值合并为"其他"，占比之和才闭合。
+  assert.match(summary, /其他 2 个大区（-3，占整体变动 -1\.5%）/);
+  assert.match(summary, /A（\+90，占整体变动 44\.1%）/);
+});
+
+function attributionAnalysis(overrides = {}) {
+  return {
+    version: 1,
+    kind: 'ATTRIBUTION',
+    metric: { label: '含税销售金额', unit: '元', isRate: false },
+    periods: { current: '本期', previous: '上期' },
+    totals: { base: 150, current: 100, delta: -50 },
+    rows: [
+      {
+        key: '华东', label: '华东', base: 100, current: 40,
+        delta: -60, contribution: -60, share: 1.2, direction: 'DECREASE',
+      },
+      {
+        key: '华南', label: '华南', base: 50, current: 60,
+        delta: 10, contribution: 10, share: -0.2, direction: 'INCREASE',
+      },
+    ],
+    claims: [{ code: 'ADDITIVE' }, { code: 'SHARE_SUM' }, { code: 'DELTA_CONSISTENT' }],
+    ...overrides,
+  };
+}
+
+test('validated sandbox analysis takes over the platform movement breakdown', () => {
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    rows: [
+      { region: '华东', sale_amt: 40, __period: '本期' },
+      { region: '华南', sale_amt: 60, __period: '本期' },
+      { region: '华东', sale_amt: 100, __period: '上期' },
+      { region: '华南', sale_amt: 50, __period: '上期' },
+    ],
+    contract: attributionContract(['region', '__period']),
+    question: '本期销售额下滑的原因',
+    analysis: attributionAnalysis(),
+  });
+
+  assert.match(summary, /分析类型：ATTRIBUTION/);
+  assert.match(summary, /华东：变化 -60/);
+  // 有可校验的代码产物时，平台不再自己拆一遍。
+  assert.doesNotMatch(summary, /变动拆分/);
+});
+
+test('invalid sandbox analysis is dropped instead of being replaced by a platform guess', () => {
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    rows: [
+      { region: '华东', sale_amt: 40, __period: '本期' },
+      { region: '华南', sale_amt: 60, __period: '本期' },
+      { region: '华东', sale_amt: 100, __period: '上期' },
+      { region: '华南', sale_amt: 50, __period: '上期' },
+    ],
+    contract: attributionContract(['region', '__period']),
+    question: '本期销售额下滑的原因',
+    analysis: attributionAnalysis({
+      rows: [
+        {
+          key: '华东', label: '华东', base: 100, current: 40,
+          delta: -60, contribution: -60, share: 0.5, direction: 'DECREASE',
+        },
+        {
+          key: '华南', label: '华南', base: 50, current: 60,
+          delta: 10, contribution: 10, share: 0.2, direction: 'INCREASE',
+        },
+      ],
+    }),
+  });
+
+  // 份额不归一 → 契约校验失败 → 平台丢弃该产物，回落到确定性事实。
+  assert.doesNotMatch(summary, /分析类型：ATTRIBUTION/);
+  assert.match(summary, /大区按含税销售金额的变动拆分/);
+});
+
+test('period comparison summary leads with growth rate and top increasing dimensions', () => {
+  const contract = buildQueryContract({
+    indicatorId: '2',
+    metrics: ['sale_amt'],
+    dimensions: ['province', '__period'],
+    timeWindows: [
+      {
+        label: '2026年9月',
+        expression: '2026年9月',
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+      },
+      {
+        label: '2025年9月',
+        expression: '2025年9月',
+        startDate: '2025-09-01',
+        endDate: '2025-09-30',
+      },
+    ],
+    periodOrder: ['2026年9月', '2025年9月'],
+    limit: 200,
+  });
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '省区', bizName: 'province', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    rows: [
+      { province: '广东', sale_amt: 300, __period: '2026年9月' },
+      { province: '江苏', sale_amt: 200, __period: '2026年9月' },
+      { province: '浙江', sale_amt: 100, __period: '2026年9月' },
+      { province: '广东', sale_amt: 100, __period: '2025年9月' },
+      { province: '江苏', sale_amt: 250, __period: '2025年9月' },
+      { province: '浙江', sale_amt: 120, __period: '2025年9月' },
+    ],
+    contract,
+    question: '2026年9月BBC含税销售额对比2025年9月，同比涨了多少，主要是哪些省区增长比较多',
+  });
+
+  assert.match(summary, /同比增长 \+27\.7%/);
+  assert.match(summary, /增加 130/);
+  assert.match(summary, /2026年9月含税销售金额为 600，较2025年9月增加 130/);
+  assert.match(summary, /同比增长 \+27\.7%/);
+  assert.match(summary, /上期 470/);
+  assert.match(summary, /增长最多的省区/);
+  assert.match(summary, /广东（\+200）/);
+  assert.match(summary, /江苏（-50）/);
+  assert.match(summary, /浙江（-20）/);
+  assert.doesNotMatch(summary, /查询范围/);
+
+  const scope = buildQueryScopeSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '省区', bizName: 'province', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+      { name: '对比期间', bizName: '__period', showType: 'CATEGORY' },
+    ],
+    contract,
+  });
+  assert.match(scope, /时间：2026年9月 vs 2025年9月/);
+  assert.match(scope, /维度：省区/);
 });
 
 test('empty results explicitly report that the platform did not move the range', () => {
@@ -294,7 +510,7 @@ test('empty results explicitly report that the platform did not move the range',
 
   assert.match(summary, /未返回数据/);
   assert.match(summary, /没有自动调整时间范围/);
-  assert.match(summary, /2026-09-15 至 2026-09-21/);
+  assert.doesNotMatch(summary, /2026-09-15 至 2026-09-21/);
 });
 
 test('public result projection hides formula dependency fields', () => {

@@ -1,10 +1,13 @@
 import { suggestChart } from './chart.js';
+import { validateAnalysisOutputs } from './analysisArtifact.js';
+import { buildAnalysisContractPrompt } from './analysisContract.js';
 import { buildArtifactTitle, buildSessionFileName } from './fileName.js';
 import { rankIndicators, sortIndicators } from './indicatorSearch.js';
 import { resolveBusinessLexicon } from './businessLexicon.js';
 import {
   buildDeterministicSummary,
   buildQueryContract,
+  buildQueryScopeSummary,
   queryFingerprint,
   selectPublicResult,
   stabilizeQueryResult,
@@ -1613,6 +1616,11 @@ ${supersonicEnabled
     ? '只要当前主题存在可访问业务数据集，就必须使用业务数据集执行最终数据查询；优先使用主数据集。禁止使用指标平台指标查询返回最终数据。只有主题没有绑定任何业务数据集时，才允许把指标查询作为取数来源。'
     : '指标平台指标查询在本轮不可用。只要存在可访问业务数据集，就必须使用业务数据集执行最终数据查询；没有数据集时不得伪造取数结果。'}
 39. 问题出现“分别、各自、分开、各是”等拆分语义，并且多个值属于同一分类字段时，必须把该字段放入 dimensionFields 执行 GROUP BY；可同时保留过滤限定枚举范围，禁止只生成 IN 过滤而不生成拆解维度。
+${analysisMode?.mode === 'ATTRIBUTION'
+    ? `\n本轮为归因类分析。归因、拆解、驱动因素这类分析方法不由平台内置，必须由你生成 Python 分析代码，`
+      + `基于 input/ 中已物化的结果快照计算，并把结果按契约写入 output/${ANALYSIS_RESULT_FILE}。\n`
+      + buildAnalysisContractPrompt()
+    : ''}
 ${LOCAL_FILE_GUIDANCE}`;
 }
 
@@ -3229,6 +3237,24 @@ export class MetricAgentService {
         filterLabels,
         lexicon: resolveBusinessLexicon(theme),
       });
+      const queryScope = buildQueryScopeSummary({
+        subjectName: indicator.name,
+        columns: secureResult.columns,
+        contract: queryContract,
+        filterLabels,
+        lexicon: resolveBusinessLexicon(theme),
+      });
+      appendProcessStep({
+        id: `step-${processSteps.length + 1}`,
+        type: 'analysis',
+        stageCode: 'ANALYZE',
+        status: 'success',
+        name: 'query_scope_summary',
+        skillCode: 'indicator_query',
+        skillName: '查询范围',
+        title: '查询范围与口径',
+        detail: queryScope,
+      });
       const evidence = this.semanticCompiler.buildEvidence(effectivePlan, {
         indicator,
         rawResult,
@@ -4100,6 +4126,10 @@ export class MetricAgentService {
         question: resolvedQuestion,
         preferred: preferredChart || theme.defaultChart || 'auto',
       });
+      const queryScopeFilterLabels = Object.fromEntries(fields.map((field) => [
+        field.fieldName,
+        field.displayName,
+      ]));
       const summary = buildDeterministicSummary({
         subjectName: dataset.name,
         columns: secureResult.columns,
@@ -4107,11 +4137,26 @@ export class MetricAgentService {
         contract: queryContract,
         question: resolvedQuestion,
         metricDefinitions,
-        filterLabels: Object.fromEntries(fields.map((field) => [
-          field.fieldName,
-          field.displayName,
-        ])),
+        filterLabels: queryScopeFilterLabels,
         lexicon: resolveBusinessLexicon(theme),
+      });
+      const queryScope = buildQueryScopeSummary({
+        subjectName: dataset.name,
+        columns: secureResult.columns,
+        contract: queryContract,
+        filterLabels: queryScopeFilterLabels,
+        lexicon: resolveBusinessLexicon(theme),
+      });
+      appendProcessStep({
+        id: `step-${processSteps.length + 1}`,
+        type: 'analysis',
+        stageCode: 'ANALYZE',
+        status: 'success',
+        name: 'query_scope_summary',
+        skillCode: 'business_dataset_query',
+        skillName: '查询范围',
+        title: '查询范围与口径',
+        detail: queryScope,
       });
       const evidence = this.semanticCompiler.buildDatasetEvidence(
         effectivePlan,
@@ -4668,7 +4713,20 @@ export class MetricAgentService {
               artifactId: output.artifactId,
             });
           }
+          const analysis = validateAnalysisOutputs({
+            workspace,
+            outputs: result.outputs,
+          });
+          if (analysis && !analysis.valid) {
+            emit({
+              type: 'warning',
+              message: `分析结果契约校验未通过：${analysis.issues
+                .map((item) => item.code)
+                .join('、')}`,
+            });
+          }
           return {
+            analysis,
             runId: result.runId,
             codeArtifactId: result.codeArtifactId,
             success: result.success,

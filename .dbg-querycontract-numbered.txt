@@ -1,0 +1,901 @@
+1: import crypto from 'node:crypto';
+2: import { formatPresentationCell } from './resultPresentation.js';
+3: import { CONTRACT_COMPILER_VERSION } from './contractVersion.js';
+4: import { getPlatformLexicon, lexiconPattern } from './businessLexicon.js'; import { normalizeMetricSpecs } from './scopedMetrics.js';
+5: const DATE_DIMENSION_PATTERN =
+6:   /(^|_)(date|time|day|week|month|quarter|year)($|_)|sdt|日期|时间|账期/i;
+7: const RANKING_PATTERN = /排名|排行|榜单|对比|top\s*\d*|前\s*\d+|最高|最大|最多/i;
+8: const BOTTOM_RANKING_PATTERN = /最低|最小|最少|倒数|后\s*\d+/i;
+9: 
+10: function formatTemporalDisplay(value, timeGrain) {
+11:   const text = String(value ?? '');
+12:   const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+13:   if (!match) {
+14:     return text;
+15:   }
+16:   const [, year, month] = match;
+17:   switch (String(timeGrain ?? '').toUpperCase()) {
+18:     case 'MONTH':
+19:       return `${year}-${month}`;
+20:     case 'QUARTER':
+21:       return `${year}-Q${Math.floor((Number(month) - 1) / 3) + 1}`;
+22:     case 'YEAR':
+23:       return year;
+24:     default:
+25:       return text;
+26:   }
+27: }
+28: 
+29: function normalizeValue(value) {
+30:   if (Array.isArray(value)) {
+31:     return value.map(normalizeValue).sort(compareSerialized);
+32:   }
+33:   if (value && typeof value === 'object') {
+34:     return Object.fromEntries(
+35:       Object.keys(value)
+36:         .sort()
+37:         .map((key) => [key, normalizeValue(value[key])]),
+38:     );
+39:   }
+40:   return value ?? null;
+41: }
+42: 
+43: function normalizeValuePreservingArrayOrder(value) {
+44:   if (Array.isArray(value)) {
+45:     return value.map(normalizeValuePreservingArrayOrder);
+46:   }
+47:   if (value && typeof value === 'object') {
+48:     return Object.fromEntries(
+49:       Object.keys(value)
+50:         .sort()
+51:         .map((key) => [key, normalizeValuePreservingArrayOrder(value[key])]),
+52:     );
+53:   }
+54:   return value ?? null;
+55: }
+56: 
+57: function stableSerialize(value) {
+58:   return JSON.stringify(normalizeValue(value));
+59: }
+60: 
+61: function compareText(left, right) {
+62:   return String(left ?? '').localeCompare(String(right ?? ''), 'zh-CN', {
+63:     numeric: true,
+64:     sensitivity: 'base',
+65:   });
+66: }
+67: 
+68: function compareSerialized(left, right) {
+69:   return compareText(stableSerialize(left), stableSerialize(right));
+70: }
+71: 
+72: function uniqueSortedStrings(values) {
+73:   return [...new Set((values ?? []).map((value) => String(value ?? '').trim()).filter(Boolean))]
+74:     .sort(compareText);
+75: }
+76: 
+77: function uniqueStrings(values) {
+78:   return [...new Set((values ?? []).map((value) => String(value ?? '').trim()).filter(Boolean))];
+79: }
+80: 
+81: function normalizeFilters(filters) {
+82:   return (filters ?? [])
+83:     .map((filter) => {
+84:       const operator = String(filter?.operator ?? 'IN').trim().toUpperCase();
+85:       return {
+86:         bizName: String(
+87:           filter?.bizName ?? filter?.dimension ?? filter?.field ?? '',
+88:         ).trim(),
+89:         operator,
+90:         value: ['IN', 'NOT_IN'].includes(operator)
+91:           ? normalizeValue(filter?.value)
+92:           : normalizeValuePreservingArrayOrder(filter?.value),
+93:         scope: String(filter?.scope ?? 'ROW').toUpperCase() === 'AGGREGATE'
+94:           ? 'AGGREGATE'
+95:           : 'ROW',
+96:       };
+97:     })
+98:     .filter((filter) => filter.bizName)
+99:     .sort((left, right) => (
+100:       compareText(left.bizName, right.bizName)
+101:       || compareText(left.operator, right.operator)
+102:       || compareSerialized(left.value, right.value)
+103:     ));
+104: }
+105: 
+106: function normalizeDateInfo(dateInfo) {
+107:   if (!dateInfo) {
+108:     return {
+109:       dateMode: 'ALL',
+110:       startDate: null,
+111:       endDate: null,
+112:       unit: null,
+113:       period: null,
+114:       dateField: null,
+115:     };
+116:   }
+117:   const dateMode = String(dateInfo.dateMode ?? 'ALL').toUpperCase();
+118:   const period = String(dateInfo.period ?? '').toUpperCase();
+119:   return {
+120:     dateMode,
+121:     startDate: dateInfo.startDate ?? null,
+122:     endDate: dateInfo.endDate ?? null,
+123:     unit: dateMode === 'RECENT' ? Number(dateInfo.unit) || null : null,
+124:     period: dateMode === 'RECENT' && period ? period : null,
+125:     dateField: dateInfo.dateField ?? null,
+126:     label: dateInfo.label ?? dateInfo.detectWord ?? dateInfo.expression ?? null,
+127:     expression: dateInfo.expression ?? dateInfo.detectWord ?? null,
+128:   };
+129: }
+130: 
+131: function normalizeTimeWindows(timeWindows) {
+132:   return (timeWindows ?? []).map((window) => normalizeDateInfo(window));
+133: }
+134: 
+135: function normalizeCalculation(calculation) {
+136:   return {
+137:     type: String(calculation?.type ?? 'NONE').toUpperCase(),
+138:     baseWindowIndex: Number.isInteger(calculation?.baseWindowIndex)
+139:       ? calculation.baseWindowIndex
+140:       : null,
+141:     compareWindowIndex: Number.isInteger(calculation?.compareWindowIndex)
+142:       ? calculation.compareWindowIndex
+143:       : null,
+144:     description: String(calculation?.description ?? ''),
+145:     timeGrain: ['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'].includes(
+146:       String(calculation?.timeGrain ?? '').toUpperCase(),
+147:     )
+148:       ? String(calculation.timeGrain).toUpperCase()
+149:       : null,
+150:   };
+151: }
+152: 
+153: function normalizePostProcessing(postProcessing) {
+154:   return postProcessing && typeof postProcessing === 'object'
+155:     ? JSON.parse(JSON.stringify(postProcessing))
+156:     : null;
+157: }
+158: 
+159: function columnKey(column) {
+160:   return String(column?.bizName ?? column?.nameEn ?? column?.name ?? '').trim();
+161: }
+162: 
+163: function isNumericColumn(column) {
+164:   return String(column?.showType ?? column?.type ?? '').toUpperCase() === 'NUMBER'
+165:     || String(column?.type ?? '').toUpperCase() === 'DECIMAL';
+166: }
+167: 
+168: function isDateColumn(column) {
+169:   return DATE_DIMENSION_PATTERN.test(columnKey(column));
+170: }
+171: 
+172: function normalizeColumns(columns, contract) {
+173:   if (contract?.postProcessing?.pivot || contract?.analysisPipeline) {
+174:     return [...(columns ?? [])];
+175:   }
+176:   const requestedOrder = [...(contract?.dimensions ?? []), ...(contract?.metrics ?? [])];
+177:   const order = new Map(requestedOrder.map((key, index) => [key, index]));
+178:   return [...(columns ?? [])].sort((left, right) => {
+179:     const leftKey = columnKey(left);
+180:     const rightKey = columnKey(right);
+181:     const leftOrder = order.has(leftKey) ? order.get(leftKey) : Number.MAX_SAFE_INTEGER;
+182:     const rightOrder = order.has(rightKey) ? order.get(rightKey) : Number.MAX_SAFE_INTEGER;
+183:     return leftOrder - rightOrder || compareText(leftKey, rightKey);
+184:   });
+185: }
+186: 
+187: function rowSignature(row, columns) {
+188:   return stableSerialize(columns.map((column) => row?.[columnKey(column)]));
+189: }
+190: 
+191: function compareCellValues(left, right) {
+192:   if (left === null || left === undefined || left === '') {
+193:     return right === null || right === undefined || right === '' ? 0 : 1;
+194:   }
+195:   if (right === null || right === undefined || right === '') {
+196:     return -1;
+197:   }
+198:   const leftNumber = Number(left);
+199:   const rightNumber = Number(right);
+200:   if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+201:     return leftNumber - rightNumber;
+202:   }
+203:   return compareText(left, right);
+204: }
+205: 
+206: function selectSortMetric(columns, contract) {
+207:   const candidates = [
+208:     ...(contract?.metrics ?? []),
+209:     ...(columns ?? []).filter(isNumericColumn).map(columnKey),
+210:   ];
+211:   return candidates.find(Boolean) ?? null;
+212: }
+213: 
+214: function sortRows({ columns, rows, contract, question }) {
+215:   const dateColumns = (columns ?? [])
+216:     .filter((column) => isDateColumn(column))
+217:     .map(columnKey)
+218:     .filter(Boolean);
+219:   const dimensionColumns = (columns ?? [])
+220:     .filter((column) => !isNumericColumn(column) && !isDateColumn(column))
+221:     .map(columnKey)
+222:     .filter(Boolean);
+223:   const sortMetric = selectSortMetric(columns, contract);
+224:   const periodOrder = new Map(
+225:     (contract?.periodOrder ?? []).map((label, index) => [String(label), index]),
+226:   );
+227:   const ranking = RANKING_PATTERN.test(String(question ?? ''));
+228:   const ascendingRanking = BOTTOM_RANKING_PATTERN.test(String(question ?? ''));
+229: 
+230:   return [...(rows ?? [])].sort((left, right) => {
+231:     if (periodOrder.size > 0 && columns.some((column) => columnKey(column) === '__period')) {
+232:       const leftPeriod = periodOrder.has(String(left?.__period))
+233:         ? periodOrder.get(String(left.__period))
+234:         : Number.MAX_SAFE_INTEGER;
+235:       const rightPeriod = periodOrder.has(String(right?.__period))
+236:         ? periodOrder.get(String(right.__period))
+237:         : Number.MAX_SAFE_INTEGER;
+238:       if (leftPeriod !== rightPeriod) {
+239:         return leftPeriod - rightPeriod;
+240:       }
+241:     }
+242:     if (ranking && sortMetric) {
+243:       const metricComparison = compareCellValues(left?.[sortMetric], right?.[sortMetric]);
+244:       if (metricComparison !== 0) {
+245:         return ascendingRanking ? metricComparison : -metricComparison;
+246:       }
+247:     }
+248: 
+249:     for (const key of dateColumns) {
+250:       const comparison = compareCellValues(left?.[key], right?.[key]);
+251:       if (comparison !== 0) {
+252:         return comparison;
+253:       }
+254:     }
+255: 
+256:     for (const key of dimensionColumns) {
+257:       const comparison = compareCellValues(left?.[key], right?.[key]);
+258:       if (comparison !== 0) {
+259:         return comparison;
+260:       }
+261:     }
+262: 
+263:     if (!ranking && sortMetric) {
+264:       const metricComparison = compareCellValues(left?.[sortMetric], right?.[sortMetric]);
+265:       if (metricComparison !== 0) {
+266:         return -metricComparison;
+267:       }
+268:     }
+269: 
+270:     return compareText(
+271:       rowSignature(left, columns),
+272:       rowSignature(right, columns),
+273:     );
+274:   });
+275: }
+276: 
+277: function hash(value) {
+278:   return crypto.createHash('sha256').update(String(value)).digest('hex');
+279: }
+280: 
+281: function formatNumber(value) {
+282:   const number = Number(value);
+283:   if (!Number.isFinite(number)) {
+284:     return String(value ?? '');
+285:   }
+286:   return new Intl.NumberFormat('zh-CN', {
+287:     maximumFractionDigits: 2,
+288:   }).format(number);
+289: }
+290: 
+291: function formatColumnValue(value, column) {
+292:   const number = Number(value);
+293:   if (!Number.isFinite(number)) {
+294:     return String(value ?? '');
+295:   }
+296:   return column?.presentationType
+297:     ? formatPresentationCell(value, column)
+298:     : formatNumber(value);
+299: }
+300: 
+301: function columnLabel(column) {
+302:   return String(column?.name ?? column?.bizName ?? '').trim();
+303: }
+304: 
+305: function findColumn(columns, key) {
+306:   return (columns ?? []).find((column) => columnKey(column) === key) ?? null;
+307: }
+308: 
+309: function filterSummary(filters, columns, filterLabels = {}, lexicon = null) {
+310:   const identifierPattern = lexiconPattern(
+311:     (lexicon ?? getPlatformLexicon()).identifierPatterns,
+312:     { raw: true },
+313:   );
+314:   return normalizeFilters(filters).map((filter) => {
+315:     const label = filterLabels[filter.bizName]
+316:       || columnLabel(findColumn(columns, filter.bizName))
+317:       || filter.bizName;
+318:     const identifier = identifierPattern?.test(
+319:       `${filter.bizName} ${label}`,
+320:     ) ?? false;
+321:     const renderValue = (item) => (
+322:       identifier ? String(item ?? '') : formatNumber(item)
+323:     );
+324:     const value = Array.isArray(filter.value)
+325:       ? filter.value.map(renderValue).join('、')
+326:       : renderValue(filter.value);
+327:     return `${label} ${filter.operator} ${value}`;
+328:   });
+329: }
+330: 
+331: function dateRangeText(dateInfo) {
+332:   if (!dateInfo || dateInfo.dateMode === 'ALL') {
+333:     return '全部时间';
+334:   }
+335:   if (dateInfo.startDate && dateInfo.endDate) {
+336:     return dateInfo.startDate === dateInfo.endDate
+337:       ? dateInfo.startDate
+338:       : `${dateInfo.startDate} 至 ${dateInfo.endDate}`;
+339:   }
+340:   return '全部时间';
+341: }
+342: 
+343: function contractTimeText(contract) {
+344:   const windows = contract?.timeWindows ?? [];
+345:   if (windows.length > 1) {
+346:     return windows.map((window, index) => (
+347:       window.label || window.expression || `期间${index + 1}`
+348:     )).join(' vs ');
+349:   }
+350:   return dateRangeText(windows[0] ?? contract?.dateInfo);
+351: }
+352: 
+353: function metricTotals(columns, rows, contract, metricDefinitions = [], lexicon = null) {
+354:   const ratePattern = lexiconPattern((lexicon ?? getPlatformLexicon()).rateTerms);
+355:   const definitions = new Map(
+356:     (metricDefinitions ?? []).map((definition) => [
+357:       String(definition.key ?? definition.field ?? ''),
+358:       definition,
+359:     ]),
+360:   );
+361:   const keys = (contract?.metrics ?? []).length > 0
+362:     ? contract.metrics
+363:     : columns.filter(isNumericColumn).map(columnKey).filter(Boolean);
+364:   const periodKeys = (contract?.timeWindows ?? [])
+365:     .map((window, index) => window.label || window.expression || `期间${index + 1}`)
+366:     .filter(Boolean);
+367:   return keys.map((key) => {
+368:     const column = findColumn(columns, key);
+369:     if (!column) {
+370:       return null;
+371:     }
+372:     const definition = definitions.get(key) ?? {};
+373:     const label = columnLabel(column) || definition.label || key;
+374:     const aggregation = String(
+375:       definition.aggregation ?? definition.aggregator ?? '',
+376:     ).toUpperCase();
+377:     const rate = ratePattern?.test(label) ?? false;
+378:     const render = (values) => {
+379:       const numeric = values.map(Number).filter(Number.isFinite);
+380:       if (numeric.length === 0) {
+381:         return null;
+382:       }
+383:       const value = rate || aggregation === 'AVG'
+384:         ? numeric.reduce((sum, item) => sum + item, 0) / numeric.length
+385:         : numeric.reduce((sum, item) => sum + item, 0);
+386:       const suffix = rate || aggregation === 'AVG'
+387:         ? '均值'
+388:         : ['COUNT', 'COUNT_DISTINCT'].includes(aggregation)
+389:           ? ''
+390:           : '合计';
+391:       return `${label}${suffix} ${formatColumnValue(value, column)}`;
+392:     };
+393:     if (periodKeys.length > 1 && columns.some((item) => columnKey(item) === '__period')) {
+394:       return periodKeys.map((period) => {
+395:         const periodRows = rows.filter((row) => row.__period === period);
+396:         const rendered = render(periodRows.map((row) => row?.[key]));
+397:         return rendered ? `${period}：${rendered}` : null;
+398:       }).filter(Boolean).join('，');
+399:     }
+400:     return render(rows.map((row) => row?.[key]));
+401:   }).filter(Boolean);
+402: }
+403: 
+404: function numericTotal(rows, key, period) {
+405:   const periodKey = '__period';
+406:   return (rows ?? [])
+407:     .filter((row) => (
+408:       !period
+409:       || String(row?.[periodKey] ?? '') === String(period)
+410:     ))
+411:     .reduce((sum, row) => {
+412:       const value = Number(row?.[key]);
+413:       return sum + (Number.isFinite(value) ? value : 0);
+414:     }, 0);
+415: }
+416: 
+417: function periodComparisonFindings(
+418:   columns,
+419:   rows,
+420:   contract,
+421:   metricDefinitions = [],
+422:   lexicon = null,
+423: ) {
+424:   const periodKey = '__period';
+425:   if (!columns.some((column) => columnKey(column) === periodKey)) {
+426:     return [];
+427:   }
+428:   const availablePeriods = [...new Set(
+429:     rows.map((row) => String(row?.[periodKey] ?? '')).filter(Boolean),
+430:   )];
+431:   const periodOrder = (contract?.periodOrder ?? []).length > 0
+432:     ? contract.periodOrder
+433:     : (contract?.timeWindows ?? []).map((window, index) => (
+434:       window.label || window.expression || `期间${index + 1}`
+435:     ));
+436:   const baseIndex = Number.isInteger(contract?.calculation?.baseWindowIndex)
+437:     ? contract.calculation.baseWindowIndex
+438:     : 0;
+439:   const compareIndex = Number.isInteger(contract?.calculation?.compareWindowIndex)
+440:     ? contract.calculation.compareWindowIndex
+441:     : 1;
+442:   const currentPeriod = periodOrder[baseIndex] ?? availablePeriods[0];
+443:   const previousPeriod = periodOrder[compareIndex] ?? availablePeriods[1];
+444:   if (!currentPeriod || !previousPeriod) {
+445:     return [];
+446:   }
+447: 
+448:   const ratePattern = lexiconPattern((lexicon ?? getPlatformLexicon()).rateTerms);
+449:   const definitions = new Map(
+450:     (metricDefinitions ?? []).map((definition) => [
+451:       String(definition.key ?? definition.field ?? ''),
+452:       definition,
+453:     ]),
+454:   );
+455:   const metricColumns = (contract?.metrics ?? [])
+456:     .map((key) => findColumn(columns, key))
+457:     .filter((column) => column && isNumericColumn(column));
+458:   const dimensionColumn = (contract?.dimensions ?? [])
+459:     .map((key) => findColumn(columns, key))
+460:     .find((column) => (
+461:       column
+462:       && columnKey(column) !== periodKey
+463:       && !isNumericColumn(column)
+464:       && !isDateColumn(column)
+465:     ));
+466: 
+467:   return metricColumns.map((metricColumn) => {
+468:     const metricKey = columnKey(metricColumn);
+469:     const definition = definitions.get(metricKey) ?? {};
+470:     const metricLabel = columnLabel(metricColumn)
+471:       || definition.label
+472:       || metricKey;
+473:     const currentTotal = numericTotal(rows, metricKey, currentPeriod);
+474:     const previousTotal = numericTotal(rows, metricKey, previousPeriod);
+475:     const delta = currentTotal - previousTotal;
+476:     const rate = previousTotal !== 0
+477:       ? delta / Math.abs(previousTotal)
+478:       : null;
+479:     const direction = delta > 0
+480:       ? '增长'
+481:       : delta < 0
+482:         ? '下降'
+483:         : '持平';
+484:     const directionPrefix = delta > 0 ? '+' : '';
+485:     const rateText = rate === null
+486:       ? ''
+487:       : `，同比${direction} ${directionPrefix}${(Math.abs(rate) * 100).toFixed(1)}%`;
+488:     const amountText = Number.isFinite(delta)
+489:       ? `，${delta > 0 ? '增加' : delta < 0 ? '减少' : '变动'} ${
+490:         formatColumnValue(Math.abs(delta), metricColumn)
+491:       }`
+492:       : '';
+493:     const statement = `${metricLabel}${rateText}${amountText}（${
+494:       currentPeriod
+495:     } ${formatColumnValue(currentTotal, metricColumn)}，${
+496:       previousPeriod
+497:     } ${formatColumnValue(previousTotal, metricColumn)}）`;
+498: 
+499:     const detail = [];
+500:     if (dimensionColumn) {
+501:       const dimensionKey = columnKey(dimensionColumn);
+502:       const dimensionLabel = columnLabel(dimensionColumn) || dimensionKey;
+503:       const grouped = new Map();
+504:       for (const row of rows ?? []) {
+505:         const period = String(row?.[periodKey] ?? '');
+506:         if (![currentPeriod, previousPeriod].includes(period)) {
+507:           continue;
+508:         }
+509:         const value = Number(row?.[metricKey]);
+510:         if (!Number.isFinite(value)) {
+511:           continue;
+512:         }
+513:         const name = String(row?.[dimensionKey] ?? '').trim();
+514:         if (!name) {
+515:           continue;
+516:         }
+517:         const item = grouped.get(name) ?? { current: 0, previous: 0 };
+518:         if (period === currentPeriod) {
+519:           item.current += value;
+520:         } else {
+521:           item.previous += value;
+522:         }
+523:         grouped.set(name, item);
+524:       }
+525:       const changes = [...grouped.entries()]
+526:         .map(([name, item]) => ({
+527:           name,
+528:           delta: item.current - item.previous,
+529:         }))
+530:         .filter((item) => Number.isFinite(item.delta))
+531:         .sort((left, right) => right.delta - left.delta);
+532:       const topGrowth = changes
+533:         .filter((item) => item.delta > 0)
+534:         .slice(0, 3);
+535:       if (topGrowth.length > 0) {
+536:         detail.push(`增长最多的${dimensionLabel}：${
+537:           topGrowth.map((item) => (
+538:             `${item.name}（+${formatColumnValue(item.delta, metricColumn)}）`
+539:           )).join('、')
+540:         }`);
+541:       } else {
+542:         const largest = changes.slice(0, 3);
+543:         if (largest.length > 0) {
+544:           detail.push(`当前没有${dimensionLabel}实现增长，变化靠前的为：${
+545:             largest.map((item) => (
+546:               `${item.name}（${formatColumnValue(item.delta, metricColumn)}）`
+547:             )).join('、')
+548:           }`);
+549:         }
+550:       }
+551:     }
+552:     return {
+553:       statement,
+554:       details: detail,
+555:       metricKey,
+556:       metricLabel,
+557:       currentPeriod,
+558:       previousPeriod,
+559:       currentTotal,
+560:       previousTotal,
+561:       delta,
+562:       rate,
+563:     };
+564:   });
+565: }
+566: 
+567: function trendFinding(columns, rows, contract) {
+568:   if (contract?.analysisMode === 'ATTRIBUTION' || rows.length < 2) {
+569:     return '';
+570:   }
+571:   const dateKey = (contract?.dimensions ?? []).find((key) => (
+572:     isDateColumn(findColumn(columns, key))
+573:   )) ?? columns.filter(isDateColumn).map(columnKey)[0];
+574:   const metricKey = selectSortMetric(columns, contract);
+575:   if (!dateKey || !metricKey) {
+576:     return '';
+577:   }
+578:   const firstValue = Number(rows[0]?.[metricKey]);
+579:   const lastValue = Number(rows.at(-1)?.[metricKey]);
+580:   if (!Number.isFinite(firstValue) || !Number.isFinite(lastValue)) {
+581:     return '';
+582:   }
+583:   const metricColumn = findColumn(columns, metricKey);
+584:   const metricLabel = columnLabel(metricColumn) || metricKey;
+585:   const base = `${formatTemporalDisplay(rows[0]?.[dateKey], contract?.timeGrain)}：${
+586:     formatColumnValue(firstValue, metricColumn)}，${formatTemporalDisplay(
+587:     rows.at(-1)?.[dateKey],
+588:     contract?.timeGrain,
+589:   )}：${formatColumnValue(lastValue, metricColumn)}`;
+590:   const lastPeriod = String(rows.at(-1)?.[dateKey] ?? '');
+591:   const rangeEnd = String(contract?.dateInfo?.endDate ?? '');
+592:   const incompletePeriod = String(contract?.timeGrain ?? '').toUpperCase() === 'MONTH'
+593:     && lastPeriod.slice(0, 7) === rangeEnd.slice(0, 7)
+594:     && rangeEnd > lastPeriod
+595:     ? `（最后一个月截至 ${rangeEnd}，为未完整月）`
+596:     : '';
+597:   if (firstValue === 0) {
+598:     return `${metricLabel}从 ${base}${incompletePeriod}`;
+599:   }
+600:   const change = ((lastValue - firstValue) / Math.abs(firstValue)) * 100;
+601:   return `${metricLabel}从 ${base}，区间变化 ${change >= 0 ? '+' : ''}${
+602:     change.toFixed(1)}%${incompletePeriod}`;
+603: }
+604: 
+605: function attributionFindings(columns, rows, contract, lexicon = null) {
+606:   const ratePattern = lexiconPattern((lexicon ?? getPlatformLexicon()).rateTerms);
+607:   if (contract?.analysisMode !== 'ATTRIBUTION' || rows.length < 2) {
+608:     return [];
+609:   }
+610:   const periodKey = '__period';
+611:   if (!columns.some((column) => columnKey(column) === periodKey)) {
+612:     return [];
+613:   }
+614:   const dimensionColumn = (contract?.dimensions ?? [])
+615:     .map((key) => findColumn(columns, key))
+616:     .find((column) => (
+617:       column
+618:       && columnKey(column) !== periodKey
+619:       && !isDateColumn(column)
+620:       && !isNumericColumn(column)
+621:     ));
+622:   const metricKey = selectSortMetric(columns, contract);
+623:   if (!dimensionColumn || !metricKey) {
+624:     return [];
+625:   }
+626:   const dimensionKey = columnKey(dimensionColumn);
+627:   const periods = [...new Set(rows.map((row) => String(row?.[periodKey] ?? '')).filter(Boolean))];
+628:   const periodOrder = contract?.periodOrder ?? [];
+629:   const baseIndex = Number.isInteger(contract?.calculation?.baseWindowIndex)
+630:     ? contract.calculation.baseWindowIndex
+631:     : 0;
+632:   const compareIndex = Number.isInteger(contract?.calculation?.compareWindowIndex)
+633:     ? contract.calculation.compareWindowIndex
+634:     : 1;
+635:   const currentPeriod = periodOrder[baseIndex] ?? periods[0];
+636:   const previousPeriod = periodOrder[compareIndex] ?? periods[1];
+637:   if (!currentPeriod || !previousPeriod) {
+638:     return [];
+639:   }
+640: 
+641:   const grouped = new Map();
+642:   for (const row of rows) {
+643:     const dimensionValue = String(row?.[dimensionKey] ?? '');
+644:     if (!dimensionValue) {
+645:       continue;
+646:     }
+647:     const current = grouped.get(dimensionValue) ?? {
+648:       current: 0,
+649:       previous: 0,
+650:     };
+651:     const value = Number(row?.[metricKey]);
+652:     if (!Number.isFinite(value)) {
+653:       continue;
+654:     }
+655:     if (String(row?.[periodKey]) === String(currentPeriod)) {
+656:       current.current += value;
+657:     } else if (String(row?.[periodKey]) === String(previousPeriod)) {
+658:       current.previous += value;
+659:     }
+660:     grouped.set(dimensionValue, current);
+661:   }
+662: 
+663:   const changes = [...grouped.entries()].map(([dimensionValue, values]) => ({
+664:     dimensionValue,
+665:     ...values,
+666:     delta: values.current - values.previous,
+667:   })).filter((item) => item.current !== 0 || item.previous !== 0);
+668:   if (changes.length === 0) {
+669:     return [];
+670:   }
+671:   changes.sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
+672:   const totalDelta = changes.reduce((sum, item) => sum + item.delta, 0);
+673:   const metricColumn = findColumn(columns, metricKey);
+674:   const metricLabel = columnLabel(metricColumn) || metricKey;
+675:   const dimensionLabel = columnLabel(dimensionColumn) || dimensionKey;
+676:   const rateMetric = ratePattern?.test(metricLabel) ?? false;
+677:   return changes.slice(0, 5).map((item) => {
+678:     const contribution = !rateMetric && Math.abs(totalDelta) > Number.EPSILON
+679:       ? `，对整体变化贡献 ${(item.delta / totalDelta * 100).toFixed(1)}%`
+680:       : '';
+681:     return `${dimensionLabel}「${item.dimensionValue}」${metricLabel}变化 ${
+682:       item.delta >= 0 ? '+' : ''
+683:     }${formatColumnValue(item.delta, metricColumn)}${contribution}`;
+684:   });
+685: }
+686: 
+687: function rankingFinding(question, columns, rows, contract) {
+688:   if (!RANKING_PATTERN.test(String(question ?? '')) || rows.length === 0) {
+689:     return '';
+690:   }
+691:   const metricKey = selectSortMetric(columns, contract);
+692:   if (!metricKey) {
+693:     return '';
+694:   }
+695:   const dimensionKey = (contract?.dimensions ?? [])
+696:     .map((key) => findColumn(columns, key))
+697:     .find((column) => column && !isNumericColumn(column) && !isDateColumn(column));
+698:   const metricColumn = findColumn(columns, metricKey);
+699:   const metricLabel = columnLabel(metricColumn) || metricKey;
+700:   if (!dimensionKey) {
+701:     return `最高/最低值为 ${formatColumnValue(rows[0]?.[metricKey], metricColumn)}`;
+702:   }
+703:   const dimensionLabel = columnLabel(dimensionKey);
+704:   return `${dimensionLabel}首位为 ${formatNumber(rows[0]?.[columnKey(dimensionKey)])}，${
+705:     metricLabel} ${formatColumnValue(rows[0]?.[metricKey], metricColumn)}`;
+706: }
+707: 
+708: export function buildQueryContract({
+709:   indicatorId,
+710:   metrics = [], metricSpecs = [],
+711:   derivedMetrics = [],
+712:   dimensions = [],
+713:   filters = [],
+714:   dateInfo,
+715:   timeGrain = null,
+716:   limit = 200,
+717:   timeWindows = [],
+718:   calculation = null,
+719:   postProcessing = null,
+720:   periodOrder = [],
+721:   analysisMode = null,
+722:   attribution = null,
+723:   semanticPolicy = null,
+724:   semanticResolutions = [],
+725:   internalMetrics = [],
+726:   analysisPipeline = null,
+727: } = {}) {
+728:   const normalizedTimeGrain = String(timeGrain ?? '').toUpperCase();
+729:   const normalizedAnalysisMode = String(analysisMode ?? '').toUpperCase();
+730:   const normalizedMetricSpecs = normalizeMetricSpecs(metricSpecs); const contractMetrics = normalizedMetricSpecs.length > 0 ? normalizedMetricSpecs.map((metric) => metric.outputField) : metrics;
+731:   return {
+732:     version: 1,
+733:     compilerVersion: CONTRACT_COMPILER_VERSION,
+734:     indicatorId: String(indicatorId ?? ''),
+735:     metrics: uniqueSortedStrings(contractMetrics), metricSpecs: normalizedMetricSpecs,
+736:     internalMetrics: uniqueSortedStrings([...(internalMetrics ?? []), ...normalizedMetricSpecs.filter((metric) => metric.internal).map((metric) => metric.outputField)]),
+737:     derivedMetrics: (derivedMetrics ?? []).map((metric) => ({ ...metric })),
+738:     dimensions: uniqueSortedStrings(dimensions),
+739:     filters: normalizeFilters(filters),
+740:     dateInfo: normalizeDateInfo(dateInfo),
+741:     timeWindows: normalizeTimeWindows(
+742:       (timeWindows ?? []).length > 0 ? timeWindows : [dateInfo].filter(Boolean),
+743:     ),
+744:     calculation: normalizeCalculation(calculation),
+745:     postProcessing: normalizePostProcessing(postProcessing),
+746:     periodOrder: uniqueStrings(periodOrder),
+747:     timeGrain: ['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR'].includes(normalizedTimeGrain)
+748:       ? normalizedTimeGrain
+749:       : null,
+750:     limit: Math.max(
+751:       1,
+752:       Math.min(
+753:         Number(limit) || 200,
+754:         analysisPipeline ? 50000 : 2000,
+755:       ),
+756:     ),
+757:     analysisMode: ['METRIC_QUERY', 'TREND', 'ATTRIBUTION'].includes(normalizedAnalysisMode)
+758:       ? normalizedAnalysisMode
+759:       : 'METRIC_QUERY',
+760:     attribution: attribution && typeof attribution === 'object'
+761:       ? { ...attribution }
+762:       : null,
+763:     semanticPolicy: semanticPolicy && typeof semanticPolicy === 'object'
+764:       ? {
+765:         ...semanticPolicy,
+766:         matches: (semanticPolicy.matches ?? []).map((item) => ({ ...item })),
+767:       }
+768:       : null,
+769:     semanticResolutions: (semanticResolutions ?? []).map((resolution) => ({
+770:       ...resolution,
+771:       candidates: (resolution.candidates ?? []).map((candidate) => ({
+772:         ...candidate,
+773:         candidate: { ...candidate.candidate },
+774:       })),
+775:       adjudication: { ...resolution.adjudication },
+776:     })),
+777:     analysisPipeline: analysisPipeline && typeof analysisPipeline === 'object'
+778:       ? JSON.parse(JSON.stringify(analysisPipeline))
+779:       : null,
+780:   };
+781: }
+782: 
+783: export function selectPublicResult({
+784:   columns = [],
+785:   rows = [],
+786:   internalMetrics = [],
+787: }) {
+788:   const internal = new Set(
+789:     (internalMetrics ?? []).map((field) => String(field ?? '')),
+790:   );
+791:   if (internal.size === 0) {
+792:     return { columns, rows };
+793:   }
+794:   const publicColumns = columns.filter((column) => (
+795:     !internal.has(String(column?.bizName ?? column?.name ?? ''))
+796:   ));
+797:   const publicKeys = new Set(publicColumns.map(columnKey));
+798:   return {
+799:     columns: publicColumns,
+800:     rows: (rows ?? []).map((row) => Object.fromEntries(
+801:       Object.entries(row ?? {}).filter(([key]) => publicKeys.has(key)),
+802:     )),
+803:   };
+804: }
+805: 
+806: export function queryFingerprint(contract) {
+807:   return hash(stableSerialize(contract));
+808: }
+809: 
+810: export function stabilizeQueryResult({
+811:   columns,
+812:   rows,
+813:   contract,
+814:   question,
+815: }) {
+816:   const stableColumns = normalizeColumns(columns, contract);
+817:   const stableRows = contract?.postProcessing?.pivot || contract?.analysisPipeline
+818:     ? [...(rows ?? [])]
+819:     : sortRows({
+820:       columns: stableColumns,
+821:       rows: rows ?? [],
+822:       contract,
+823:       question,
+824:     });
+825:   return {
+826:     columns: stableColumns,
+827:     rows: stableRows,
+828:     dataHash: hash(stableSerialize({
+829:       columns: stableColumns.map(columnKey),
+830:       rows: stableRows.map((row) => stableColumns.map((column) => (
+831:         normalizeValue(row?.[columnKey(column)])
+832:       ))),
+833:     })),
+834:   };
+835: }
+836: 
+837: export function buildDeterministicSummary({
+838:   subjectName,
+839:   columns = [],
+840:   rows = [],
+841:   contract,
+842:   question = '',
+843:   metricDefinitions = [],
+844:   filterLabels = {},
+845:   lexicon = null,
+846: }) {
+847:   const totals = metricTotals(columns, rows, contract, metricDefinitions, lexicon);
+848:   const comparisons = periodComparisonFindings(
+849:     columns,
+850:     rows,
+851:     contract,
+852:     metricDefinitions,
+853:     lexicon,
+854:   );
+855:   const comparisonStatements = comparisons.map((item) => item.statement);
+856:   const conclusion = rows.length === 0
+857:     ? `在当前查询条件下未返回数据；平台没有自动调整时间范围、指标或维度。`
+858:     : comparisonStatements.length > 0
+859:       ? `${comparisonStatements.join('；')}。`
+860:       : `${totals.length > 0 ? `${totals.join('，')}。` : `本次查询返回 ${rows.length} 行数据。`}`;
+861:   const findings = [
+862:     rankingFinding(question, columns, rows, contract),
+863:     trendFinding(columns, rows, contract),
+864:     ...comparisons.flatMap((item) => item.details),
+865:     ...attributionFindings(columns, rows, contract, lexicon),
+866:   ].filter(Boolean);
+867: 
+868:   return [
+869:     conclusion,
+870:     ...(findings.length > 0 ? ['', '**关键结果**', ...findings.map((item) => `- ${item}`)] : []),
+871:   ].join('\n');
+872: }
+873: 
+874: export function buildQueryScopeSummary({
+875:   subjectName,
+876:   columns = [],
+877:   contract = null,
+878:   filterLabels = {},
+879:   lexicon = null,
+880: }) {
+881:   const normalizedFilters = normalizeFilters(contract?.filters);
+882:   const dimensions = (contract?.dimensions ?? [])
+883:     .map((key) => findColumn(columns, key))
+884:     .filter((column) => column && columnKey(column) !== '__period')
+885:     .map((column) => columnLabel(column) || columnKey(column));
+886:   const filterLines = filterSummary(normalizedFilters, columns, filterLabels, lexicon);
+887:   return [
+888:     `指标：${subjectName || contract?.indicatorId || '-'}`,
+889:     `时间：${contractTimeText(contract)}`,
+890:     `维度：${dimensions.join('、') || '汇总'}`,
+891:     `过滤：${filterLines.join('；') || '无额外过滤条件'}`,
+892:   ].join('\n');
+893: }
+894: 
+895: export {
+896:   dateRangeText,
+897:   contractTimeText,
+898:   formatNumber,
+899:   normalizeFilters,
+900:   stableSerialize,
+901: };

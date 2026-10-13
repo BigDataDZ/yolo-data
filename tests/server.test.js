@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -337,5 +338,103 @@ test('model management persists multiple models and theme default selection', as
   } finally {
     await new Promise((resolve) => server.close(resolve));
     application.database.close();
+  }
+});
+
+test('model management can test a saved model connection without exposing the key', async () => {
+  const upstream = http.createServer(async (request, response) => {
+    const body = await new Promise((resolve, reject) => {
+      let text = '';
+      request.on('data', (chunk) => { text += chunk; });
+      request.on('end', () => resolve(text ? JSON.parse(text) : {}));
+      request.on('error', reject);
+    });
+    assert.equal(request.method, 'POST');
+    assert.equal(request.url, '/v1/chat/completions');
+    assert.equal(request.headers.authorization, 'Bearer sk-test-model');
+    assert.equal(body.messages[0].content, 'Reply with OK.');
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({
+      choices: [{ message: { content: 'OK' } }],
+    }));
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-model-test-'));
+  const { server, application } = await startServer(testConfig(directory), new FakeIndicatorClient());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/v1`;
+  const headers = {
+    'content-type': 'application/json',
+    'x-user-id': '1',
+  };
+
+  try {
+    const createdResponse = await fetch(`${baseUrl}/api/models`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'Connection Test',
+        provider: 'openai-compatible',
+        modelName: 'test-model',
+        baseUrl: upstreamUrl,
+        apiKey: 'sk-test-model',
+      }),
+    });
+    const created = await createdResponse.json();
+    assert.equal(createdResponse.status, 200);
+
+    const testResponse = await fetch(`${baseUrl}/api/models/test`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ id: created.id }),
+    });
+    const result = await testResponse.json();
+    assert.equal(testResponse.status, 200);
+    assert.equal(result.success, true);
+    assert.equal(result.message, 'OK');
+    assert.equal(application.database.getModel(created.id).hasApiKey, true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    application.database.close();
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('model connection test turns an HTML upstream error into a readable message', async () => {
+  const upstream = http.createServer((_request, response) => {
+    response.writeHead(404, { 'content-type': 'text/html' });
+    response.end('<!doctype html><html><body><h1>Not Found</h1></body></html>');
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-model-html-error-'));
+  const { server, application } = await startServer(testConfig(directory), new FakeIndicatorClient());
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/v1`;
+  const headers = {
+    'content-type': 'application/json',
+    'x-user-id': '1',
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/models/test`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        provider: 'openai-compatible',
+        modelName: 'test-model',
+        baseUrl: upstreamUrl,
+        apiKey: 'sk-test-model',
+      }),
+    });
+    const result = await response.json();
+    assert.equal(response.status, 400);
+    assert.match(result.message, /模型服务返回了 HTML 页面/);
+    assert.equal(result.message.includes('<html>'), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    application.database.close();
+    await new Promise((resolve) => upstream.close(resolve));
   }
 });

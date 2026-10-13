@@ -213,7 +213,7 @@ flowchart LR
 | `src/http/` | 声明式路由表与中间件管线（`router.js`/`middleware.js`/`support.js`）、按域拆分的 `routes/*.js`、由路由表生成的 OpenAPI |
 | `src/application.js` | 依赖装配、运行时初始化、Supersonic 健康检查和数据集引导 |
 | `src/agent.js` | Agent 主流程、工具协议、指标/数据集执行、结果锁和审计落库 |
-| `src/workflow.js` | 标准 DataAgent 十二阶段工作流和阶段事件 |
+| `src/workflow.js` | 标准 DataAgent 十三阶段工作流和阶段事件 |
 | `src/harness.js` | DeepSeek/OpenAI-compatible 工具调用与本地规则降级 |
 | `src/queryContractCompiler.js` | 条件账本、字段绑定、时间门禁和业务规则溯源 |
 | `src/queryContract.js` | 查询契约、稳定排序、指纹、Hash、确定性摘要和展示格式 |
@@ -572,7 +572,7 @@ erDiagram
 
 ## 5. DataAgent 标准工作流
 
-平台定义统一的十二阶段工作流，并通过 NDJSON 实时推送阶段变化：
+平台定义统一的十三阶段工作流，并通过 NDJSON 实时推送阶段变化：
 
 ```mermaid
 flowchart LR
@@ -583,9 +583,10 @@ flowchart LR
   S6 --> S7["7. VALIDATE<br/>字段、契约和权限校验"]
   S7 --> S8["8. EXECUTE<br/>执行受控查询"]
   S8 --> S9["9. RESULT_ANALYST<br/>TopN、趋势和异常分析"]
-  S9 --> S10["10. RESULT_VALIDATION<br/>结果证据验证"]
-  S10 --> S11["11. ANALYZE<br/>稳定结果与选择图表"]
-  S11 --> S12["12. RESPOND<br/>结论、证据和过程"]
+  S9 --> S10["10. ANALYSIS_CODE<br/>生成代码在沙箱内分析锁定快照"]
+  S10 --> S11["11. RESULT_VALIDATION<br/>结果证据与契约校验"]
+  S11 --> S12["12. ANALYZE<br/>稳定结果与选择图表"]
+  S12 --> S13["13. RESPOND<br/>结论、证据和过程"]
 ```
 
 ### 5.1 各阶段输入输出
@@ -601,6 +602,7 @@ flowchart LR
 | `VALIDATE` | 查询计划、权限 Scope | 校验结果、行级权限绑定 | ERROR 阻断执行 |
 | `EXECUTE` | 冻结契约、执行适配器 | 稳定结果、Query Fingerprint、Data Hash | 首次有效结果锁定 |
 | `RESULT_ANALYST` | 锁定结果、主题分析插件 | 合计、TopN、趋势、异常和业务判断 | 百分比列不求和 |
+| `ANALYSIS_CODE` | 锁定结果快照、分析方法 Skill | 生成分析代码、沙箱执行、契约化产物 | 契约校验不通过则回退重写，不发布结论 |
 | `RESULT_VALIDATION` | 结果证据、Skill 结果验证规则 | 校验状态、检查项、证据 | ERROR 阻断或 WARN 标记 |
 | `ANALYZE` | 行列结构、问题、图表偏好 | 图表配置、确定性摘要 | 无结果不伪造数据 |
 | `RESPOND` | 锁定结果、模型表达、证据 | 助手消息、工作区产物、审计记录 | 数值仍以锁定结果为准 |
@@ -824,6 +826,44 @@ flowchart LR
 该实现是**受限执行环境（deterrence only）**，不是安全边界：预置护栏与用户代码在同一个解释器进程里，
 重新赋值 `builtins` 即可摘除，因此它只防误操作（越界路径、整盘遍历、误用进程/网络能力），
 **不防恶意代码**。多租户或不可信输入场景必须替换为独立低权用户 + 容器/seccomp 的代码执行服务。
+
+### 7.7 代码驱动分析与分析结果契约
+
+归因、结构拆解、量价分解这类"分析方法"**不在平台核心里实现**。
+平台保持通用 Agent 形态：`ANALYSIS_CODE` 阶段由大模型生成 Python 分析代码，
+在沙箱内作用于已锁定的结果快照，产出机器可校验的契约化结果。
+
+```mermaid
+flowchart LR
+  SNAP["锁定的 QUERY_RESULT 快照"] --> MAT["物化到 input/ (csv + json + manifest)"]
+  MAT --> CODE["大模型生成 Python 分析代码"]
+  CODE --> RUN["沙箱执行"]
+  RUN --> OUT["output/analysis.json"]
+  OUT --> VAL["平台复算契约与自报断言"]
+  VAL -->|通过| ART["分析产物进入回答与证据"]
+  VAL -->|不通过| FIX["回传 issues，模型改代码重跑"]
+  FIX --> CODE
+```
+
+平台侧职责边界：
+
+| 关注点 | 归属 |
+| --- | --- |
+| 用什么方法分解（加法 / 乘法 / 加权 / 层级） | 模型 + Skill，平台不内置 |
+| 结果产物的形状 | 平台契约（`src/analysisContract.js`，文件 `output/analysis.json`） |
+| 断言是否成立（可加性、份额归一、变化量自洽） | 平台确定性复算，不依赖模型自觉 |
+| 业务词、公式、枚举、默认口径 | 主题语义包，禁止写死在分析代码里 |
+
+契约校验规则（`ANALYSIS-002`）：
+
+- `ADDITIVE`：各行指定字段之和必须精确等于总计指定字段（默认 `Σcontribution = totals.delta`）。
+- `SHARE_SUM`：各行 `share` 之和必须等于 `scale`。
+- `DELTA_CONSISTENT`：每行 `delta` 必须等于 `current - base`。
+- `totals.delta` 必须等于 `current - base`；禁止 `NaN` / `Infinity`。
+- 未登记的断言只告警不阻断；声明了但算错的断言一律拒绝整轮结果。
+
+设计含义：**平台不解释"归因"是什么，只验证模型自报的等式是否成立。**
+这样新增一种分析方法不需要改平台代码，只需要补 Skill 指引与评测用例。
 
 ## 8. 指标执行链
 
@@ -1164,7 +1204,7 @@ flowchart TD
 
 ### 17.5 可观测性
 
-- 十二阶段工作流。
+- 十三阶段工作流。
 - 工具调用与废弃尝试。
 - 查询计划、契约、问题和校验结果。
 - LLM Token、延迟、错误和 Prompt 摘要。
