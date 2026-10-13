@@ -58,8 +58,13 @@
   "src/fileParsing.js": 320,
   "src/gateRegistry.js": 436,
   "src/growth.js": 46,
+<<<<<<< HEAD
   "src/harness.js": 812,
   "src/http/middleware.js": 165,
+=======
+  "src/harness.js": 786,
+  "src/http/middleware.js": 182,
+>>>>>>> 64d2422b9da508fadbdeeb5105a53b272e7650a0
   "src/http/openapi.js": 59,
   "src/http/router.js": 144,
   "src/http/routes/auth.js": 117,
