@@ -17,6 +17,13 @@
 3. 最终查询只能从已治理的指标或业务数据集中执行。
 4. 所有关键步骤保留证据，可审计、可复现、可回放。
 
+## 页面截图
+### 开始问数
+![开始问数](docs/screenshots/query.png) 
+
+### 智能体
+![智能体](docs/screenshots/agent.png)
+
 ## 核心能力
 
 - **实时指标体系**
@@ -64,11 +71,6 @@
 - 数据集字段说明
 - 默认值域配置
 
-## 页面截图
-
-| 开始问数 | 数据集 |
-| ---- | --- |
-| ![开始问数](docs/screenshots/query.png) | ![智能体](docs/screenshots/agent.png) |
 
 ## 总体架构
 
@@ -116,7 +118,7 @@ flowchart LR
 
 ```bash
 # 克隆仓库
-git clone <仓库地址> yolo-data
+git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
 
 # 校验 Node 版本、安装依赖（含 MySQL 驱动 mysql2）、从 .env.example 生成 .env
@@ -156,11 +158,6 @@ http://localhost:8088/
 - 角色分管理员与分析员：管理员管理平台，分析员只能查看已授权智能体并用其问数。
 
 ## 配置说明
-
-### 指标平台
-
-- 启用或停用指标平台匹配。
-- 停用后切换到大模型直连模式，直接使用业务数据集和工作区产物。
 
 ### OpenAI协议模型(推荐DeepSeek)
 
