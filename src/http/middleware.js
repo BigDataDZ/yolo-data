@@ -10,10 +10,25 @@ function readLimit(name, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function createTokenBucket({ capacity, refillPerSecond }) {
+export function createTokenBucket({ capacity, refillPerSecond, sweepIntervalMs = 60_000 }) {
   const buckets = new Map();
-  return (key) => {
+  let lastSweepAt = 0;
+  const limit = (key) => {
     const now = Date.now();
+    // Evict buckets that have fully refilled to capacity: such a bucket is
+    // indistinguishable from a fresh one, so dropping it can never loosen an
+    // active limit. Without this sweep the map grows with every unique
+    // user / theme / IP key for the lifetime of the process.
+    if (now - lastSweepAt >= sweepIntervalMs) {
+      lastSweepAt = now;
+      for (const [bucketKey, bucket] of buckets) {
+        const refilled = bucket.tokens
+          + ((now - bucket.updatedAt) / 1000) * refillPerSecond;
+        if (refilled >= capacity) {
+          buckets.delete(bucketKey);
+        }
+      }
+    }
     const bucket = buckets.get(key) ?? { tokens: capacity, updatedAt: now };
     const elapsedSeconds = Math.max(0, (now - bucket.updatedAt) / 1000);
     bucket.tokens = Math.min(capacity, bucket.tokens + elapsedSeconds * refillPerSecond);
@@ -25,6 +40,8 @@ function createTokenBucket({ capacity, refillPerSecond }) {
     buckets.set(key, bucket);
     return allowed;
   };
+  limit.size = () => buckets.size;
+  return limit;
 }
 
 const RATE_LIMIT_PROFILES = {

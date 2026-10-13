@@ -53,7 +53,7 @@
   "src/gateRegistry.js": 405,
   "src/growth.js": 46,
   "src/harness.js": 786,
-  "src/http/middleware.js": 165,
+  "src/http/middleware.js": 182,
   "src/http/openapi.js": 59,
   "src/http/router.js": 144,
   "src/http/routes/auth.js": 117,
