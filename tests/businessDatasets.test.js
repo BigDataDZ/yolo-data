@@ -204,6 +204,44 @@ test('business dataset query separates row filters from aggregate filters', asyn
   assert.ok(compiled.values.includes(500000));
 });
 
+test('business dataset query renders scoped metrics with per-metric conditional filters', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const dataset = createBusinessDataset(application, user);
+  const compiled = application.businessDatasets.buildQuery(dataset.id, {
+    metrics: [
+      {
+        field: 'sale_amt',
+        aggregator: 'SUM',
+        outputField: 'oem_sale_amt',
+        predicateFilters: [{
+          field: 'performance_region_name',
+          operator: 'LIKE',
+          value: 'OEM',
+          sourceText: 'OEM',
+        }],
+      },
+      {
+        field: 'sale_amt',
+        aggregator: 'SUM',
+        outputField: 'total_sale_amt',
+      },
+    ],
+    limit: 50,
+  });
+
+  assert.match(
+    compiled.sql,
+    /SUM\(CASE WHEN `performance_region_name` LIKE \? THEN `sale_amt` ELSE 0 END\) AS `oem_sale_amt`/,
+  );
+  assert.match(
+    compiled.sql,
+    /SUM\(`sale_amt`\) AS `total_sale_amt`/,
+  );
+  assert.ok(compiled.values.includes('%OEM%'));
+});
+
 test('business dataset can load distinct values for enum-like fields', async () => {
   const application = await createApplication(testConfig(), new FakeIndicatorClient());
   await application.init();

@@ -19,11 +19,9 @@ const CANCEL_OPTION = {
   description: '保留当前上下文，不执行新的数据查询。',
   recommended: false,
 };
-
 function candidateValue(item) {
   return String(typeof item === 'string' ? item : item?.value ?? '').trim();
 }
-
 export function collectValueCandidates(issues = []) {
   const codes = new Set(Object.values(VALUE_CLARIFICATION_CODES));
   const groups = [];
@@ -183,3 +181,5 @@ export function buildModelClarification({ question, options } = {}, { allowed = 
     ],
   };
 }
+
+export { buildSemanticSpanClarification, collectSemanticSpanGroups } from './semanticSpanClarification.js';

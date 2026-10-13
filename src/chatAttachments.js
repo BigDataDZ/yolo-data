@@ -47,6 +47,7 @@ export function appendUserQuestionWithAttachments({
   session,
   user,
   question,
+  displayQuestion = '',
   artifactIds = [],
 }) {
   const attachments = resolveQuestionAttachments({
@@ -55,7 +56,15 @@ export function appendUserQuestionWithAttachments({
     sessionId: session.id,
     artifactIds,
   });
-  const message = memory.appendUserMessage(session.id, user.id, question, { attachments });
+  const message = memory.appendUserMessage(
+    session.id,
+    user.id,
+    String(displayQuestion ?? '').trim() || question,
+    {
+      attachments,
+      question,
+    },
+  );
   if (attachments.length > 0 && typeof workspace?.bindArtifactsToMessage === 'function') {
     workspace.bindArtifactsToMessage({
       artifactIds: attachments.map((item) => item.artifactId),

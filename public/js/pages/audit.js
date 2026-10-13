@@ -33,6 +33,7 @@ const {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -129,6 +130,7 @@ async function renderAuditPage(root) {
   root.querySelectorAll('[data-audit-tab]').forEach((button) => {
     button.addEventListener('click', () => {
       state.auditTab = button.dataset.auditTab;
+      persistPreferences({ auditTab: state.auditTab });
       renderPage();
     });
   });

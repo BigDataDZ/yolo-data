@@ -32,8 +32,10 @@ import { parseTemporalExpression } from './timeSemantics.js';
 import { aggregateRowsByTimeGrain } from './timeAggregation.js';
 import {
   buildModelClarification,
+  buildSemanticSpanClarification,
   buildValueClarification,
   collectValueCandidates,
+  collectSemanticSpanGroups,
   describeClarificationOption,
 } from './valueClarification.js';
 import { buildSemanticTaxonomyPrompt } from './analysisSemantics.js';
@@ -73,6 +75,17 @@ import {
 import { analyzeWithPlugins } from './analysisPluginRegistry.js';
 import { LOCAL_FILE_GUIDANCE } from './localFileGuidance.js';
 import { buildResultAnalysisText } from './resultAnalyst.js';
+import { prepareBoundDatasetExecution } from './scopedMetrics.js';
+import {
+  buildContractSourceContext as buildContextFromModule,
+  buildStructuredClarification as buildClarificationFromModule,
+  resolveBoundDatasetDimensions as resolveBoundDimensionsFromModule,
+} from './contractContext.js';
+export {
+  buildContractSourceContext,
+  buildStructuredClarification,
+  resolveBoundDatasetDimensions,
+} from './contractContext.js';
 import {
   applyColumnPolicies,
   assertAllowedDimensions,
@@ -82,68 +95,6 @@ import {
   filterIndicatorsByScope,
   resolveAccessScope,
 } from './permissions.js';
-
-export function buildContractSourceContext({
-  inheritQueryContext = false,
-  history = [],
-  resolvedQuestion = '',
-} = {}) {
-  if (!inheritQueryContext) {
-    return String(resolvedQuestion ?? '').trim();
-  }
-  return [
-    ...(history ?? [])
-      .filter((message) => message?.role === 'user')
-      .slice(-4)
-      .map((message) => String(message.content ?? '').trim()),
-    String(resolvedQuestion ?? '').trim(),
-  ].filter(Boolean).join('\n');
-}
-
-export function resolveBoundDatasetDimensions(boundContract) {
-  return (boundContract?.dimensionFields ?? [])
-    .map((dimension) => String(dimension?.field ?? '').trim())
-    .filter(Boolean);
-}
-
-export function buildStructuredClarification({
-  message = '',
-  clarificationPolicy = null,
-} = {}) {
-  if (!isClarificationText(message)) {
-    return null;
-  }
-  const allowed = clarificationPolicy?.allowed !== false;
-  const options = allowed
-    ? [
-      {
-        id: 'use-recommended',
-        label: '按推荐口径继续',
-        description: '采用当前主题提示词中的默认口径和推荐方案直接执行。',
-        recommended: true,
-      },
-      {
-        id: 'cancel',
-        label: '停止本轮查询',
-        description: '保留当前上下文，不执行新的数据查询。',
-        recommended: false,
-      },
-    ]
-    : [
-      {
-        id: 'cancel',
-        label: '停止本轮查询',
-        description: '当前信息不足，停止执行并等待补充主题规则。',
-        recommended: true,
-      },
-    ];
-  return {
-    type: allowed ? 'NEEDS_CONFIRMATION' : 'CAPABILITY_GAP',
-    prompt: String(message ?? '').trim(),
-    recommendedOptionId: options.find((option) => option.recommended)?.id ?? null,
-    options,
-  };
-}
 
 const TOOL_DEFINITIONS = [
   ...USER_MEMORY_TOOLS,
@@ -243,13 +194,28 @@ const TOOL_DEFINITIONS = [
               type: 'object',
               properties: {
                 field: { type: 'string' },
+                outputField: {
+                  type: 'string',
+                  description: [
+                    'Unique result-column name for this metric variant.',
+                    'Required when the same base field and aggregator appear under different filter or scope conditions.',
+                    'Use stable ASCII identifiers such as oem_sale_amt or total_sku_count.',
+                  ].join(' '),
+                },
                 sourceText: {
                   type: 'string',
-                  description: 'Exact metric phrase from the user question.',
+                  description: [
+                    'Exact metric phrase from the user question.',
+                    'For a COUNT metric choose ONE IDENTIFIER field and use COUNT_DISTINCT when the question asks for a distinct entity count; do not submit several identifier fields for the same count.',
+                  ].join(' '),
                 },
                 aggregator: {
                   type: 'string',
                   enum: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNT_DISTINCT'],
+                },
+                internal: {
+                  type: 'boolean',
+                  description: 'Set true for an intermediate denominator or base column that should not be shown directly.',
                 },
                 conditionIds: {
                   type: 'array',
@@ -266,7 +232,8 @@ const TOOL_DEFINITIONS = [
               'Optional structured derived metrics compiled by the platform.',
               'Use RATIO for numerator/denominator, GROWTH_RATE for period growth, DIFFERENCE for amount change, PERCENTAGE_POINT for percentage-point change, SUM for additive aggregation, AVERAGE for averages and EXPRESSION for a generic arithmetic tree.',
               'EXPRESSION uses op/left/right/value nodes with FIELD, ADD, SUBTRACT, MULTIPLY, DIVIDE, ABS and NEGATE. FIELD nodes reference confirmed metric fields or earlier derived outputField values.',
-              'Metric operands must reference confirmed metric names; do not provide SQL or rendered values.',
+              'For a ratio, define both numerator and denominator as metricFields with unique outputField values. The numerator metric includes the applicable FILTER conditionIds; the denominator metric includes the SCOPE conditionIds but excludes the numerator FILTER conditionIds. The platform will calculate each scope separately within the same time window and then apply the derived ratio.',
+              'RATIO numerator/denominator must reference metricFields outputField values or exact confirmed field names; do not provide SQL or rendered values.',
             ].join(' '),
             items: {
               type: 'object',
@@ -312,10 +279,22 @@ const TOOL_DEFINITIONS = [
                   required: ['field'],
                   additionalProperties: false,
                 },
-                numerator: { type: 'string' },
-                denominator: { type: 'string' },
-                metric: { type: 'string' },
-                secondMetric: { type: 'string' },
+                numerator: {
+                  type: 'string',
+                  description: 'metricFields outputField for the ratio numerator.',
+                },
+                denominator: {
+                  type: 'string',
+                  description: 'metricFields outputField for the ratio denominator.',
+                },
+                metric: {
+                  type: 'string',
+                  description: 'metricFields outputField or exact confirmed field name.',
+                },
+                secondMetric: {
+                  type: 'string',
+                  description: 'metricFields outputField or exact confirmed field name.',
+                },
                 outputField: { type: 'string' },
                 outputFormat: {
                   type: 'string',
@@ -1482,7 +1461,7 @@ function buildSystemPrompt({
 4. 业务词到枚举值的映射只能在主题提示词、指标业务口径、字段说明或字段默认 values 中找到依据，并在 ruleSource 中引用原文；字段返回 values 时，过滤值必须使用或映射到这些规范枚举值，不得自造枚举值。无法唯一映射时必须停止。
 5. 多个时间表达必须建立多个 timeWindows；“每个月/每个周/每个季度/每年/每天/按周/按月”等分组表达必须同时提供时间维度和 timeGrain。
 6. 排名前 N 必须提供业务拆解维度和不超过 N 的 limit。
-7. 主题提示词规定某个词表示“全量/整体/不添加过滤”时，使用 SCOPE 条件并在 scopeModifiers 中设置 action=NO_FILTER，不得伪造空值过滤或业务维度分组。
+7. “整体/全部/全量/不添加过滤”等通用范围词由平台补成 SCOPE 条件并生成 NO_FILTER scopeModifier；涉及“子集占整体的比例”时，必须把该 SCOPE 条件的 id 绑定到分母 metricField，且分母 metricField 不得包含分子过滤条件的 id。
 8. compile_query_contract 返回 valid=false 时，根据 issues 修正后重新编译，不得执行无效契约。
 9. execute_query_contract 只接受已通过门禁的 contractId，不得自行改写指标、维度、过滤或时间条件。
 10. 当本轮分析模式为 ATTRIBUTION 时，先锁定指标、本期、业务范围，再按主题提示词声明的归因公式和候选归因维度直接生成契约；必须提供本期与等长上期两个 timeWindows、至少一个非时间业务维度，并设置 calculation.type=PERIOD_COMPARISON。
@@ -1495,12 +1474,14 @@ function buildSystemPrompt({
 ${buildSemanticTaxonomyPrompt()}
 - 提交 conditions 前逐类检查上述清单，并覆盖问题中的每一个有效片段。
 - TIME_WINDOW、TIME_GRAIN、RANKING、TREND、ATTRIBUTION 和结果动作由平台做确定性补全；仍需在条件账本中显式声明，以便审计来源。
-- METRIC、DIMENSION、FILTER、SCOPE、COMPARISON 和 CALCULATION 必须由你映射到当前指标或数据集字段，并绑定 conditionIds。
+- METRIC、DIMENSION、FILTER、COMPARISON 和 CALCULATION 必须由你映射到当前指标或数据集字段，并绑定 conditionIds；SCOPE 由平台补全，但你必须在对应 metricFields 的 conditionIds 中引用它。
 - 如果同一句同时包含多个类别，必须生成多个条件项，不得只保留一个类别。
 
 派生指标规则：
 - 比率、占比、增长率、差额、百分点变化、求和和均值必须通过 derivedMetrics 提交结构化公式。
 - RATIO 使用 left/right 或 numerator/denominator；GROWTH_RATE 使用本期 left 与上期 right；不得直接提交 SQL、代码或格式化后的字符串。
+- “A占整体B的比例”必须先在 metricFields 中分别建立 A 和整体 B 两个计算口径，二者使用唯一 outputField；分子绑定业务过滤条件，分母只绑定 SCOPE 条件，不绑定该业务过滤条件。RATIO 的 numerator/denominator 引用这两个 outputField。
+- 计数指标只选择一个 IDENTIFIER 字段，用 COUNT_DISTINCT 统计去重数量；不得把多个商品编码、名称或编号同时提交为同一个计数指标。
 - 当前预设类型不足时使用 EXPRESSION，提交通用运算树：ADD、SUBTRACT、MULTIPLY、DIVIDE、ABS、NEGATE；字段节点必须引用已确认字段或前序 outputField。
 - 主题业务语义包中已经声明的指标公式、别名、排除条件和枚举优先于自由判断；命中时必须直接使用，不得替换成相似字段。
 - 派生指标引用的基础指标必须来自已确认口径。
@@ -2167,6 +2148,7 @@ export class MetricAgentService {
     question,
     preferredChart = 'auto',
     clarificationOptionId = '',
+    clarificationOptionLabel = '',
     modelId = null,
     attachmentArtifactIds = [],
     signal = null,
@@ -2395,7 +2377,15 @@ export class MetricAgentService {
       theme,
       onEvent: emit,
     });
-    appendUserQuestionWithAttachments({ memory: this.memory, workspace: this.workspace, session, user, question: normalizedQuestion, artifactIds: attachmentArtifactIds });
+    appendUserQuestionWithAttachments({
+      memory: this.memory,
+      workspace: this.workspace,
+      session,
+      user,
+      question: normalizedQuestion,
+      displayQuestion: clarificationOptionLabel,
+      artifactIds: attachmentArtifactIds,
+    });
     const answerStartedAt = Date.now();
     let lastQueryResult = null;
     let lastChart = null;
@@ -2544,6 +2534,7 @@ export class MetricAgentService {
     // 本轮契约编译里出现的「过滤值未唯一命中」候选值：它比其它阻塞项优先，
     // 因为用户必须先选定具体值，后面的口径问题才有可能问对。
     let pendingValueCandidates = [];
+    let pendingSemanticSpans = [];
     // 模型通过 request_clarification 提出的确认问题：由平台渲染成可点选选项，
     // 避免它自己写一大段内部术语。
     let pendingModelClarification = null;
@@ -3487,16 +3478,17 @@ export class MetricAgentService {
         String(dataset.id),
       )?.fields ?? this.businessDatasets.getDatasetFields(dataset.id, true);
       const boundContract = args.__contract ?? null;
+      const boundExecution = boundContract
+        ? prepareBoundDatasetExecution(boundContract)
+        : null;
+      const executionFilterFields = boundExecution?.executionFilterFields ?? [];
       const requestedMetrics = boundContract
-        ? boundContract.metricFields.map((metric) => ({
-          field: metric.field,
-          aggregator: metric.aggregator,
-        }))
+        ? boundExecution.requestedMetrics
         : (args.metrics ?? []).map((metric) => (
           typeof metric === 'string' ? { field: metric } : metric
         ));
       const requestedDimensions = boundContract
-        ? resolveBoundDatasetDimensions(boundContract)
+        ? resolveBoundDimensionsFromModule(boundContract)
         : (args.dimensions ?? []).map(String);
       const inferred = boundContract
         ? {
@@ -3557,10 +3549,12 @@ export class MetricAgentService {
         metrics: inferred.metrics.map((metric) => ({
           field: metric.field,
           aggregator: metric.aggregator,
+          outputField: metric.outputField ?? metric.field,
+          predicateFilters: metric.predicateFilters ?? [],
         })),
         dimensions: inferred.dimensions,
         filters: boundContract
-          ? boundContract.filterFields
+          ? executionFilterFields
             .filter((filter) => !derivedOutputFields.has(String(filter.field)))
             .map((filter) => ({
               field: filter.field,
@@ -3679,12 +3673,15 @@ export class MetricAgentService {
           operator: filter.operator,
           value: filter.value,
           scope: filter.scope ?? 'ROW',
+          applicationScope: filter.applicationScope ?? 'GLOBAL',
+          conditionIds: filter.conditionIds ?? [],
           source: 'AGENT',
         }))
         : effectivePlan.filters;
       const queryContract = buildQueryContract({
         indicatorId: `dataset:${dataset.id}`,
         metrics: effectivePlan.metrics.map((metric) => metric.field),
+        metricSpecs: effectivePlan.metrics,
         derivedMetrics: boundContract?.derivedMetrics ?? [],
         dimensions: boundWindows.length > 1
           ? [...effectivePlan.dimensions, '__period']
@@ -3814,9 +3811,11 @@ export class MetricAgentService {
       const metricDefinitions = effectivePlan.metrics.map((metric) => {
         const inferredMetric = inferred.metrics.find((item) => (
           String(item.field) === String(metric.field)
+          && String(item.outputField ?? item.field) === String(metric.outputField ?? metric.field)
         ));
         return {
-          key: metric.field,
+          key: metric.outputField ?? metric.field,
+          field: metric.field,
           label: inferredMetric?.label
             ?? fieldMap.get(metric.field)?.displayName
             ?? metric.field,
@@ -4270,10 +4269,11 @@ export class MetricAgentService {
         sourceError.recoverable = true;
         throw sourceError;
       }
-      const sourceContext = buildContractSourceContext({
+      const sourceContext = buildContextFromModule({
         inheritQueryContext: conversationContext.inheritQueryContext,
         history,
         resolvedQuestion,
+        clarificationText: clarificationOptionLabel,
       });
       const startedAt = Date.now();
       let result;
@@ -4383,6 +4383,7 @@ export class MetricAgentService {
       } else {
         invalidContractAttempts += 1;
         pendingValueCandidates = collectValueCandidates(result.issues);
+        pendingSemanticSpans = result.contract?.unresolvedSemanticSpans ?? [];
         if (invalidContractAttempts >= 4) {
           const contractError = new Error(
             `查询契约连续 ${invalidContractAttempts} 次未通过：${
@@ -5344,6 +5345,12 @@ export class MetricAgentService {
     const valueClarification = lastQueryResult
       ? null
       : buildValueClarification(pendingValueCandidates, { allowed: valueClarificationAllowed });
+    const semanticSpanClarification = lastQueryResult || valueClarification
+      ? null
+      : buildSemanticSpanClarification(
+        collectSemanticSpanGroups(pendingSemanticSpans),
+        { allowed: valueClarificationAllowed },
+      );
     const modelClarification = lastQueryResult
       ? null
       : buildModelClarification(
@@ -5363,7 +5370,9 @@ export class MetricAgentService {
     const analysisText = resultAnalysis
       ? buildResultAnalysisText(resultAnalysis.facts)
       : '';
-    const activeClarification = valueClarification ?? modelClarification;
+    const activeClarification = valueClarification
+      ?? semanticSpanClarification
+      ?? modelClarification;
     const finalMessage = activeClarification
       ? activeClarification.prompt
       : [
@@ -5374,7 +5383,7 @@ export class MetricAgentService {
           : '',
       ].filter(Boolean).join('\n\n');
     const structuredClarification = !lastQueryResult
-      ? (activeClarification ?? buildStructuredClarification({
+      ? (activeClarification ?? buildClarificationFromModule({
         message: finalMessage,
         clarificationPolicy,
       }))

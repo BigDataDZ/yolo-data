@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildModelClarification,
+  buildSemanticSpanClarification,
   buildValueClarification,
   choiceOptionId,
   collectValueCandidates,
+  collectSemanticSpanGroups,
   describeClarificationOption,
   parseValueOption,
   valueOptionId,
@@ -146,4 +148,33 @@ test('model clarification caps the option list and always keeps the cancel optio
   const clarification = buildModelClarification({ question: 'T7 指哪个？', options });
   assert.equal(clarification.options.length, 7);
   assert.equal(clarification.options.at(-1).id, 'cancel');
+});
+
+test('semantic span clarification batches indexed candidates', () => {
+  const groups = collectSemanticSpanGroups([
+    {
+      text: 'OEM',
+      candidates: [
+        { term: '03', field: 'goods_purchase_level', value: '03' },
+        { term: 'oem商品', field: 'goods_purchase_level', value: 'oem商品' },
+      ],
+    },
+  ]);
+  const clarification = buildSemanticSpanClarification(groups);
+
+  assert.equal(clarification.type, 'NEEDS_CONFIRMATION');
+  assert.match(clarification.prompt, /OEM/);
+  assert.match(clarification.options[0].label, /03/);
+  assert.equal(clarification.options.at(-1).id, 'cancel');
+});
+
+test('semantic span clarification reports a capability gap when no candidate exists', () => {
+  const clarification = buildSemanticSpanClarification([
+    { text: 'XYZ业务', candidates: [] },
+  ]);
+
+  assert.equal(clarification.type, 'CAPABILITY_GAP');
+  assert.match(clarification.prompt, /XYZ业务/);
+  assert.match(clarification.prompt, /业务语义包/);
+  assert.equal(clarification.options.length, 0);
 });

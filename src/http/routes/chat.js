@@ -27,6 +27,7 @@ export function registerChatRoutes(table) {
           question: body.question,
           preferredChart: body.preferredChart,
           clarificationOptionId: body.clarificationOptionId,
+          clarificationOptionLabel: body.clarificationOptionLabel,
           modelId: body.modelId ? Number(body.modelId) : null,
           attachmentArtifactIds: body.attachmentArtifactIds,
           signal: abortController.signal,
@@ -71,6 +72,7 @@ export function registerChatRoutes(table) {
         question: body.question,
         preferredChart: body.preferredChart === 'auto' ? 'auto' : body.preferredChart,
         clarificationOptionId: body.clarificationOptionId,
+        clarificationOptionLabel: body.clarificationOptionLabel,
         modelId: body.modelId ? Number(body.modelId) : null,
         attachmentArtifactIds: body.attachmentArtifactIds,
       });

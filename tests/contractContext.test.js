@@ -44,6 +44,18 @@ test('follow-up questions keep the inherited binding context', () => {
   assert.match(sourceContext, /那按周拆开呢/);
 });
 
+test('confirmed clarification values are included in contract traceability context', () => {
+  const sourceContext = buildContractSourceContext({
+    inheritQueryContext: false,
+    history: [],
+    resolvedQuestion: '2026年8月OEM销售额占整体的比例',
+    clarificationText: '商品采购级别 = 03',
+  });
+
+  assert.match(sourceContext, /2026年8月OEM销售额占整体的比例/);
+  assert.match(sourceContext, /商品采购级别 = 03/);
+});
+
 test('bound dataset dimensions keep the time field required for trend grouping', () => {
   const dimensions = resolveBoundDatasetDimensions({
     dimensionFields: [

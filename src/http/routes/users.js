@@ -185,6 +185,7 @@ export function registerUserRoutes(table) {
             : await indicatorClient.listTypes().catch(() => []);
       sendJson(response, 200, {
         currentUser: user,
+        preferences: database.getUserPreferences(user.id),
         users: canManage ? database.listUsers() : [user],
         themes: themes.map(toPublicTheme),
         managedThemes: canManage ? database.listThemes().map(toPublicTheme) : [],
@@ -199,6 +200,46 @@ export function registerUserRoutes(table) {
         indicatorTypes,
         health: application.currentHealth(),
       });
+    },
+  });
+
+  table.add({
+    id: 'users.preferences.replace',
+    method: 'PUT',
+    path: '/api/preferences',
+    tags: ['users'],
+    summary: '保存当前用户界面偏好',
+    middleware: ['auth'],
+    handler: async (ctx) => {
+      const { request, response, database, getRequestUser, readJson, sendJson } = ctx;
+      const user = getRequestUser(request, database);
+      const body = await readJson(request);
+      const allowedKeys = new Set([
+        'selectedThemeId',
+        'selectedModelId',
+        'chatDensity',
+        'datasetTab',
+        'auditTab',
+      ]);
+      const patch = {};
+      for (const [key, value] of Object.entries(body ?? {})) {
+        if (!allowedKeys.has(key)) {
+          continue;
+        }
+        if (
+          key === 'selectedThemeId'
+          || key === 'selectedModelId'
+        ) {
+          const id = Number(value);
+          patch[key] = Number.isFinite(id) && id > 0 ? id : null;
+        } else if (value === null || value === undefined) {
+          patch[key] = null;
+        } else {
+          patch[key] = String(value);
+        }
+      }
+      const preferences = database.saveUserPreferences(user.id, patch);
+      sendJson(response, 200, { preferences });
     },
   });
 }

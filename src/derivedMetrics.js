@@ -1,3 +1,5 @@
+import { normalizeDerivedOperand } from './scopedMetrics.js';
+
 const DERIVED_TYPES = new Set([
   'RATIO',
   'DIFFERENCE',
@@ -13,19 +15,6 @@ const OUTPUT_FORMATS = new Set(['NUMBER', 'PERCENT', 'CURRENCY', 'QUANTITY']);
 function numericValue(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-}
-
-function normalizeOperand(operand) {
-  if (operand && typeof operand === 'object') {
-    return {
-      field: String(operand.field ?? operand.metric ?? '').trim(),
-      aggregator: String(operand.aggregator ?? 'SUM').toUpperCase(),
-    };
-  }
-  return {
-    field: String(operand ?? '').trim(),
-    aggregator: 'SUM',
-  };
 }
 
 function computeDefinition(definition, row) {
@@ -119,12 +108,12 @@ export function normalizeDerivedMetricDefinition(
   if (!DERIVED_TYPES.has(type)) {
     return null;
   }
-  const left = normalizeOperand(
+  const left = normalizeDerivedOperand(
     definition.left
       ?? definition.numerator
       ?? definition.metric,
   );
-  const right = normalizeOperand(
+  const right = normalizeDerivedOperand(
     definition.right
       ?? definition.denominator
       ?? (['SUM', 'AVERAGE', 'DIFFERENCE'].includes(type)
@@ -164,7 +153,7 @@ export function normalizeDerivedMetricDefinition(
       ?? '',
     ).trim().toUpperCase();
     if (!operation || operation === 'FIELD' || operation === 'METRIC') {
-      const operand = resolveOperand(normalizeOperand(expression));
+      const operand = resolveOperand(normalizeDerivedOperand(expression));
       return operand ? { ...operand, op: 'FIELD' } : null;
     }
     if (operation === 'ABS' || operation === 'NEGATE') {

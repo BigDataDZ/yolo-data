@@ -79,6 +79,7 @@ const state = {
   businessDatasets: [],
   dataSources: [],
   models: [],
+  preferences: {},
   datasetTab: 'datasets',
   auditTab: 'platform',
   memoryUserId: null,
@@ -501,6 +502,24 @@ async function api(path, options = {}) {
   return payload;
 }
 
+let preferenceSaveTimer = null;
+
+function persistPreferences(patch = {}) {
+  state.preferences = {
+    ...(state.preferences ?? {}),
+    ...patch,
+  };
+  if (preferenceSaveTimer) {
+    clearTimeout(preferenceSaveTimer);
+  }
+  preferenceSaveTimer = setTimeout(() => {
+    api('/api/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(state.preferences),
+    }).catch(() => {});
+  }, 120);
+}
+
 async function streamApi(path, options = {}, onEvent) {
   const response = await fetch(path, {
     ...options,
@@ -677,6 +696,7 @@ function syncThemeBreadcrumb() {
     state.activeSessionId = null;
     state.chatMessages = [];
     state.chatStream = null;
+    persistPreferences({ selectedThemeId: state.selectedThemeId });
     queryHooks.beforeQueryReset?.();
     renderPage();
   };
@@ -881,10 +901,26 @@ async function loadBootstrap(userId) {
   state.dataSources = state.bootstrap.dataSources ?? [];
   state.models = state.bootstrap.models ?? [];
   state.indicatorTypes = state.bootstrap.indicatorTypes ?? [];
-  state.selectedThemeId = state.selectedThemeId
-    && state.themes.some((theme) => Number(theme.id) === Number(state.selectedThemeId))
-    ? state.selectedThemeId
+  state.preferences = state.bootstrap.preferences ?? {};
+  state.chatDensity = ['detailed', 'compact'].includes(state.preferences.chatDensity)
+    ? state.preferences.chatDensity
+    : state.chatDensity;
+  state.datasetTab = ['datasets', 'sources'].includes(state.preferences.datasetTab)
+    ? state.preferences.datasetTab
+    : state.datasetTab;
+  state.auditTab = ['platform', 'datasets'].includes(state.preferences.auditTab)
+    ? state.preferences.auditTab
+    : state.auditTab;
+  const preferredThemeId = Number(state.preferences.selectedThemeId);
+  const preferredModelId = Number(state.preferences.selectedModelId);
+  state.selectedThemeId = preferredThemeId
+    && state.themes.some((theme) => Number(theme.id) === preferredThemeId)
+    ? preferredThemeId
     : state.themes[0]?.id ?? null;
+  state.selectedModelId = preferredModelId
+    && state.models.some((model) => Number(model.id) === preferredModelId)
+    ? preferredModelId
+    : null;
   if (state.currentUser.role === 'ADMIN' && state.allUsers.length === 0) {
     state.allUsers = await api('/api/users');
   }
@@ -1142,6 +1178,7 @@ document.getElementById('densitySeg').addEventListener('click', (event) => {
     return;
   }
   state.chatDensity = option.dataset.density;
+  persistPreferences({ chatDensity: state.chatDensity });
   document.querySelectorAll('#densitySeg .density-option').forEach((button) => {
     button.classList.toggle('is-active', button === option);
   });
@@ -1192,6 +1229,7 @@ export {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,

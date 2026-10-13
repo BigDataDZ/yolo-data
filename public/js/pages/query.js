@@ -42,6 +42,7 @@ const {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -157,6 +158,7 @@ async function renderQueryPage(root) {
       return;
     }
     state.selectedModelId = Number(event.target.value);
+    persistPreferences({ selectedModelId: state.selectedModelId });
   });
   const input = document.getElementById('questionInput');
   input.addEventListener('keydown', (event) => {
@@ -1214,8 +1216,12 @@ async function submitClarificationOption(messageId, optionId) {
   if (input) {
     input.value = question;
   }
+  const selectedOption = sourceMessage?.result?.clarification?.options?.find(
+    (option) => String(option.id) === String(optionId),
+  );
   await runQuestion({
     clarificationOptionId: optionId,
+    displayQuestion: selectedOption?.label || question,
   });
 }
 
@@ -1397,7 +1403,10 @@ function stopQuestion() {
   toast('正在停止生成');
 }
 
-async function runQuestion({ clarificationOptionId = '' } = {}) {
+async function runQuestion({
+  clarificationOptionId = '',
+  displayQuestion = '',
+} = {}) {
   const input = document.getElementById('questionInput');
   const question = input?.value.trim();
   if (!question || state.chatLoading) {
@@ -1426,7 +1435,7 @@ async function runQuestion({ clarificationOptionId = '' } = {}) {
     state.chatMessages.push({
       id: `local-${Date.now()}`,
       role: 'user',
-      content: question,
+      content: String(displayQuestion ?? '').trim() || question,
       attachments,
       result: {},
       createdAt: new Date().toISOString(),
@@ -1454,6 +1463,9 @@ async function runQuestion({ clarificationOptionId = '' } = {}) {
         question,
         preferredChart: 'auto',
         modelId: state.selectedModelId ?? null,
+        ...(clarificationOptionId ? {
+          clarificationOptionLabel: String(displayQuestion ?? '').trim(),
+        } : {}),
         ...(attachments.length > 0
           ? { attachmentArtifactIds: attachments.map((item) => item.artifactId) }
           : {}),

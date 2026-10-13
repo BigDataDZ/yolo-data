@@ -24,6 +24,21 @@ import { resolveWithPlugins } from './analysisPluginRegistry.js';
 import { VALUE_CLARIFICATION_CODES } from './valueClarification.js';
 import { normalizeAnalysisPipeline } from './analysisPipeline.js';
 import { CONTRACT_COMPILER_VERSION } from './contractVersion.js';
+import {
+  applyMetricScopedFilters,
+  classifyDerivedInternalMetrics,
+} from './scopedMetrics.js';
+import {
+  auditSemanticCategories,
+  buildSemanticCoverage,
+  completePlatformSemanticConditions,
+} from './semanticCompletion.js';
+import { buildSemanticTermRegistry } from './semanticTermRegistry.js';
+import {
+  buildSemanticCoverageReport,
+  splitQuestionClauses,
+  validateBindingSources,
+} from './semanticCoverage.js';
 
 const CONDITION_KINDS = new Set([
   'METRIC',
@@ -49,9 +64,6 @@ const RESULT_ACTION_PATTERN =
   /导出|下载|输出|保存|生成|excel|xlsx|csv|cel|表格|文件/i;
 const PRESENTATION_PATTERN =
   /趋势|走势|折线图|折线展示|图形展示|可视化/;
-const QUESTION_FILLER_PATTERN =
-  '请|麻烦|帮我|给我|提供|查询|查一下|看看|看一下|查看|请问|的|了|呢|吗|多少|是多少|有哪些|哪些|哪个|什么|分别|以及|并且|然后|同时|另外|并|按照|分组|展示|输出|统计|分析|排名|对比|和|与|vs|数据|具体原因|原因|为何|为什么|归因|上升还是下滑|上升或下滑|上升|下滑|下降|增长';
-
 function normalizePostProcessing(postProcessing) {
   return postProcessing && typeof postProcessing === 'object'
     ? JSON.parse(JSON.stringify(postProcessing))
@@ -205,24 +217,38 @@ function normalizeMetricFields(metrics, available, issues, fieldType = 'METRIC')
     const resolution = resolveFieldDetailed(requested, available, fieldType);
     const resolved = resolution?.item ?? null;
     const field = canonicalField(resolved, fieldType);
+    const aggregator = String(
+      (typeof metric === 'object' ? metric?.aggregator : null) ?? 'SUM',
+    ).toUpperCase();
     if (!field) {
       issues.push({
         level: 'ERROR',
         code: 'METRIC_FIELD_UNRESOLVED',
         message: `指标字段无法映射到实时语义定义: ${requested ?? index + 1}`,
       });
+    } else if (
+      fieldType === 'DATASET'
+      && resolved?.role === 'IDENTIFIER'
+      && !['COUNT', 'COUNT_DISTINCT'].includes(aggregator)
+    ) {
+      issues.push({
+        level: 'ERROR',
+        code: 'IDENTIFIER_METRIC_AGGREGATOR_INVALID',
+        message: `标识字段「${requested}」只能使用 COUNT 或 COUNT_DISTINCT 聚合。`,
+      });
     }
     return {
       field,
+      outputField: String(
+        (typeof metric === 'object' ? metric?.outputField : null) ?? field,
+      ).trim() || field,
       requested: String(requested ?? ''),
       mappingMode: resolution?.mode ?? 'UNRESOLVED',
       matchedAlias: resolution?.matchedAlias ?? '',
       sourceText: String(
         (typeof metric === 'object' ? metric?.sourceText : null) ?? '',
       ).trim(),
-      aggregator: String(
-        (typeof metric === 'object' ? metric?.aggregator : null) ?? 'SUM',
-      ).toUpperCase(),
+      aggregator,
       conditionIds: normalizeConditionIds(
         typeof metric === 'object' ? metric?.conditionIds : null,
       ),
@@ -231,7 +257,9 @@ function normalizeMetricFields(metrics, available, issues, fieldType = 'METRIC')
   }).filter((item) => item.field);
   const merged = new Map();
   for (const metric of normalized) {
-    const key = `${metric.field}\u001f${metric.aggregator}`;
+    const key = `${metric.field}\u001f${metric.aggregator}\u001f${metric.outputField}\u001f${
+      metric.conditionIds.join(',')
+    }`;
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, { ...metric });
@@ -251,7 +279,23 @@ function normalizeMetricFields(metrics, available, issues, fieldType = 'METRIC')
       existing.matchedAlias = metric.matchedAlias;
     }
   }
-  return [...merged.values()];
+  const result = [...merged.values()];
+  const signatureCounts = new Map();
+  for (const metric of result) {
+    const signature = `${metric.field}\u001f${metric.aggregator}`;
+    signatureCounts.set(signature, (signatureCounts.get(signature) ?? 0) + 1);
+  }
+  for (const metric of result) {
+    const signature = `${metric.field}\u001f${metric.aggregator}`;
+    if (signatureCounts.get(signature) > 1 && metric.outputField === metric.field) {
+      issues.push({
+        level: 'ERROR',
+        code: 'METRIC_SCOPE_ALIAS_REQUIRED',
+        message: `指标「${metric.field}」在同一契约中使用多个计算口径，必须为每个口径配置唯一的 outputField。`,
+      });
+    }
+  }
+  return result;
 }
 
 function normalizeDimensionFields(dimensions, available, issues, fieldType = 'DIMENSION') {
@@ -549,37 +593,8 @@ function normalizeTimeWindows(windows, timeField) {
   }));
 }
 
-function splitQuestionClauses(question) {
-  return String(question ?? '')
-    .split(/[，,。；;！!？?\n]+|(?=(?:并且|同时|另外|然后|以及|再按|再计算))/)
-    .map((clause) => clause.trim())
-    .filter((clause) => compact(clause).length >= 2)
-    .filter((clause) => !/^(?:并|然后|再|还有|以及|说明|展示|输出)$/.test(clause));
-}
-
 function isResultActionClause(clause) {
   return RESULT_ACTION_PATTERN.test(String(clause ?? ''));
-}
-
-function conditionCoverage(clause, conditions) {
-  const target = compact(clause).replace(
-    new RegExp(QUESTION_FILLER_PATTERN, 'gi'),
-    '',
-  );
-  if (!target) {
-    return 1;
-  }
-  let covered = 0;
-  for (const condition of conditions) {
-    const source = compact(condition.sourceText).replace(
-      new RegExp(QUESTION_FILLER_PATTERN, 'gi'),
-      '',
-    );
-    if (source && target.includes(source)) {
-      covered += Math.min(source.length, target.length);
-    }
-  }
-  return Math.min(1, covered / target.length);
 }
 
 function textHasRule(source, rule, ruleSources) {
@@ -887,137 +902,6 @@ function bindMentionWindows(question, windows, now, conditions = []) {
     addedConditions,
     addedWindowExpressions,
   };
-}
-
-function semanticSourceMatches(left, right) {
-  const a = compact(left);
-  const b = compact(right);
-  return Boolean(a && b && (a.includes(b) || b.includes(a)));
-}
-
-function semanticConditionKinds(category) {
-  if (category.code === 'DIMENSION') {
-    return ['DIMENSION', 'FILTER'];
-  }
-  if (category.code === 'COMPARISON') {
-    return ['COMPARISON', 'CALCULATION', 'RESULT_ACTION'];
-  }
-  if (category.code === 'CALCULATION') {
-    return ['CALCULATION', 'COMPARISON', 'METRIC'];
-  }
-  if (category.code === 'SCOPE') {
-    return ['SCOPE', 'FILTER'];
-  }
-  if (category.code === 'FILTER') {
-    return ['FILTER', 'SCOPE', 'ANALYSIS_STAGE'];
-  }
-  if (category.code === 'CALCULATION') {
-    return ['CALCULATION', 'COMPARISON', 'METRIC', 'ANALYSIS_STAGE'];
-  }
-  if (category.code === 'RESULT_ACTION') {
-    return ['RESULT_ACTION', 'CALCULATION'];
-  }
-  return [category.conditionKind];
-}
-
-function findSemanticCondition(conditions, category) {
-  const kinds = new Set(semanticConditionKinds(category));
-  const matched = conditions.find((condition) => (
-    kinds.has(condition.kind)
-    && semanticSourceMatches(condition.sourceText, category.sourceText)
-  ));
-  if (
-    matched
-    || category.code !== 'DIMENSION'
-    || !/^(?:分别|各自|分开)$/.test(compact(category.sourceText))
-  ) {
-    return matched;
-  }
-  return conditions.find((condition) => condition.kind === 'FILTER') ?? null;
-}
-
-function completePlatformSemanticConditions(profile, conditions) {
-  const added = [];
-  let rankLimit = null;
-  for (const category of profile?.categories ?? []) {
-    if (!category.autoComplete || category.code === 'TIME_WINDOW') {
-      continue;
-    }
-    const existing = findSemanticCondition(conditions, category);
-    if (existing) {
-      continue;
-    }
-    let index = conditions.length + 1;
-    while (conditions.some((condition) => (
-      condition.id === `semantic-auto-${index}`
-    ))) {
-      index += 1;
-    }
-    const condition = {
-      id: `semantic-auto-${index}`,
-      sourceText: category.sourceText,
-      kind: category.conditionKind,
-      status: 'RESOLVED',
-      reason: `平台按${category.label}语义自动补全`,
-      ruleSource: `analysisSemantics:${category.code}`,
-    };
-    conditions.push(condition);
-    added.push(condition);
-    if (category.code === 'RANKING') {
-      const topN = resolveTopN(category.sourceText);
-      if (Number.isFinite(topN) && topN > 0) {
-        rankLimit = topN;
-      }
-    }
-  }
-  return { added, rankLimit };
-}
-
-function auditSemanticCategories(profile, conditions, issues) {
-  for (const category of profile?.categories ?? []) {
-    if (
-      category.owner === 'PLATFORM'
-      || category.code === 'TIME_WINDOW'
-      || findSemanticCondition(conditions, category)
-    ) {
-      continue;
-    }
-    issues.push({
-      level: 'ERROR',
-      code: 'SEMANTIC_CATEGORY_NOT_BOUND',
-      phase: 'PLAN',
-      categoryCode: category.code,
-      message: `检测到${category.label}语义「${category.sourceText}」，但条件账本没有对应的 ${category.conditionKind}/${category.code} 条件。`,
-    });
-  }
-}
-
-function buildSemanticCoverage(
-  profile,
-  conditions,
-  automaticConditionIds = [],
-  automaticSources = [],
-) {
-  const automatic = new Set(automaticConditionIds);
-  return (profile?.categories ?? []).map((category) => {
-    const condition = findSemanticCondition(conditions, category);
-    const automaticallyCompleted = automatic.has(condition?.id)
-      || automaticSources.some((source) => (
-        semanticSourceMatches(source, category.sourceText)
-      ));
-    return {
-      code: category.code,
-      label: category.label,
-      owner: category.owner,
-      conditionKind: category.conditionKind,
-      sourceText: category.sourceText,
-      status: condition
-        ? automaticallyCompleted
-          ? 'AUTO_COMPLETED'
-          : 'BOUND'
-        : 'MISSING',
-    };
-  });
 }
 
 function validateConditionBindings(conditions, {
@@ -1347,7 +1231,14 @@ function validateFilterTraceability(filters, conditions, ruleSources, sourceText
 function validateScopeTraceability(modifiers, ruleSources, sourceText = '') {
   const issues = [];
   for (const modifier of modifiers ?? []) {
-    if (String(modifier.ruleSource ?? '').startsWith('semanticPolicy:')) {
+    if (
+      String(modifier.ruleSource ?? '').startsWith('semanticPolicy:')
+      || String(modifier.ruleSource ?? '').startsWith('analysisSemantics:')
+      || (
+        modifier.sourceText
+        && compact(sourceText).includes(compact(modifier.sourceText))
+      )
+    ) {
       continue;
     }
     if (!textHasRule(sourceText, modifier.ruleSource, ruleSources)) {
@@ -1359,15 +1250,6 @@ function validateScopeTraceability(modifiers, ruleSources, sourceText = '') {
     }
   }
   return issues;
-}
-
-function buildCoverage(question, conditions) {
-  return splitQuestionClauses(question).map((clause) => ({
-    clause,
-    ratio: isResultActionClause(clause)
-      ? 1
-      : conditionCoverage(clause, conditions),
-  }));
 }
 
 function buildMappingProvenance({
@@ -1660,100 +1542,6 @@ function validateAnalysisPipeline({
   }
 }
 
-function validateBindingTextCoverage(question, {
-  conditions,
-  metricFields,
-  dimensionFields,
-  filterFields,
-  scopeModifiers,
-  timeWindows,
-  skipResidual = false,
-}) {
-  const issues = [];
-  const bindingSources = [
-    ...metricFields,
-    ...dimensionFields,
-    ...filterFields,
-    ...scopeModifiers,
-    ...timeWindows,
-  ].map((item) => String(item.sourceText ?? '').trim()).filter(Boolean);
-  const conditionSources = conditions
-    .map((condition) => String(condition.sourceText ?? '').trim())
-    .filter(Boolean);
-  for (const item of [
-    ...metricFields,
-    ...dimensionFields,
-    ...filterFields,
-    ...scopeModifiers,
-    ...timeWindows,
-  ]) {
-    if (!String(item.sourceText ?? '').trim()) {
-      issues.push({
-        level: 'ERROR',
-        code: 'BINDING_SOURCE_REQUIRED',
-        message: `查询元素缺少问题原文绑定: ${item.field || item.id || '-'}`,
-      });
-    }
-  }
-  for (const source of bindingSources) {
-    if (!compact(question).includes(compact(source))) {
-      issues.push({
-        level: 'ERROR',
-        code: 'BINDING_SOURCE_NOT_IN_QUESTION',
-        message: `查询元素引用了问题中不存在的原文: ${source}`,
-      });
-    }
-  }
-  if (skipResidual) {
-    return issues;
-  }
-  const structuralSources = conditions
-    .filter((condition) => (
-      ['LIMIT', 'COMPARISON', 'CALCULATION'].includes(condition.kind)
-      && condition.status !== 'UNRESOLVED'
-    ))
-    .map((condition) => condition.sourceText)
-    .filter(Boolean);
-  const nonQuerySources = conditions
-    .filter((condition) => (
-      condition.kind === 'RESULT_ACTION'
-      || (condition.kind === 'OTHER' && condition.status === 'NOT_APPLICABLE')
-    ))
-    .map((condition) => condition.sourceText)
-    .filter(Boolean);
-  for (const clause of splitQuestionClauses(question)) {
-    if (isResultActionClause(clause)) {
-      continue;
-    }
-    let residual = compact(clause);
-    const clauseBindings = [...bindingSources, ...conditionSources].filter(
-      (source) => residual.includes(compact(source)),
-    );
-    const applicableSources = [
-      ...clauseBindings,
-      ...structuralSources.filter((source) => residual.includes(compact(source))),
-      ...nonQuerySources.filter((source) => residual.includes(compact(source))),
-    ];
-    for (const source of [...new Set(applicableSources)].sort(
-      (left, right) => compact(right).length - compact(left).length,
-    )) {
-      residual = residual.split(compact(source)).join('');
-    }
-    residual = residual.replace(
-      new RegExp(QUESTION_FILLER_PATTERN, 'gi'),
-      '',
-    );
-    if (residual.length >= 2) {
-      issues.push({
-        level: 'ERROR',
-        code: 'QUESTION_RESIDUE_NOT_BOUND',
-        message: `问题片段存在未绑定条件: ${clause}（残留：${residual}）`,
-      });
-    }
-  }
-  return issues;
-}
-
 export class QueryContractCompiler {
   compile({
     question,
@@ -1787,6 +1575,7 @@ export class QueryContractCompiler {
     const semanticCompletion = completePlatformSemanticConditions(
       semanticProfile,
       conditions,
+      resolveTopN,
     );
     auditSemanticCategories(semanticProfile, conditions, issues);
     if (conditions.length === 0) {
@@ -1798,7 +1587,9 @@ export class QueryContractCompiler {
     }
 
     const metricAvailable = normalizedSourceType === 'BUSINESS_DATASET'
-      ? datasetFields.filter((field) => field.role === 'METRIC')
+      ? datasetFields.filter((field) => (
+        field.role === 'METRIC' || field.role === 'IDENTIFIER'
+      ))
       : availableMetrics;
     const dimensionAvailable = normalizedSourceType === 'BUSINESS_DATASET'
       ? datasetFields
@@ -1816,12 +1607,25 @@ export class QueryContractCompiler {
       issues,
       metricType,
     );
+    const resolveContractMetric = (requested) => {
+      const target = String(requested ?? '').trim();
+      const targetWithoutPrefix = target.includes('.')
+        ? target.slice(target.lastIndexOf('.') + 1).trim()
+        : target;
+      const contractMetric = metricFields.find((metric) => (
+        [metric.outputField, metric.field, metric.requested, metric.matchedAlias]
+          .filter(Boolean)
+          .some((value) => compact(value) === compact(targetWithoutPrefix))
+      ));
+      return contractMetric?.outputField
+        ?? canonicalField(
+          resolveField(targetWithoutPrefix, metricAvailable, metricType),
+          metricType,
+        );
+    };
     let derivedMetrics = normalizeDerivedMetrics(
       draft.derivedMetrics,
-      (requested) => canonicalField(
-        resolveField(requested, metricAvailable, metricType),
-        metricType,
-      ),
+      resolveContractMetric,
     );
     if (
       Array.isArray(draft.derivedMetrics)
@@ -1837,10 +1641,14 @@ export class QueryContractCompiler {
       for (const operand of definition.operands ?? [definition.left, definition.right].filter(Boolean)) {
         if (
           operand.source !== 'DERIVED'
-          && !metricFields.some((metric) => metric.field === operand.field)
+          && !metricFields.some((metric) => (
+            metric.outputField === operand.field
+            || metric.field === operand.field
+          ))
         ) {
           metricFields.push({
             field: operand.field,
+            outputField: operand.field,
             requested: operand.field,
             mappingMode: 'DERIVED',
             matchedAlias: operand.field,
@@ -1959,9 +1767,10 @@ export class QueryContractCompiler {
       resolveBusinessLexicon(theme),
     );
     filterFields = dedupeFilters(filterFields);
-    let scopeModifiers = normalizeScopeModifiers(
-      draft.scopeModifiers ?? draft.scopeFields,
-    );
+    let scopeModifiers = normalizeScopeModifiers([
+      ...(draft.scopeModifiers ?? draft.scopeFields ?? []),
+      ...semanticCompletion.addedScopeModifiers,
+    ]);
     const timeField = resolveTimeField(dimensionAvailable);
     let timeWindows = normalizeTimeWindows(draft.timeWindows ?? draft.dateWindows, timeField);
     const timeBinding = bindMentionWindows(question, timeWindows, now, conditions);
@@ -2022,6 +1831,14 @@ export class QueryContractCompiler {
       conditions,
       timeWindows.map((window) => ({ ...window, kind: 'TIME' })),
     ).map(({ kind, ...window }) => window);
+    const scopedApplication = applyMetricScopedFilters(metricFields, filterFields);
+    metricFields = scopedApplication.metricFields;
+    filterFields = scopedApplication.filterFields;
+    metricFields = classifyDerivedInternalMetrics(
+      conditions,
+      metricFields,
+      derivedMetrics,
+    );
     const postProcessing = normalizePostProcessing(draft.postProcessing);
     const analysisPipeline = normalizeAnalysisPipeline(draft.analysisPipeline);
     if (
@@ -2193,16 +2010,56 @@ export class QueryContractCompiler {
       ruleSources,
       bindingText,
     ));
-    issues.push(...validateBindingTextCoverage(bindingText, {
-      conditions,
+    issues.push(...validateBindingSources(bindingText, {
       metricFields,
-      derivedMetrics,
       dimensionFields,
       filterFields,
       scopeModifiers,
       timeWindows,
-      skipResidual: Boolean(postProcessing) || Boolean(analysisPipeline),
     }));
+    const registryFields = normalizedSourceType === 'BUSINESS_DATASET'
+      ? datasetFields
+      : [...availableMetrics, ...availableDimensions];
+    const semanticTermRegistry = buildSemanticTermRegistry({
+      fields: registryFields,
+      indicator,
+      theme,
+      sourceContext: bindingText,
+    });
+    const bindingSources = [
+      ...metricFields,
+      ...dimensionFields,
+      ...filterFields,
+      ...scopeModifiers,
+      ...timeWindows,
+    ].map((item) => String(item.sourceText ?? '').trim()).filter(Boolean);
+    const conditionSources = conditions
+      .map((condition) => String(condition.sourceText ?? '').trim())
+      .filter(Boolean);
+    const structuralSources = conditions
+      .filter((condition) => (
+        ['LIMIT', 'COMPARISON', 'CALCULATION'].includes(condition.kind)
+        && condition.status !== 'UNRESOLVED'
+      ))
+      .map((condition) => condition.sourceText)
+      .filter(Boolean);
+    const nonQuerySources = conditions
+      .filter((condition) => (
+        condition.kind === 'RESULT_ACTION'
+        || (condition.kind === 'OTHER' && condition.status === 'NOT_APPLICABLE')
+      ))
+      .map((condition) => condition.sourceText)
+      .filter(Boolean);
+    const coverageReport = buildSemanticCoverageReport({
+      question: bindingText,
+      sources: [...bindingSources, ...conditionSources],
+      structuralSources,
+      nonQuerySources,
+      registry: semanticTermRegistry,
+      skipResidual: Boolean(postProcessing) || Boolean(analysisPipeline),
+      isResultActionClause,
+    });
+    issues.push(...coverageReport.issues);
 
     if (metricFields.length === 0) {
       issues.push({
@@ -2226,18 +2083,8 @@ export class QueryContractCompiler {
       });
     }
 
-    const coverage = postProcessing || analysisPipeline
-      ? []
-      : buildCoverage(bindingText, conditions);
-    for (const item of coverage) {
-      if (item.ratio < 0.72) {
-        issues.push({
-          level: 'ERROR',
-          code: 'QUESTION_CLAUSE_NOT_COVERED',
-          message: `问题片段未被条件账本完整覆盖: ${item.clause}`,
-        });
-      }
-    }
+    const coverage = coverageReport.coverage;
+    const unresolvedSemanticSpans = coverageReport.unresolvedSpans;
 
     const mappingProvenance = buildMappingProvenance({
       sourceType: normalizedSourceType,
@@ -2282,7 +2129,7 @@ export class QueryContractCompiler {
       metricFields,
       internalMetrics: metricFields
         .filter((field) => field.internal === true)
-        .map((field) => field.field),
+        .map((field) => field.outputField || field.field),
       derivedMetrics,
       dimensionFields,
       filterFields,
@@ -2296,6 +2143,7 @@ export class QueryContractCompiler {
       analysisPipeline,
       provenance: mappingProvenance,
       coverage,
+      unresolvedSemanticSpans,
       semanticCoverage: buildSemanticCoverage(
         semanticProfile,
         conditions,

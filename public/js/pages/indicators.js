@@ -31,6 +31,7 @@ const {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -107,6 +108,7 @@ async function renderIndicatorsPage(root) {
 
   document.getElementById('indicatorThemeFilter').addEventListener('change', (event) => {
     state.selectedThemeId = Number(event.target.value);
+    persistPreferences({ selectedThemeId: state.selectedThemeId });
     renderPage();
   });
   document.getElementById('indicatorSearchBtn').addEventListener('click', searchIndicators);

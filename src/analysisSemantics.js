@@ -46,9 +46,9 @@ export const ANALYSIS_CONDITION_CATEGORIES = [
     code: 'SCOPE',
     label: '数据范围',
     conditionKind: 'SCOPE',
-    owner: 'MODEL',
-    autoComplete: false,
-    description: '全国、全部、整体、不限制或排除特定范围。',
+    owner: 'PLATFORM',
+    autoComplete: true,
+    description: '整体、全部、全量等表示无业务过滤的基础范围，或作为占比分母的范围。',
   },
   {
     code: 'RANKING',

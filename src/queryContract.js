@@ -1,8 +1,7 @@
 import crypto from 'node:crypto';
 import { formatPresentationCell } from './resultPresentation.js';
 import { CONTRACT_COMPILER_VERSION } from './contractVersion.js';
-import { getPlatformLexicon, lexiconPattern } from './businessLexicon.js';
-
+import { getPlatformLexicon, lexiconPattern } from './businessLexicon.js'; import { normalizeMetricSpecs } from './scopedMetrics.js';
 const DATE_DIMENSION_PATTERN =
   /(^|_)(date|time|day|week|month|quarter|year)($|_)|sdt|日期|时间|账期/i;
 const RANKING_PATTERN = /排名|排行|榜单|对比|top\s*\d*|前\s*\d+|最高|最大|最多/i;
@@ -545,7 +544,7 @@ function rankingFinding(question, columns, rows, contract) {
 
 export function buildQueryContract({
   indicatorId,
-  metrics = [],
+  metrics = [], metricSpecs = [],
   derivedMetrics = [],
   dimensions = [],
   filters = [],
@@ -565,12 +564,13 @@ export function buildQueryContract({
 } = {}) {
   const normalizedTimeGrain = String(timeGrain ?? '').toUpperCase();
   const normalizedAnalysisMode = String(analysisMode ?? '').toUpperCase();
+  const normalizedMetricSpecs = normalizeMetricSpecs(metricSpecs); const contractMetrics = normalizedMetricSpecs.length > 0 ? normalizedMetricSpecs.map((metric) => metric.outputField) : metrics;
   return {
     version: 1,
     compilerVersion: CONTRACT_COMPILER_VERSION,
     indicatorId: String(indicatorId ?? ''),
-    metrics: uniqueSortedStrings(metrics),
-    internalMetrics: uniqueSortedStrings(internalMetrics),
+    metrics: uniqueSortedStrings(contractMetrics), metricSpecs: normalizedMetricSpecs,
+    internalMetrics: uniqueSortedStrings([...(internalMetrics ?? []), ...normalizedMetricSpecs.filter((metric) => metric.internal).map((metric) => metric.outputField)]),
     derivedMetrics: (derivedMetrics ?? []).map((metric) => ({ ...metric })),
     dimensions: uniqueSortedStrings(dimensions),
     filters: normalizeFilters(filters),

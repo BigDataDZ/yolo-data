@@ -4,9 +4,11 @@ import {
   profileDataset as buildDatasetProfile,
 } from './datasetProfiler.js';
 import {
-  normalizeLikePattern,
-  resolveFilterScope,
-} from './querySemantics.js';
+  appendPredicateFilter,
+  metricOutputField,
+  normalizeDatasetFilters,
+  quoteIdentifier,
+} from './scopedMetrics.js';
 
 // The MySQL driver is only required when a MySQL/Doris data source is actually
 // used. Loading it lazily keeps the platform runnable (and testable) in
@@ -30,7 +32,6 @@ function requireMysql() {
   return mysql;
 }
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const FILTER_OPERATORS = new Set([
   'IN',
   'NOT_IN',
@@ -46,14 +47,6 @@ const FILTER_OPERATORS = new Set([
   'IS_NOT_NULL',
 ]);
 const TIME_GRAINS = new Set(['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR']);
-
-function quoteIdentifier(value) {
-  const text = String(value ?? '');
-  if (!IDENTIFIER.test(text)) {
-    throw new Error(`invalid SQL identifier: ${text}`);
-  }
-  return `\`${text}\``;
-}
 
 export function buildTimeGrainExpression(fieldName, timeGrain) {
   const column = quoteIdentifier(fieldName);
@@ -123,38 +116,6 @@ function inferField(column) {
     ordinalPosition: Number(column.ordinalPosition ?? 0),
     enabled: true,
   };
-}
-
-function normalizeDatasetFilters(filters, fieldsByName) {
-  return (filters ?? []).map((filter) => {
-    const field = fieldsByName.get(String(filter.field ?? filter.bizName ?? ''));
-    if (!field) {
-      throw new Error(`dataset filter field not found: ${filter.field ?? filter.bizName}`);
-    }
-    const operator = String(filter.operator ?? 'IN').toUpperCase();
-    if (!FILTER_OPERATORS.has(operator)) {
-      throw new Error(`unsupported dataset filter operator: ${operator}`);
-    }
-    if (
-      field.allowedOperators.length > 0
-      && !field.allowedOperators.includes(operator)
-    ) {
-      throw new Error(`operator ${operator} is not allowed for field ${field.fieldName}`);
-    }
-    const scope = resolveFilterScope({
-      field,
-      operator,
-      sourceText: filter.sourceText,
-    });
-    return {
-      field,
-      operator,
-      value: operator === 'LIKE'
-        ? normalizeLikePattern(filter.value, filter.sourceText)
-        : filter.value,
-      scope: filter.scope === 'AGGREGATE' ? 'AGGREGATE' : scope,
-    };
-  });
 }
 
 export class BusinessDatasetService {
@@ -606,12 +567,21 @@ export class BusinessDatasetService {
       if (!['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNT_DISTINCT'].includes(aggregator)) {
         throw new Error(`unsupported aggregator: ${aggregator}`);
       }
-      return { field, aggregator };
+      return {
+        field,
+        aggregator,
+        outputField: metricOutputField(item, field.fieldName),
+        predicateFilters: normalizeDatasetFilters(
+          item?.predicateFilters ?? [],
+          fieldsByName,
+        ),
+      };
     });
     if (metrics.length === 0 && dimensions.length === 0) {
       throw new Error('dataset query requires metrics or dimensions');
     }
     const filters = normalizeDatasetFilters(request.filters, fieldsByName);
+    const selectValues = [];
     const selectParts = [];
     for (const dimension of dimensionSelections) {
       selectParts.push(
@@ -619,10 +589,29 @@ export class BusinessDatasetService {
       );
     }
     for (const metric of metrics) {
-      const expression = metric.aggregator === 'COUNT_DISTINCT'
-        ? `COUNT(DISTINCT ${quoteIdentifier(metric.field.fieldName)})`
-        : `${metric.aggregator}(${quoteIdentifier(metric.field.fieldName)})`;
-      selectParts.push(`${expression} AS ${quoteIdentifier(metric.field.fieldName)}`);
+      const column = quoteIdentifier(metric.field.fieldName);
+      let expression;
+      if (metric.predicateFilters.length === 0) {
+        expression = metric.aggregator === 'COUNT_DISTINCT'
+          ? `COUNT(DISTINCT ${column})`
+          : `${metric.aggregator}(${column})`;
+      } else {
+        const predicateParts = [];
+        for (const filter of metric.predicateFilters) {
+          appendPredicateFilter(filter, predicateParts, selectValues);
+        }
+        const predicate = predicateParts.join(' AND ');
+        if (metric.aggregator === 'COUNT_DISTINCT') {
+          expression = `COUNT(DISTINCT CASE WHEN ${predicate} THEN ${column} END)`;
+        } else if (metric.aggregator === 'COUNT') {
+          expression = `COUNT(CASE WHEN ${predicate} THEN 1 END)`;
+        } else if (metric.aggregator === 'SUM') {
+          expression = `SUM(CASE WHEN ${predicate} THEN ${column} ELSE 0 END)`;
+        } else {
+          expression = `${metric.aggregator}(CASE WHEN ${predicate} THEN ${column} END)`;
+        }
+      }
+      selectParts.push(`${expression} AS ${quoteIdentifier(metric.outputField)}`);
     }
     const whereParts = [];
     const havingParts = [];
@@ -735,7 +724,7 @@ export class BusinessDatasetService {
     }.${quoteIdentifier(dataset.primaryTable)}${
       whereParts.length ? ` WHERE ${whereParts.join(' AND ')}` : ''
     }${groupBy}${having}${orderBy} LIMIT ?`;
-    const values = [...whereValues, ...havingValues];
+    const values = [...selectValues, ...whereValues, ...havingValues];
     values.push(limit);
     return {
       dataset,
@@ -945,4 +934,5 @@ export class BusinessDatasetService {
   }
 }
 
-export { inferField, quoteIdentifier, FILTER_OPERATORS };
+export { inferField, FILTER_OPERATORS };
+export { quoteIdentifier } from './scopedMetrics.js';

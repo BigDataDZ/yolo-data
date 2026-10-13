@@ -1639,8 +1639,34 @@ textarea::placeholder {
 
 .clarification-option {
   min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid #d9e5ef;
   border-radius: 999px;
+  color: #29485f;
+  background: #edf5fb;
+  box-shadow: 0 1px 2px rgba(29, 64, 96, 0.05);
   font-size: 11.5px;
+}
+
+.clarification-option:hover,
+.clarification-option:focus-visible {
+  border-color: #b9cfe2;
+  color: #173d5c;
+  background: #e0effb;
+  outline: none;
+}
+
+.clarification-option.btn-primary {
+  border-color: #173042;
+  color: #ffffff;
+  background: #173042;
+}
+
+.clarification-option.btn-primary:hover,
+.clarification-option.btn-primary:focus-visible {
+  border-color: #33516a;
+  color: #ffffff;
+  background: #33516a;
 }
 
 .clarification-recommended {

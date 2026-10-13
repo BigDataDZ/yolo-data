@@ -1783,6 +1783,169 @@ test('contract compiler accepts structured derived metrics and auto-binds base f
   );
 });
 
+test('contract compiler supports filtered numerator and unfiltered denominator ratio scopes', () => {
+  const question = '请给出2026年1~8月，2025年8月OEM的含税销售额、sku个数，和2026年1~8月，2025年8月oem含税销售额占整体销售额的比例、oem sku个数占整体sku个数的比例';
+  const fields = [
+    {
+      fieldName: 'sales_date',
+      displayName: '销售日期',
+      role: 'TIME',
+      semanticType: 'DATE',
+      dataType: 'date',
+    },
+    {
+      fieldName: 'goods_code',
+      displayName: '商品编码',
+      role: 'IDENTIFIER',
+      semanticType: 'STRING',
+      dataType: 'varchar',
+    },
+    {
+      fieldName: 'goods_purchase_level',
+      displayName: '商品采购级别',
+      role: 'DIMENSION',
+      semanticType: 'STRING',
+      dataType: 'varchar',
+    },
+    {
+      fieldName: 'sale_amt',
+      displayName: '含税销售额',
+      role: 'METRIC',
+      semanticType: 'NUMBER',
+      dataType: 'decimal',
+      aggregator: 'SUM',
+    },
+  ];
+  const result = new QueryContractCompiler().compile({
+    question,
+    sourceType: 'BUSINESS_DATASET',
+    dataset: { id: 2, name: '销售大宽表' },
+    datasetFields: fields,
+    theme: {},
+    draft: {
+      sourceType: 'BUSINESS_DATASET',
+      datasetId: 2,
+      conditions: [
+        { id: 't1', sourceText: '2026年1~8月', kind: 'TIME', status: 'RESOLVED' },
+        { id: 't2', sourceText: '2025年8月', kind: 'TIME', status: 'RESOLVED' },
+        { id: 'f1', sourceText: 'OEM', kind: 'FILTER', status: 'RESOLVED' },
+        { id: 'm1', sourceText: '含税销售额', kind: 'METRIC', status: 'RESOLVED' },
+        { id: 'm2', sourceText: 'sku个数', kind: 'METRIC', status: 'RESOLVED' },
+        { id: 's1', sourceText: '整体', kind: 'SCOPE', status: 'RESOLVED' },
+        {
+          id: 'c1',
+          sourceText: 'oem含税销售额占整体销售额的比例',
+          kind: 'CALCULATION',
+          status: 'RESOLVED',
+        },
+        {
+          id: 'c2',
+          sourceText: 'oem sku个数占整体sku个数的比例',
+          kind: 'CALCULATION',
+          status: 'RESOLVED',
+        },
+      ],
+      metricFields: [
+        {
+          field: 'sale_amt',
+          outputField: 'oem_sale_amt',
+          sourceText: '含税销售额',
+          aggregator: 'SUM',
+          conditionIds: ['m1', 'f1'],
+        },
+        {
+          field: 'goods_code',
+          outputField: 'oem_sku_count',
+          sourceText: 'sku个数',
+          aggregator: 'COUNT_DISTINCT',
+          conditionIds: ['m2', 'f1'],
+        },
+        {
+          field: 'sale_amt',
+          outputField: 'total_sale_amt',
+          sourceText: '整体销售额',
+          aggregator: 'SUM',
+          conditionIds: ['s1'],
+        },
+        {
+          field: 'goods_code',
+          outputField: 'total_sku_count',
+          sourceText: '整体sku个数',
+          aggregator: 'COUNT_DISTINCT',
+          conditionIds: ['s1'],
+        },
+      ],
+      filterFields: [{
+        field: 'goods_purchase_level',
+        operator: 'LIKE',
+        value: 'OEM',
+        sourceText: 'OEM',
+        conditionIds: ['f1'],
+      }],
+      scopeModifiers: [{
+        sourceText: '整体',
+        action: 'NO_FILTER',
+        conditionIds: ['s1'],
+      }],
+      derivedMetrics: [
+        {
+          name: 'OEM含税销售额占比',
+          type: 'RATIO',
+          numerator: 'oem_sale_amt',
+          denominator: 'total_sale_amt',
+          outputField: 'oem_sales_ratio',
+          outputFormat: 'PERCENT',
+          conditionIds: ['c1'],
+        },
+        {
+          name: 'OEM SKU个数占比',
+          type: 'RATIO',
+          numerator: 'oem_sku_count',
+          denominator: 'total_sku_count',
+          outputField: 'oem_sku_ratio',
+          outputFormat: 'PERCENT',
+          conditionIds: ['c2'],
+        },
+      ],
+      timeWindows: [
+        {
+          sourceText: '2026年1~8月',
+          dateMode: 'BETWEEN',
+          startDate: '2026-01-01',
+          endDate: '2026-08-31',
+          conditionIds: ['t1'],
+        },
+        {
+          sourceText: '2025年8月',
+          dateMode: 'BETWEEN',
+          startDate: '2025-08-01',
+          endDate: '2025-08-31',
+          conditionIds: ['t2'],
+        },
+      ],
+    },
+    now,
+  });
+
+  assert.equal(result.valid, true, result.issues.map((issue) => issue.message).join('\n'));
+  assert.equal(result.contract.filterFields[0].applicationScope, 'METRIC');
+  assert.deepEqual(
+    result.contract.metricFields
+      .filter((metric) => metric.filterConditionIds.includes('f1'))
+      .map((metric) => metric.outputField)
+      .sort(),
+    ['oem_sale_amt', 'oem_sku_count'],
+  );
+  assert.deepEqual(
+    result.contract.internalMetrics.sort(),
+    ['total_sale_amt', 'total_sku_count'],
+  );
+  assert.deepEqual(
+    result.contract.derivedMetrics.map((metric) => metric.outputField).sort(),
+    ['oem_sales_ratio', 'oem_sku_ratio'],
+  );
+});
+
 test('contract compiler rejects a missing aggregate threshold filter', () => {
   const question = '2026年8月销售额不低于50万的客户';
   const result = new QueryContractCompiler().compile({

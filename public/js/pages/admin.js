@@ -33,6 +33,7 @@ const {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -155,6 +156,7 @@ async function renderDatasetsPage(root) {
   root.querySelectorAll('[data-dataset-tab]').forEach((button) => {
     button.addEventListener('click', () => {
       state.datasetTab = button.dataset.datasetTab;
+      persistPreferences({ datasetTab: state.datasetTab });
       renderPage();
     });
   });

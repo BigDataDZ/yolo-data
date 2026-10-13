@@ -3929,6 +3929,27 @@ export class PlatformDatabase {
     return this.getPlatformSetting(normalizedKey);
   }
 
+  getUserPreferences(userId) {
+    const record = this.getPlatformSetting(
+      `user_preferences:${Number(userId)}`,
+      {},
+    );
+    const value = record && typeof record === 'object'
+      ? record.value
+      : record;
+    return value && typeof value === 'object' ? value : {};
+  }
+
+  saveUserPreferences(userId, patch) {
+    const current = this.getUserPreferences(userId);
+    const next = {
+      ...current,
+      ...(patch && typeof patch === 'object' ? patch : {}),
+    };
+    this.savePlatformSetting(`user_preferences:${Number(userId)}`, next);
+    return next;
+  }
+
   listPlatformSettings() {
     return this.db.prepare(`
       SELECT key, value_json AS valueJson, updated_at AS updatedAt

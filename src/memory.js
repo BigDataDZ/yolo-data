@@ -68,7 +68,7 @@ export class SessionMemoryStore {
     const history = this.database.listChatMessages(sessionId, userId, this.contextLimit)
       .map((message) => ({
         role: message.role,
-        content: message.content,
+        content: message.result?.question ?? message.content,
       }));
     const memoryMessage = this.userMemories?.buildContextMessage(userId, session.themeId);
     return memoryMessage ? [memoryMessage, ...history] : history;

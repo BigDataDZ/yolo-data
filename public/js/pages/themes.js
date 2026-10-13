@@ -37,6 +37,7 @@ const {
   formatSessionTime,
   initials,
   api,
+  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -90,6 +91,7 @@ async function renderThemesPage(root) {
       state.activeSessionId = null;
       state.chatMessages = [];
       state.chatStream = null;
+      persistPreferences({ selectedThemeId: state.selectedThemeId });
       navigate('/');
     });
   });
