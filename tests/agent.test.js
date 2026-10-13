@@ -847,3 +847,42 @@ test('agent wires the long-term memory tool into the tool loop', async () => {
   assert.equal(memoryLookup.results.length, 1);
   assert.match(memoryLookup.results[0].excerpt, /含税口径/);
 });
+
+test('chart type follow-ups reuse the locked result and render natively', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const theme = application.database.listThemes().find((item) => item.name === '经营总览');
+  const session = application.agent.createSession({
+    userId: user.id,
+    themeId: theme.id,
+  });
+
+  const first = await application.agent.answer({
+    userId: user.id,
+    sessionId: session.id,
+    themeId: theme.id,
+    question: '近7天华东销售额趋势',
+  });
+  assert.equal(first.chart.type, 'line');
+  assert.ok(first.data.rows.length > 0);
+
+  const restyle = await application.agent.answer({
+    userId: user.id,
+    sessionId: session.id,
+    themeId: theme.id,
+    question: '换成柱状图展示',
+  });
+  assert.equal(restyle.chart.type, 'bar');
+  assert.equal(restyle.chart.xField, first.chart.xField);
+  assert.deepEqual(restyle.chart.yFields, first.chart.yFields);
+  assert.deepEqual(restyle.data.rows, first.data.rows);
+  assert.deepEqual(restyle.data.columns, first.data.columns);
+  // 展示层复用：不重新取数、不产生新的查询产物、模型未被调用。
+  assert.equal(restyle.artifactId, first.artifactId);
+  assert.equal(restyle.runtime.toolCalls, 0);
+  assert.equal(restyle.executionResults.length, 1);
+  assert.equal(restyle.executionResults[0].kind, 'chart_restyle');
+  assert.ok(restyle.processSteps.some((step) => step.skillCode === 'chart_restyle'));
+  assert.ok(!/!\[.*\]\(.*\.(png|svg)\)/.test(restyle.message));
+});

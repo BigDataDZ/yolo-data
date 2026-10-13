@@ -124,14 +124,6 @@ body.workspace-open .app-shell {
   font-weight: 670;
 }
 
-.brand-copy small {
-  margin-top: 2px;
-  color: #91a4b5;
-  font-family: "Segoe UI", sans-serif;
-  font-size: 10px;
-  text-transform: uppercase;
-}
-
 .main-nav {
   display: grid;
   gap: 7px;
@@ -1593,14 +1585,6 @@ body.workspace-open .app-shell {
   padding: 10px 20px 12px;
 }
 
-.chat-example-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 8px;
-}
-
 .chat-input-shell {
   min-height: 52px;
   display: grid;
@@ -1946,24 +1930,6 @@ body.workspace-open .app-shell {
 .example-label {
   color: var(--text-muted);
   font-size: 11px;
-}
-
-.example-chip {
-  min-height: 28px;
-  padding: 0 10px;
-  border: 1px solid #d9e7f3;
-  border-radius: 999px;
-  color: #4c5b6d;
-  background: rgba(255, 255, 255, 0.9);
-  cursor: pointer;
-  font-size: 11px;
-}
-
-.example-chip:hover {
-  color: #1761c9;
-  border-color: #a6c9f6;
-  background: linear-gradient(135deg, #eff6ff, #eefaf8);
-  transform: translateY(-1px);
 }
 
 .answer-message {
@@ -3257,16 +3223,6 @@ body.workspace-open .app-shell {
     padding: 8px 10px 10px;
   }
 
-  .chat-example-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 3px;
-  }
-
-  .chat-example-row .example-chip {
-    flex: 0 0 auto;
-  }
-
   .chat-input-shell {
     min-height: 48px;
     grid-template-columns: minmax(0, 1fr) 38px;
@@ -3721,11 +3677,6 @@ body {
 .brand-copy strong {
   color: #0d0d0d;
   font-size: 15px;
-}
-
-.brand-copy small {
-  color: #8f8f8f;
-  text-transform: none;
 }
 
 .main-nav {
@@ -4275,23 +4226,6 @@ body {
 .chat-composer-inner {
   width: min(100%, 920px);
   padding: 12px 20px 18px;
-}
-
-.chat-example-row {
-  margin-bottom: 10px;
-}
-
-.example-chip {
-  border-color: #dedede;
-  color: #4d4d4d;
-  background: #ffffff;
-}
-
-.example-chip:hover {
-  color: #0d0d0d;
-  border-color: #bdbdbd;
-  background: #f7f7f7;
-  transform: none;
 }
 
 .chat-input-shell {

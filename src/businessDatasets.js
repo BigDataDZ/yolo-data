@@ -798,9 +798,23 @@ export class BusinessDatasetService {
         latencyMs,
         success: true,
       });
+      // 指标列可能被计划重命名为自定义别名（例如 sale_amt -> sale_amt_total），
+      // 仅按物理列名回查定义会丢失 METRIC/TIME 语义，导致下游把指标列当成维度，
+      // 趋势/对比问题因此退化成纯表格。这里同时按指标输出别名回查定义。
+      const definitionByName = new Map(
+        fields.map((item) => [item.fieldName, item]),
+      );
+      const definitionByMetricOutput = new Map();
+      for (const metric of compiled.metrics ?? []) {
+        if (metric?.outputField && metric?.field) {
+          definitionByMetricOutput.set(metric.outputField, metric.field);
+        }
+      }
       return {
         columns: fieldPackets.map((field) => {
-          const definition = fields.find((item) => item.fieldName === field.name);
+          const definition = definitionByName.get(field.name)
+            ?? definitionByMetricOutput.get(field.name)
+            ?? null;
           const groupedTimeDimension = Boolean(
             compiled.timeGrain && definition?.role === 'TIME',
           );
@@ -815,6 +829,8 @@ export class BusinessDatasetService {
               ? 'STRING'
               : definition?.dataType ?? String(field.type),
             unit: definition?.unit ?? '',
+            role: definition?.role ?? null,
+            semanticType: definition?.semanticType ?? null,
           };
         }),
         rows,

@@ -1,3 +1,5 @@
+import { isNumericColumn } from './columnSemantics.js';
+
 const GRAIN_LABELS = {
   WEEK: '周起始日',
   MONTH: '月份',
@@ -7,11 +9,6 @@ const GRAIN_LABELS = {
 
 function columnKey(column) {
   return String(column?.bizName ?? column?.nameEn ?? column?.name ?? '').trim();
-}
-
-function isNumericColumn(column) {
-  return String(column?.showType ?? column?.type ?? '').toUpperCase() === 'NUMBER'
-    || String(column?.type ?? '').toUpperCase() === 'DECIMAL';
 }
 
 function parseDate(value) {

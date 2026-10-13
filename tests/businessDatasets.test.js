@@ -486,3 +486,41 @@ test('data source creation generates a readable unique code without user input',
   });
   assert.match(fallback.code, /^ds_[a-z0-9]+$/);
 });
+
+test('aliased metric output columns keep metric semantics', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const dataset = createBusinessDataset(application, user, { attachToTheme: false });
+  application.businessDatasets.getPoolById = () => ({
+    query: async () => [
+      [{ sales_date: '2026-10-06', amt_total: '10.500000' }],
+      [
+        { name: 'sales_date', type: 'STRING' },
+        { name: 'amt_total', type: 246 },
+      ],
+    ],
+  });
+
+  const result = await application.businessDatasets.executeQuery({
+    datasetId: dataset.id,
+    request: {
+      metrics: [{ field: 'sale_amt', aggregator: 'SUM', outputField: 'amt_total' }],
+      dimensions: ['sales_date'],
+      timeGrain: 'DAY',
+      dateRange: {
+        field: 'sales_date',
+        startDate: '2026-10-01',
+        endDate: '2026-10-07',
+      },
+    },
+    userId: user.id,
+  });
+
+  const metric = result.columns.find((column) => column.bizName === 'amt_total');
+  assert.equal(metric.showType, 'NUMBER');
+  assert.equal(metric.role, 'METRIC');
+  assert.equal(metric.semanticType, 'NUMBER');
+  const timeColumn = result.columns.find((column) => column.bizName === 'sales_date');
+  assert.equal(timeColumn.role, 'TIME');
+});

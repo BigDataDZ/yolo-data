@@ -156,22 +156,13 @@ a {
   text-shadow: none;
 }
 
-.brand-copy small {
-  margin-top: 1px;
-  overflow: hidden;
-  color: var(--text-3);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .main-nav {
-  gap: 2px;
-  margin-top: 10px;
+  gap: 1px;
+  margin-top: 8px;
 }
 
 .nav-group-label {
-  padding: 12px 10px 5px;
+  padding: 8px 10px 4px;
   color: var(--text-3);
   font-size: 10.5px;
   font-weight: 500;
@@ -180,8 +171,8 @@ a {
 
 .nav-item,
 .nav-item.is-active {
-  min-height: 36px;
-  padding: 7px 10px;
+  min-height: 30px;
+  padding: 5px 10px;
   gap: 9px;
   border: 0;
   border-radius: var(--radius-s);
@@ -228,14 +219,20 @@ a {
   font-weight: 500;
 }
 
+/* 会话记录占满导航与页脚之间的剩余高度，列表内部滚动，让可视区域尽量大。 */
 .sidebar-sessions {
-  margin-top: 18px;
+  margin-top: 12px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
   border-top: 1px solid var(--border);
 }
 
 .sidebar-session-head {
-  min-height: 48px;
-  padding: 12px 8px 7px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px 8px 6px;
 }
 
 .sidebar-session-head strong {
@@ -250,6 +247,9 @@ a {
 }
 
 .sidebar-sessions .session-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0 0 8px;
 }
 
@@ -1858,6 +1858,118 @@ textarea::placeholder {
   line-height: 1.65;
 }
 
+/* 开场：继续上次入口 */
+.welcome-resume {
+  width: min(100%, 720px);
+  margin-top: 20px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.welcome-resume-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.welcome-resume-label {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 620;
+  letter-spacing: 0.04em;
+}
+
+.welcome-resume-session {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-resume-session:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.welcome-resume-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.resume-chip {
+  max-width: 100%;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  color: var(--text-2);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* 开场：能力示例卡 */
+.welcome-cards {
+  width: min(100%, 720px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-s);
+  cursor: pointer;
+  text-align: left;
+}
+
+.welcome-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.welcome-card-tag {
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.welcome-card-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 .live-execution {
   padding: 13px 14px;
   border: 1px solid var(--border);
@@ -2173,34 +2285,6 @@ textarea::placeholder {
   width: min(100%, 980px);
   margin: 0 auto;
   padding: 12px 28px 18px;
-}
-
-.chat-example-row {
-  margin-bottom: 10px;
-  gap: 7px;
-  justify-content: center;
-}
-
-.example-chip {
-  min-height: 30px;
-  max-width: 100%;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--text-2);
-  background: var(--surface);
-  box-shadow: var(--shadow-s);
-  font-size: 11.5px;
-  text-align: left;
-  white-space: normal;
-  transform: none;
-}
-
-.example-chip:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
-  background: var(--surface-2);
-  transform: none;
 }
 
 .chat-input-shell {
@@ -2979,18 +3063,6 @@ textarea::placeholder {
     padding: 8px 12px 12px;
   }
 
-  .chat-example-row {
-    align-items: stretch;
-    flex-wrap: wrap;
-    overflow-x: visible;
-    padding-bottom: 0;
-  }
-
-  .chat-example-row .example-chip {
-    width: 100%;
-    flex: 1 1 100%;
-  }
-
   .chat-input-shell {
     min-height: 50px;
     border-radius: 14px;
@@ -3663,11 +3735,20 @@ body {
   font-weight: 620;
 }
 
+/* 简洁模式只收敛过程信息，图表是回答本体，必须保留原生渲染。 */
 .main-content.is-chat.density-compact .execution-details,
 .main-content.is-chat.density-compact .chat-data-details,
-.main-content.is-chat.density-compact .answer-meta,
-.main-content.is-chat.density-compact .chat-chart-panel {
+.main-content.is-chat.density-compact .answer-meta {
   display: none;
+}
+
+.main-content.is-chat.density-compact .chat-chart-panel {
+  margin-top: 10px;
+  padding: 8px;
+}
+
+.main-content.is-chat.density-compact .chat-chart-canvas {
+  height: 220px;
 }
 
 /* v4 page-level components */
@@ -4083,6 +4164,10 @@ body {
 
   .welcome-mini-sub {
     font-size: 11.5px;
+  }
+
+  .welcome-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

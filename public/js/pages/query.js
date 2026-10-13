@@ -12,6 +12,7 @@ import {
   renderWorkspaceArtifactList,
   workspaceArtifactFileMeta,
 } from '../components/workspaceArtifacts.js';
+import { renderChatOpening } from '../components/chatOpening.js';
 
 const {
   ICONS,
@@ -80,7 +81,9 @@ async function renderQueryPage(root) {
   const modelOptions = availableThemeModels(theme);
   const selectedModelId = currentModelSelection(theme, session?.modelId);
   const canSwitchModel = state.chatMessages.length === 0;
-  const examples = getExampleQuestions(theme);
+  if (canSwitchModel) {
+    await loadOpeningSuggestions(theme?.id);
+  }
   const questionAxis = renderQuestionAxis();
 
   root.innerHTML = `
@@ -102,16 +105,9 @@ async function renderQueryPage(root) {
         </div>
         <footer class="chat-composer">
           <div class="chat-composer-inner">
-            ${state.chatMessages.length === 0 ? `
-              <div class="chat-example-row">
-                ${examples.map((question) => (
-                  `<button class="example-chip" type="button" data-question="${escapeAttr(question)}">${escapeHtml(question)}</button>`
-                )).join('')}
-              </div>
-            ` : ''}
             ${fileUploadMarkup()}
             <div class="chat-input-shell">
-              <textarea class="chat-input" id="questionInput" rows="1" placeholder="继续追问，例如：那按渠道拆开呢" aria-label="问数问题"></textarea>
+              <textarea class="chat-input" id="questionInput" rows="1" placeholder="${escapeAttr(composerPlaceholder())}" aria-label="问数问题"></textarea>
               <div class="chat-input-actions">
                 ${modelOptions.length > 0 ? `
                   <span class="chat-model-picker${canSwitchModel ? '' : ' is-locked'}" title="${canSwitchModel ? '新会话可选择运行模型' : '会话开始后模型已锁定'}">
@@ -174,7 +170,7 @@ async function renderQueryPage(root) {
     input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
   });
   if (state.chatMessages.length === 0) {
-    startWelcomePlaceholderRotation(theme);
+    startWelcomePlaceholderRotation();
   } else {
     stopWelcomePlaceholderRotation();
     input.placeholder = '继续追问，例如：那按渠道拆开呢';
@@ -202,20 +198,33 @@ async function ensureChatLoaded() {
   }
 }
 
-function getExampleQuestions(theme) {
-  if (theme?.examples?.length > 0) {
-    return theme.examples;
+// 开场建议由后端按主题绑定关系生成：主题配置优先，其次按指标/维度自动拼装，
+// 最后回落到平台通用示例，保证空配置的主题也不会出现空白首屏。
+async function loadOpeningSuggestions(themeId) {
+  if (!themeId) {
+    state.openingSuggestions = null;
+    return null;
   }
-  return [];
+  try {
+    state.openingSuggestions = await api(`/api/themes/${Number(themeId)}/suggestions`);
+  } catch (error) {
+    state.openingSuggestions = null;
+  }
+  return state.openingSuggestions;
+}
+
+function openingCards() {
+  return state.openingSuggestions?.cards ?? [];
+}
+
+function composerPlaceholder() {
+  if (state.chatMessages.length > 0) {
+    return '继续追问，例如：那按渠道拆开呢';
+  }
+  return openingCards()[0]?.question ?? '输入你的问题，回车发送';
 }
 
 let welcomePlaceholderTimer = null;
-const FALLBACK_WELCOME_EXAMPLES = [
-  '本月业绩是多少？',
-  '本期与上期相比变化如何？',
-  '按地区拆分最近趋势',
-  '帮我分析变化的主要原因',
-];
 
 function stopWelcomePlaceholderRotation() {
   if (welcomePlaceholderTimer) {
@@ -224,11 +233,12 @@ function stopWelcomePlaceholderRotation() {
   }
 }
 
-function startWelcomePlaceholderRotation(theme) {
+function startWelcomePlaceholderRotation() {
   stopWelcomePlaceholderRotation();
-  const examples = getExampleQuestions(theme).length > 0
-    ? getExampleQuestions(theme)
-    : FALLBACK_WELCOME_EXAMPLES;
+  const examples = openingCards().map((card) => card.question);
+  if (examples.length === 0) {
+    return;
+  }
   let index = 0;
   const apply = () => {
     const input = document.getElementById('questionInput');
@@ -550,23 +560,16 @@ async function downloadWorkspaceArtifact(artifactId, format) {
 function renderChatTimeline() {
   if (state.chatMessages.length === 0 && !state.chatLoading) {
     const theme = getTheme();
-    const primaryDatasetId = Number(theme?.primaryBusinessDatasetId) || null;
-    const dataset = state.businessDatasets.find((item) => (
-      Number(item.id) === primaryDatasetId
-    )) ?? state.businessDatasets[0];
-    const indicatorCount = state.indicators?.length
-      || state.bootstrap?.health?.source?.lastSyncCount
-      || 0;
-    const datasetLabel = dataset?.name ?? '已接入业务数据集';
-    return `
-      <div class="chat-welcome welcome-mini">
-        <div class="welcome-mini-mark">
-          <img src="/yolo-mark.svg" alt="YOLO" />
-        </div>
-        <h2 class="welcome-mini-title">今天想问点什么？</h2>
-        <p class="welcome-mini-sub">${escapeHtml(theme?.name ?? '当前主题')} · ${escapeHtml(datasetLabel)} · ${indicatorCount} 个在线指标 · 支持查数 / 对比 / 趋势 / 归因</p>
-      </div>
-    `;
+    const opening = state.openingSuggestions ?? {};
+    const stats = opening.stats ?? {};
+    return renderChatOpening({
+      themeName: theme?.name ?? '当前主题',
+      datasetName: stats.datasetName ?? '',
+      metricCount: Number(stats.metricCount) || 0,
+      dimensionCount: Number(stats.dimensionCount) || 0,
+      cards: opening.cards ?? [],
+      resume: opening.resume ?? null,
+    });
   }
   const messages = state.chatMessages.map(renderChatMessage).join('');
   return `${messages}${state.chatLoading ? `
@@ -750,9 +753,11 @@ function renderAssistantContent(message) {
   const columns = result.data?.columns ?? [];
   const rows = result.data?.rows ?? [];
   const chart = result.chart ?? { type: 'table' };
-  const numericColumns = columns.filter(
-    (column) => String(column.showType).toUpperCase() === 'NUMBER',
-  );
+  const numericColumns = columns.filter((column) => (
+    String(column.showType).toUpperCase() === 'NUMBER'
+    || String(column.role ?? '').toUpperCase() === 'METRIC'
+    || String(column.semanticType ?? '').toUpperCase() === 'NUMBER'
+  ));
   const kpis = chart.type === 'kpi'
     ? numericColumns.map((column) => {
       const value = rows[0]?.[column.bizName] ?? rows[0]?.[column.name];
@@ -1842,7 +1847,8 @@ registerQueryHooks({ beforeQueryReset: disposeChatCharts });
 export {
   renderQueryPage,
   ensureChatLoaded,
-  getExampleQuestions,
+  loadOpeningSuggestions,
+  openingCards,
   renderSessionList,
   renderSidebarSessions,
   bindSessionList,

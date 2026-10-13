@@ -726,3 +726,121 @@ test('disabled accounts cannot log in and password changes rotate the session', 
     assert.equal((await stale.json()).authenticated, false);
   }, { authMode: 'session' });
 });
+
+test('theme opening suggestions follow bindings, config, history and scope', async () => {
+  await withServer(async ({ baseUrl, application }) => {
+    const admin = { 'content-type': 'application/json', 'x-user-id': '1' };
+    const analyst = { 'content-type': 'application/json', 'x-user-id': '2' };
+    const theme = application.database.listThemes().find((item) => item.name === '经营总览');
+    const otherTheme = application.database.listThemes().find((item) => item.name === '财务分析');
+    const suggestionsUrl = (id) => `${baseUrl}/api/themes/${id}/suggestions`;
+    const readSuggestions = async (id, headers = admin) => {
+      const response = await fetch(suggestionsUrl(id), { headers });
+      return { status: response.status, body: await response.json() };
+    };
+
+    // 主题没有任何绑定与配置时，回落到平台通用示例，首屏不留白。
+    const generic = await readSuggestions(theme.id);
+    assert.equal(generic.status, 200);
+    assert.equal(generic.body.source, 'GENERIC');
+    assert.ok(generic.body.cards.length >= 3);
+    assert.equal(generic.body.resume, null);
+    assert.deepEqual(generic.body.stats, {
+      metricCount: 0,
+      dimensionCount: 0,
+      datasetName: null,
+    });
+
+    // 未授权的主题对分析员不可见。
+    assert.equal((await readSuggestions(otherTheme.id, analyst)).status, 404);
+    assert.equal((await readSuggestions(theme.id, analyst)).status, 200);
+
+    const source = application.businessDatasets.saveDataSource({
+      code: 'opening-suggestions',
+      name: 'Opening suggestions',
+      host: '127.0.0.1',
+      port: 9030,
+      databaseName: 'demo',
+      username: 'reader',
+      password: 'secret',
+    });
+    const dataset = application.database.saveBusinessDataset({
+      code: 'opening_suggestions_orders',
+      name: '开场建议订单',
+      datasourceId: source.id,
+      schemaName: 'demo',
+      primaryTable: 'orders',
+      config: {},
+    });
+    application.database.replaceDatasetFields(dataset.id, [
+      { fieldName: 'order_date', semanticType: 'DATE', dataType: 'date', role: 'TIME', aggregator: 'NONE' },
+      { fieldName: 'sale_amt', displayName: '含税销售额', role: 'METRIC', aggregator: 'SUM' },
+      { fieldName: 'muted_amt', displayName: '停用指标', role: 'METRIC', aggregator: 'SUM', enabled: false },
+      { fieldName: 'region', displayName: '销售大区名称', role: 'DIMENSION', aggregator: 'NONE' },
+    ]);
+    application.database.saveTheme({
+      ...application.database.getTheme(theme.id),
+      businessDatasetIds: [dataset.id],
+      primaryBusinessDatasetId: dataset.id,
+    }, theme.id);
+
+    // 绑定字段后按业务名自动拼装，禁用的字段不参与。
+    const auto = await readSuggestions(theme.id);
+    assert.equal(auto.body.source, 'AUTO_SEMANTIC');
+    assert.deepEqual(auto.body.stats, {
+      metricCount: 1,
+      dimensionCount: 1,
+      datasetName: '开场建议订单',
+    });
+    assert.ok(auto.body.cards.some((card) => card.question.includes('含税销售额')));
+    assert.ok(auto.body.cards.some((card) => card.question.includes('销售大区名称')));
+    assert.ok(!auto.body.cards.some((card) => card.question.includes('停用指标')));
+
+    // 未显式绑定主题时，可见数据集等于「权限内全部数据集」——与问数链路一致。
+    application.database.saveTheme({
+      ...application.database.getTheme(theme.id),
+      businessDatasetIds: [],
+      primaryBusinessDatasetId: null,
+    }, theme.id);
+    const unbound = await readSuggestions(theme.id);
+    assert.equal(unbound.body.source, 'AUTO_SEMANTIC');
+    assert.equal(unbound.body.stats.datasetName, '开场建议订单');
+    assert.ok(unbound.body.cards.some((card) => card.question.includes('含税销售额')));
+
+    // 手工配置的示例优先于自动拼装，并带上能力分组。
+    application.database.saveTheme({
+      ...application.database.getTheme(theme.id),
+      examples: ['近 7 天含税销售额趋势', '按销售大区名称看含税销售额排行'],
+    }, theme.id);
+    const configured = await readSuggestions(theme.id);
+    assert.equal(configured.body.source, 'THEME_EXAMPLES');
+    assert.deepEqual(configured.body.cards, [
+      { group: '趋势', question: '近 7 天含税销售额趋势' },
+      { group: '排行', question: '按销售大区名称看含税销售额排行' },
+    ]);
+
+    // 「继续上次」取该主题最近会话的最后几个问题。
+    const session = application.agent.createSession({
+      userId: 1,
+      themeId: theme.id,
+      title: '开场建议会话',
+    });
+    for (const question of ['第一个问题', '第二个问题', '第三个问题', '第四个问题']) {
+      application.memory.appendUserMessage(session.id, 1, question, {});
+    }
+    const resumed = await readSuggestions(theme.id);
+    assert.ok(resumed.body.resume, 'expected a resume entry');
+    assert.equal(resumed.body.resume.sessionId, session.id);
+    assert.equal(resumed.body.resume.title, '开场建议会话');
+    assert.deepEqual(
+      resumed.body.resume.questions,
+      ['第二个问题', '第三个问题', '第四个问题'],
+    );
+
+    // 分析员只看得到自己的历史，管理员看得到自己的。
+    const analystView = await readSuggestions(theme.id, analyst);
+    assert.equal(analystView.body.resume, null);
+
+    assert.equal((await readSuggestions(999999)).status, 404);
+  });
+});

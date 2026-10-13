@@ -30,6 +30,7 @@ import { registerChatRoutes } from './http/routes/chat.js';
 import { registerUploadRoutes } from './http/routes/uploads.js';
 import { registerMemoryRoutes } from './http/routes/memory.js';
 import { registerAuthRoutes } from './http/routes/auth.js';
+import { registerOpeningRoutes } from './http/routes/opening.js';
 
 // Declarative route table (P0-8). Dispatch and the generated OpenAPI document
 // both read from this single list, so they cannot drift apart.
@@ -40,6 +41,7 @@ export function buildRouteTable() {
   registerModelRoutes(table);
   registerUserRoutes(table);
   registerThemeRoutes(table);
+  registerOpeningRoutes(table);
   registerDatasetRoutes(table);
   registerIndicatorRoutes(table);
   registerChatRoutes(table);

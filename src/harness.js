@@ -26,6 +26,16 @@ function truncate(value, maxLength = 240) {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`;
 }
 
+// 上游状态码对应的可执行处理建议。业务用户不需要理解 HTTP 语义，只需要知道去哪里修。
+const PROVIDER_STATUS_HINTS = {
+  400: '请求参数不被模型服务接受，请检查「模型管理」里的模型名和 Base URL。',
+  401: 'API Key 无效或已失效，请在「模型管理」中更新密钥。',
+  402: '模型服务账户余额不足，请在模型服务商处充值，或在「模型管理」中更换可用的 API Key。',
+  403: '当前 API Key 没有调用权限，请检查密钥权限或可用模型。',
+  404: '接口地址或模型名不存在，请检查「模型管理」里的 Base URL 和模型名。',
+  429: '请求过于频繁或已超出配额，请稍后重试。',
+};
+
 function providerErrorMessage(status, payload, responseText) {
   const text = String(responseText ?? '');
   if (/<!doctype\s+html|<html[\s>]/i.test(text)) {
@@ -36,7 +46,12 @@ function providerErrorMessage(status, payload, responseText) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return `模型服务请求失败（HTTP ${status}）：${truncate(cleaned || '上游服务未返回错误信息')}`;
+  const hint = PROVIDER_STATUS_HINTS[Number(status)]
+    ?? (Number(status) >= 500
+      ? '上游模型服务暂时不可用，请稍后重试。'
+      : '请检查「模型管理」中的模型配置。');
+  const suffix = cleaned ? `（上游返回：${truncate(cleaned, 160)}）` : '';
+  return `模型服务请求失败（HTTP ${status}）：${hint}${suffix}`;
 }
 
 function normalizeMatchText(value) {

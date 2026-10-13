@@ -40,3 +40,38 @@ test('daily metric rows are aggregated into Monday-based weekly buckets', () => 
     { sdt: '2026-09-07', sale_amt: 70 },
   ]);
 });
+
+test('aggregation keeps metric columns when only column semantics are available', () => {
+  const result = aggregateRowsByTimeGrain({
+    columns: [
+      {
+        name: 'order_date',
+        bizName: 'order_date',
+        showType: 'CATEGORY',
+        type: 'STRING',
+        role: 'TIME',
+        semanticType: 'DATE',
+      },
+      {
+        name: 'sales_amt',
+        bizName: 'sales_amt_total',
+        showType: 'CATEGORY',
+        type: '246',
+        role: 'METRIC',
+        semanticType: 'NUMBER',
+      },
+    ],
+    rows: [
+      { order_date: '2026-09-01', sales_amt_total: '10.5' },
+      { order_date: '2026-09-06', sales_amt_total: '20.25' },
+      { order_date: '2026-09-07', sales_amt_total: '30' },
+    ],
+    dateKey: 'order_date',
+    grain: 'WEEK',
+  });
+
+  assert.deepEqual(result.rows, [
+    { order_date: '2026-08-31', sales_amt_total: 30.75 },
+    { order_date: '2026-09-07', sales_amt_total: 30 },
+  ]);
+});

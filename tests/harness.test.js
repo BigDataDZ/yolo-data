@@ -211,3 +211,54 @@ test('harness forwards an external cancellation signal to model requests', async
   controller.abort();
   assert.equal(capturedSignal.aborted, true);
 });
+
+function harnessReplyingWith(status, body) {
+  return new OpenAICompatibleDeepSeekHarness({
+    baseUrl: 'https://api.deepseek.com/v1',
+    apiKey: 'test-key',
+    model: 'deepseek-chat',
+    fetchImpl: async () => new Response(body, {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  });
+}
+
+async function chatErrorMessage(status, body) {
+  try {
+    await harnessReplyingWith(status, body).chat([{ role: 'user', content: '测试' }]);
+    return null;
+  } catch (error) {
+    return error.message;
+  }
+}
+
+test('provider failures are translated into actionable configuration guidance', async () => {
+  const insufficient = await chatErrorMessage(
+    402,
+    JSON.stringify({ error: { message: 'Insufficient Balance (request_id: abc-123)' } }),
+  );
+  assert.match(insufficient, /HTTP 402/);
+  assert.match(insufficient, /余额不足/);
+  assert.match(insufficient, /模型管理/);
+  // 上游原始信息保留下来，方便管理员排查。
+  assert.match(insufficient, /Insufficient Balance/);
+  assert.match(insufficient, /abc-123/);
+
+  assert.match(await chatErrorMessage(401, '{}'), /API Key 无效/);
+  assert.match(await chatErrorMessage(404, '{}'), /Base URL 和模型名/);
+  assert.match(await chatErrorMessage(429, '{}'), /稍后重试/);
+  assert.match(await chatErrorMessage(503, '{}'), /暂时不可用/);
+});
+
+test('provider failures keep the HTML base-url diagnosis and truncate long details', async () => {
+  const html = await chatErrorMessage(404, '<!DOCTYPE html><html><body>gateway</body></html>');
+  assert.match(html, /HTML 页面/);
+
+  const long = await chatErrorMessage(
+    500,
+    JSON.stringify({ error: { message: 'x'.repeat(400) } }),
+  );
+  assert.ok(long.length < 400);
+  assert.match(long, /\.\.\./);
+});

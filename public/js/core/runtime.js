@@ -96,6 +96,7 @@ const state = {
   chatAbortController: null,
   chatLoaded: false,
   chatDensity: 'detailed',
+  openingSuggestions: null,
   workspaceDrawerOpen: false,
   workspace: null,
   workspaceArtifacts: [],

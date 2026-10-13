@@ -1,36 +1,32 @@
-function isTemporalDimension(column, rows) {
-  const text = `${column?.name ?? ''} ${column?.bizName ?? ''}`.toLowerCase();
-  if (/date|time|day|week|month|quarter|year|日期|时间|日|月|周|季度|年/.test(text)) {
-    return true;
-  }
-  const values = (rows ?? []).slice(0, 20)
-    .map((row) => row?.[column?.bizName] ?? row?.[column?.name])
-    .filter((value) => value !== null && value !== undefined);
-  return values.length > 0 && values.filter((value) => (
-    /^\d{4}[-/]\d{1,2}([-/]\d{1,2})?/.test(String(value))
-  )).length >= Math.ceil(values.length * 0.6);
-}
+import { isNumericColumn, isTemporalDimension } from './columnSemantics.js';
 
-function isNumericColumn(column) {
-  return String(column?.showType ?? '').toUpperCase() === 'NUMBER'
-    || String(column?.type ?? '').toLowerCase().match(/int|decimal|double|float|number/) !== null;
-}
+// 时间诉求：命中后不得把结果退化成指标卡，必须保留趋势类图表。
+const TREND_INTENT_PATTERN = /趋势|走势|折线|时间序列|按天|按日|每天|逐日|按周|按月|按季|按年|分月|分周|近\s*\d+\s*[天日周月年]/;
 
-export function suggestChart({ columns = [], rows = [], question = '', preferred = 'auto' }) {
-  const numericColumns = columns.filter(isNumericColumn);
+export function suggestChart({ columns = [], rows = [], question = '', preferred = 'auto' } = {}) {
+  const numericColumns = columns.filter((column) => isNumericColumn(column, rows));
   const dimensionColumns = columns.filter((column) => !numericColumns.includes(column));
+  const temporalDimension = dimensionColumns.find(
+    (column) => isTemporalDimension(column, rows),
+  ) ?? null;
+  const trendIntent = TREND_INTENT_PATTERN.test(String(question ?? ''));
 
   if (preferred && preferred !== 'auto') {
-    return {
-      type: preferred,
-      xField: dimensionColumns[0]?.bizName ?? dimensionColumns[0]?.name ?? null,
-      yFields: numericColumns.slice(0, 4).map((column) => column.bizName ?? column.name),
-      title: '查询结果',
-      reason: '使用主题默认图表',
-    };
+    const primaryDimension = dimensionColumns[0] ?? null;
+    // 主题默认图表只在能落到坐标轴（或有维度）时生效；
+    // 否则继续走自动判定，避免输出没有 x 轴的空图表。
+    if (preferred === 'table' || preferred === 'kpi' || primaryDimension) {
+      return {
+        type: preferred,
+        xField: primaryDimension?.bizName ?? primaryDimension?.name ?? null,
+        yFields: numericColumns.slice(0, 4).map((column) => column.bizName ?? column.name),
+        title: '查询结果',
+        reason: '按指定的图表类型展示',
+      };
+    }
   }
 
-  if (rows.length === 1 && numericColumns.length >= 1) {
+  if (rows.length === 1 && numericColumns.length >= 1 && !(trendIntent && temporalDimension)) {
     return {
       type: 'kpi',
       xField: null,
