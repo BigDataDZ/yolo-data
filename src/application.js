@@ -85,11 +85,7 @@ export async function createApplication(
   const growth = new GrowthService(database);
   const feedback = new FeedbackService(database, growth);
   const workspace = new WorkspaceService(database);
-  const codeExecution = new CodeExecutionService({
-    database,
-    workspace,
-    config,
-  });
+  const codeExecution = new CodeExecutionService({ database, workspace, config });
   const uploads = new UploadService({ database, workspace, config });
   const semanticValues = new SemanticValueRegistry(database);
   const agent = new MetricAgentService({
