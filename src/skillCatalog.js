@@ -1,5 +1,4 @@
-import crypto from 'node:crypto';
-import { parseSkillDocument } from './skillAdapter.js';
+import { normalizeSkillCode, normalizeSkillStatus, parseSkillUpload } from './skillUpload.js';
 import { REQUIRED_TOOLS } from './skills.js';
 
 // 平台内核工具不进 skills 表：它们由 filterTools() 无条件兜底，没有可开关的载体，
@@ -22,7 +21,6 @@ const CORE_TOOL_LABELS = {
 const UPLOAD_SOURCE = 'UPLOAD';
 const UPLOAD_PREFIX = 'upload:';
 const REMOVABLE_SOURCES = new Set(['SKILL_MD', UPLOAD_SOURCE]);
-const MAX_UPLOAD_BYTES = 200 * 1024;
 
 export function missingCoreToolLabels() {
   return REQUIRED_TOOLS.filter((toolName) => !CORE_TOOL_LABELS[toolName]);
@@ -105,17 +103,14 @@ export class SkillCatalog {
   }
 
   setStatus(code, status) {
-    const target = String(code ?? '').trim();
-    if (!target) {
-      throw fail('skill code is required', 400);
-    }
+    const target = normalizeSkillCode(code);
     const row = this.database.db.prepare(
       'SELECT code FROM skills WHERE code = ?',
     ).get(target);
     if (!row) {
       throw fail('skill not found', 404);
     }
-    const next = Number(status) === 0 ? 0 : 1;
+    const next = normalizeSkillStatus(status);
     this.database.db.prepare(
       'UPDATE skills SET status = ?, updated_at = ? WHERE code = ?',
     ).run(next, new Date().toISOString(), target);
@@ -123,10 +118,7 @@ export class SkillCatalog {
   }
 
   remove(code) {
-    const target = String(code ?? '').trim();
-    if (!target) {
-      throw fail('skill code is required', 400);
-    }
+    const target = normalizeSkillCode(code);
     const row = this.database.db.prepare(
       'SELECT code, source FROM skills WHERE code = ?',
     ).get(target);
@@ -150,14 +142,7 @@ export class SkillCatalog {
   }
 
   saveUpload({ content, fileName } = {}) {
-    const source = String(content ?? '');
-    if (!source.trim()) {
-      throw fail('SKILL.md 内容不能为空', 400);
-    }
-    if (Buffer.byteLength(source, 'utf8') > MAX_UPLOAD_BYTES) {
-      throw fail(`SKILL.md 超过 ${Math.floor(MAX_UPLOAD_BYTES / 1024)}KB 上限`, 400);
-    }
-    const parsed = parseSkillDocument(source, fileName ? String(fileName) : '');
+    const parsed = parseSkillUpload({ content, fileName });
     const slug = String(parsed.code).replace(/^external:/, '') || 'unnamed-skill';
     const code = `${UPLOAD_PREFIX}${slug}`;
     const existing = this.database.db.prepare(
@@ -170,7 +155,7 @@ export class SkillCatalog {
       );
     }
     const timestamp = new Date().toISOString();
-    const contentHash = crypto.createHash('sha256').update(source).digest('hex');
+    const contentHash = parsed.contentHash;
     this.database.db.prepare(`
       INSERT INTO skills
         (code, name, description, category, kind, tool_name, instruction,

@@ -87,7 +87,7 @@ export class SkillRegistry {
     const normalizedPhase = String(phase ?? '').toUpperCase();
     return (skills ?? [])
       .filter((skill) => (
-        String(skill.source ?? '').toUpperCase() === 'SKILL_MD'
+        ['SKILL_MD', 'UPLOAD'].includes(String(skill.source ?? '').toUpperCase())
         && (skill.phaseTags ?? []).map(String).map((item) => item.toUpperCase())
           .includes(normalizedPhase)
       ))

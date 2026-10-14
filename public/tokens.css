@@ -4381,6 +4381,10 @@ body.is-query-page .workspace-toggle {
   font-size: 12px;
 }
 
+.skill-upload-selected[hidden] {
+  display: none;
+}
+
 .skill-upload-selected .icon,
 .skill-upload-selected svg {
   width: 15px;

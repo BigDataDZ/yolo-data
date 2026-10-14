@@ -1,4 +1,5 @@
 import * as core from '../core/runtime.js';
+import { bindSkillUploadForm } from '../components/skillUploadForm.js';
 import { ASSET_TABS, bindSectionTabs, sectionTabsMarkup } from '../components/sectionTabs.js';
 
 const {
@@ -178,70 +179,7 @@ function bindCatalogEvents(root) {
     });
   });
 
-  const fileInput = root.querySelector('#skillUploadFile');
-  const dropzone = root.querySelector('#skillUploadDropzone');
-  const selectedFile = root.querySelector('#skillUploadSelected');
-  const uploadBtn = root.querySelector('#skillUploadBtn');
-  const updateSelectedFile = () => {
-    const file = fileInput?.files?.[0];
-    if (!file || !selectedFile || !uploadBtn) {
-      if (uploadBtn) uploadBtn.disabled = true;
-      if (selectedFile) selectedFile.hidden = true;
-      return;
-    }
-    selectedFile.hidden = false;
-    selectedFile.innerHTML = `${icon('file-text', '已选择')}<span>${escapeHtml(file.name)}</span><small>${Math.ceil(file.size / 1024)} KB</small>`;
-    uploadBtn.disabled = false;
-  };
-  if (fileInput) {
-    fileInput.addEventListener('change', updateSelectedFile);
-  }
-  if (dropzone) {
-    ['dragenter', 'dragover'].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        dropzone.classList.add('is-dragging');
-      });
-    });
-    ['dragleave', 'drop'].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        dropzone.classList.remove('is-dragging');
-      });
-    });
-    dropzone.addEventListener('drop', (event) => {
-      const files = event.dataTransfer?.files;
-      if (!files?.length || !fileInput) return;
-      fileInput.files = files;
-      updateSelectedFile();
-    });
-  }
-
-  if (uploadBtn && fileInput) {
-    uploadBtn.addEventListener('click', async () => {
-      const file = fileInput.files?.[0];
-      if (!file) {
-        toast('请先选择 SKILL.md 文件', 'error');
-        return;
-      }
-      try {
-        setBusy(uploadBtn, true, '上传中');
-        const content = await file.text();
-        const result = await api('/api/skill-catalog/upload', {
-          method: 'POST',
-          body: JSON.stringify({
-            content,
-            fileName: file.name,
-          }),
-        });
-        toast(`「${result.name}」已加入公共目录`);
-        await renderPage();
-      } catch (error) {
-        toast(error.message, 'error');
-        setBusy(uploadBtn, false);
-      }
-    });
-  }
+  bindSkillUploadForm(root, { icon, escapeHtml, toast, setBusy, api, renderPage });
 }
 
 async function renderSkillsPage(root) {

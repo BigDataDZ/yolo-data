@@ -37,18 +37,11 @@ import { registerOpeningRoutes } from './http/routes/opening.js';
 // both read from this single list, so they cannot drift apart.
 export function buildRouteTable() {
   const table = createRouteTable();
-  registerAuthRoutes(table);
-  registerSystemRoutes(table);
-  registerModelRoutes(table);
-  registerUserRoutes(table);
-  registerThemeRoutes(table);
-  registerSkillRoutes(table);
-  registerOpeningRoutes(table);
-  registerDatasetRoutes(table);
-  registerIndicatorRoutes(table);
-  registerChatRoutes(table);
-  registerUploadRoutes(table);
-  registerMemoryRoutes(table);
+  for (const register of [
+    registerAuthRoutes, registerSystemRoutes, registerModelRoutes, registerUserRoutes,
+    registerThemeRoutes, registerSkillRoutes, registerOpeningRoutes, registerDatasetRoutes,
+    registerIndicatorRoutes, registerChatRoutes, registerUploadRoutes, registerMemoryRoutes,
+  ]) register(table);
   return table;
 }
 
