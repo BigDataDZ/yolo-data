@@ -57,7 +57,7 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
     // Exercise the visible custom select, rather than programmatically setting its hidden select.
     await page.locator('.ui-select:has(#sourceSsl) .ui-select-trigger').click();
     await page.locator('button.ui-select-option[data-value="verify"]').click();
-    const ca = process.env.YOLO_PG_TEST_CA ? fs.readFileSync(process.env.YOLO_PG_TEST_CA, 'utf8') : 'TEST CA';
+    const ca = process.env.YOLO_PG_TEST_CA ? fs.readFileSync(process.env.YOLO_PG_TEST_CA, 'utf8') : 'TEST CA\n';
     await page.locator('#sourceCa').fill(ca);
     await page.screenshot({ path: path.join(artifactDirectory, 'postgresql-form.png'), fullPage: true, animations: 'disabled' });
     const savedResponse = page.waitForResponse((response) => response.url().endsWith('/api/data-sources') && response.request().method() === 'POST');
@@ -66,7 +66,7 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
     assert.equal(response.status(), 200);
     const saved = await response.json();
     assert.equal(saved.dbType, 'POSTGRESQL');
-    assert.equal(saved.options.ssl.ca, ca);
+    assert.equal(saved.options.ssl.ca, ca.trim());
     const stored = application.database.getDataSource(saved.id);
     assert.notEqual(stored.encryptedPassword, process.env.PGPASSWORD ?? 'test-password');
     assert.equal(application.businessDatasets.crypto.decrypt(stored.encryptedPassword), process.env.PGPASSWORD ?? 'test-password');
