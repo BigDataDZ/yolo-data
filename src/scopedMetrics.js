@@ -180,8 +180,8 @@ export function metricOutputField(metric, fallback) {
   return value;
 }
 
-export function appendPredicateFilter(filter, parts, values) {
-  const expression = quoteIdentifier(filter.field.fieldName);
+export function appendPredicateFilter(filter, parts, values, quote = quoteIdentifier) {
+  const expression = quote(filter.field.fieldName);
   if (filter.operator === 'IS_NULL' || filter.operator === 'IS_NOT_NULL') {
     parts.push(`${expression} ${filter.operator.replaceAll('_', ' ')}`);
     return;

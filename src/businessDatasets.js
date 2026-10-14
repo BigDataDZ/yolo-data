@@ -1,4 +1,6 @@
 import { DatasourceCrypto } from './datasourceCrypto.js';
+import { getDialect, normalizeDataSource } from './dialects/index.js';
+import { classifyColumnType as normalizeDataType } from './dialects/common.js';
 import {
   normalizeProfileSelection,
   profileDataset as buildDatasetProfile,
@@ -7,30 +9,7 @@ import {
   appendPredicateFilter,
   metricOutputField,
   normalizeDatasetFilters,
-  quoteIdentifier,
 } from './scopedMetrics.js';
-
-// The MySQL driver is only required when a MySQL/Doris data source is actually
-// used. Loading it lazily keeps the platform runnable (and testable) in
-// "detached from database" mode without the optional dependency installed.
-let mysql = null;
-let mysqlLoadError = null;
-try {
-  mysql = (await import('mysql2/promise')).default;
-} catch (error) {
-  mysqlLoadError = error;
-}
-
-function requireMysql() {
-  if (!mysql) {
-    const error = new Error(
-      'mysql2 驱动未安装：MySQL、TiDB 或 Doris 数据源需要先执行 npm install mysql2',
-    );
-    error.cause = mysqlLoadError;
-    throw error;
-  }
-  return mysql;
-}
 
 const FILTER_OPERATORS = new Set([
   'IN',
@@ -48,36 +27,9 @@ const FILTER_OPERATORS = new Set([
 ]);
 const TIME_GRAINS = new Set(['DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR']);
 
-export function buildTimeGrainExpression(fieldName, timeGrain) {
-  const column = quoteIdentifier(fieldName);
-  switch (String(timeGrain ?? '').toUpperCase()) {
-    case 'DAY':
-      return `DATE_FORMAT(${column}, '%Y-%m-%d')`;
-    case 'WEEK':
-      return `DATE_FORMAT(DATE_SUB(DATE(${column}), INTERVAL WEEKDAY(${column}) DAY), '%Y-%m-%d')`;
-    case 'MONTH':
-      return `DATE_FORMAT(${column}, '%Y-%m')`;
-    case 'QUARTER':
-      return `CONCAT(YEAR(${column}), '-Q', QUARTER(${column}))`;
-    case 'YEAR':
-      return `DATE_FORMAT(${column}, '%Y')`;
-    default:
-      return column;
-  }
-}
-
-function normalizeDataType(columnType) {
-  const type = String(columnType ?? '').toLowerCase();
-  if (/date|time/.test(type)) {
-    return 'DATE';
-  }
-  if (/int|decimal|double|float|number|bigint|smallint|tinyint/.test(type)) {
-    return 'NUMBER';
-  }
-  if (/bool/.test(type)) {
-    return 'BOOLEAN';
-  }
-  return 'STRING';
+export function buildTimeGrainExpression(fieldName, timeGrain, dbType = 'MYSQL') {
+  const dialect = getDialect(dbType);
+  return dialect.timeGrainExpr(dialect.quoteIdentifier(fieldName), timeGrain);
 }
 
 function inferField(column) {
@@ -174,7 +126,7 @@ export class BusinessDatasetService {
       : payload.encryptedPassword;
     const current = id ? this.database.getDataSource(id) : null;
     const code = String(payload.code ?? '').trim() || current?.code || this.nextSourceCode(payload.name);
-    const source = this.database.saveDataSource({ ...payload, code, encryptedPassword }, id);
+    const source = this.database.saveDataSource(normalizeDataSource({ ...payload, code, encryptedPassword }), id);
     this.closePool(source.code);
     return source;
   }
@@ -200,8 +152,9 @@ export class BusinessDatasetService {
     if (!source) {
       throw new Error('data source not found');
     }
-    const pool = this.createPool(source);
+    let pool;
     try {
+      pool = this.createPool(source);
       await pool.query('SELECT 1');
       return this.database.updateDataSourceTest(source.id, {
         ok: true,
@@ -213,30 +166,13 @@ export class BusinessDatasetService {
         message: error.message,
       });
     } finally {
-      await pool.end().catch(() => {});
+      await pool?.end().catch(() => {});
     }
   }
 
   createPool(source) {
-    return requireMysql().createPool({
-      host: source.host,
-      port: Number(source.port),
-      user: source.username,
-      password: source.encryptedPassword
-        ? this.crypto.decrypt(source.encryptedPassword)
-        : '',
-      database: source.databaseName || undefined,
-      waitForConnections: true,
-      connectionLimit: 4,
-      maxIdle: 2,
-      idleTimeout: 60_000,
-      queueLimit: 20,
-      charset: 'utf8mb4',
-      timezone: '+08:00',
-      dateStrings: true,
-      multipleStatements: false,
-      connectTimeout: 10_000,
-    });
+    const password = source.encryptedPassword ? this.crypto.decrypt(source.encryptedPassword) : '';
+    return getDialect(source.dbType).createPool(source, password);
   }
 
   getPool(source) {
@@ -256,20 +192,14 @@ export class BusinessDatasetService {
 
   async listDatabases(sourceId) {
     const source = this.database.getDataSource(sourceId);
-    const [rows] = await this.getPool(source).query('SHOW DATABASES');
+    const [rows] = await this.getPool(source).query(getDialect(source.dbType).metadataSql('schemas'));
     return rows.map((row) => Object.values(row)[0]);
   }
 
   async listTables(sourceId, schemaName) {
     const source = this.database.getDataSource(sourceId);
     const [rows] = await this.getPool(source).query({
-      sql: `
-        SELECT table_name AS tableName, table_type AS tableType,
-               table_comment AS tableComment, table_rows AS approxRows
-        FROM information_schema.tables
-        WHERE table_schema = ?
-        ORDER BY table_rows DESC, table_name
-      `,
+      sql: getDialect(source.dbType).metadataSql('tables'),
       values: [schemaName],
     });
     return rows;
@@ -278,14 +208,7 @@ export class BusinessDatasetService {
   async listColumns(sourceId, schemaName, tableName) {
     const source = this.database.getDataSource(sourceId);
     const [rows] = await this.getPool(source).query({
-      sql: `
-        SELECT ordinal_position AS ordinalPosition, column_name AS columnName,
-               data_type AS dataType, column_type AS columnType,
-               is_nullable AS isNullable, column_comment AS columnComment
-        FROM information_schema.columns
-        WHERE table_schema = ? AND table_name = ?
-        ORDER BY ordinal_position
-      `,
+      sql: getDialect(source.dbType).metadataSql('columns'),
       values: [schemaName, tableName],
     });
     return rows;
@@ -340,6 +263,7 @@ export class BusinessDatasetService {
     if (!dataset) {
       throw new Error('dataset not found');
     }
+    const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
     const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
     const selected = fields.slice(0, 20);
     if (selected.length === 0) {
@@ -362,6 +286,7 @@ export class BusinessDatasetService {
   // Reads all enabled fields (not just the first 20 used by sampleDataset) so
   // the profiler can classify wide tables as well.
   async sampleForProfiling(dataset, fields, limit = 50) {
+    const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
     const selected = fields.slice(0, 50);
     if (selected.length === 0) {
       return { columns: [], rows: [] };
@@ -383,6 +308,7 @@ export class BusinessDatasetService {
   // MIN/MAX per date-like column, so the suggested default window is based on
   // the real data span instead of an arbitrary LIMIT sample.
   async listFieldRanges(dataset, fields) {
+    const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
     const candidates = fields
       .filter((field) => field.semanticType === 'DATE'
         || /date|time|day|month|year|日期|时间/.test(String(field.fieldName).toLowerCase()))
@@ -512,6 +438,7 @@ export class BusinessDatasetService {
     if (!dataset) {
       throw new Error('dataset not found');
     }
+    const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
     const field = this.database
       .listDatasetFields(dataset.id, { enabledOnly: true })
       .find((item) => item.fieldName === fieldName);
@@ -545,6 +472,8 @@ export class BusinessDatasetService {
     if (!dataset) {
       throw new Error('dataset not found');
     }
+    const dialect = getDialect(dataset.dbType);
+    const quoteIdentifier = dialect.quoteIdentifier;
     const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
     const fieldsByName = new Map(fields.map((field) => [field.fieldName, field]));
     const dimensions = [...new Set((request.dimensions ?? []).map(String))]
@@ -554,7 +483,7 @@ export class BusinessDatasetService {
     const dimensionSelections = dimensions.map((dimension) => ({
       field: dimension,
       expression: dimension.role === 'TIME' && TIME_GRAINS.has(requestedTimeGrain)
-        ? buildTimeGrainExpression(dimension.fieldName, requestedTimeGrain)
+        ? dialect.timeGrainExpr(quoteIdentifier(dimension.fieldName), requestedTimeGrain)
         : quoteIdentifier(dimension.fieldName),
     }));
     const metrics = (request.metrics ?? []).map((item) => {
@@ -593,16 +522,16 @@ export class BusinessDatasetService {
       let expression;
       if (metric.predicateFilters.length === 0) {
         expression = metric.aggregator === 'COUNT_DISTINCT'
-          ? `COUNT(DISTINCT ${column})`
+          ? dialect.countDistinct(column)
           : `${metric.aggregator}(${column})`;
       } else {
         const predicateParts = [];
         for (const filter of metric.predicateFilters) {
-          appendPredicateFilter(filter, predicateParts, selectValues);
+          appendPredicateFilter(filter, predicateParts, selectValues, quoteIdentifier);
         }
         const predicate = predicateParts.join(' AND ');
         if (metric.aggregator === 'COUNT_DISTINCT') {
-          expression = `COUNT(DISTINCT CASE WHEN ${predicate} THEN ${column} END)`;
+          expression = dialect.countDistinct(`CASE WHEN ${predicate} THEN ${column} END`);
         } else if (metric.aggregator === 'COUNT') {
           expression = `COUNT(CASE WHEN ${predicate} THEN 1 END)`;
         } else if (metric.aggregator === 'SUM') {
@@ -630,7 +559,7 @@ export class BusinessDatasetService {
       const aggregator = selectedMetric?.aggregator
         ?? String(filter.field.aggregator ?? 'SUM').toUpperCase();
       return aggregator === 'COUNT_DISTINCT'
-        ? `COUNT(DISTINCT ${quoteIdentifier(filter.field.fieldName)})`
+        ? dialect.countDistinct(quoteIdentifier(filter.field.fieldName))
         : `${aggregator}(${quoteIdentifier(filter.field.fieldName)})`;
     };
     const appendFilter = (filter) => {
@@ -703,6 +632,8 @@ export class BusinessDatasetService {
       );
       const orderExpression = dimensionSelection?.expression
         ?? (field.role === 'TIME' ? groupedTimeDimension?.expression : null)
+        ?? (dialect.code === 'POSTGRESQL' && metricSelectionByField.has(field.fieldName)
+          ? quoteIdentifier(metricSelectionByField.get(field.fieldName).outputField) : null)
         ?? quoteIdentifier(field.fieldName);
       orderParts.push(
         `${orderExpression} ${String(order.direction).toUpperCase() === 'ASC' ? 'ASC' : 'DESC'}`,
@@ -723,12 +654,12 @@ export class BusinessDatasetService {
       quoteIdentifier(dataset.schemaName)
     }.${quoteIdentifier(dataset.primaryTable)}${
       whereParts.length ? ` WHERE ${whereParts.join(' AND ')}` : ''
-    }${groupBy}${having}${orderBy} LIMIT ?`;
+    }${groupBy}${having}${orderBy} ${dialect.limitClause()}`;
     const values = [...selectValues, ...whereValues, ...havingValues];
     values.push(limit);
     return {
       dataset,
-      sql,
+      sql: dialect.prepareSql(sql),
       values,
       dimensions,
       timeGrain: TIME_GRAINS.has(requestedTimeGrain) ? requestedTimeGrain : null,
@@ -748,6 +679,7 @@ export class BusinessDatasetService {
     if (!dataset) {
       throw new Error('dataset not found');
     }
+    const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
     const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
     const effectiveRequest = { ...request };
     if (
@@ -757,7 +689,7 @@ export class BusinessDatasetService {
       const timeField = fields.find((field) => field.role === 'TIME');
       if (timeField) {
         const [rows] = await this.getPoolById(dataset.datasourceId).query({
-          sql: `SELECT MAX(${quoteIdentifier(timeField.fieldName)}) AS maxDate FROM ${
+          sql: `SELECT MAX(${quoteIdentifier(timeField.fieldName)}) AS ${quoteIdentifier('maxDate')} FROM ${
             quoteIdentifier(dataset.schemaName)
           }.${quoteIdentifier(dataset.primaryTable)}`,
           timeout: 15_000,

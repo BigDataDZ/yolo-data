@@ -33,3 +33,34 @@ jobs:
 
       - name: Semantic eval L1 (baseline regression)
         run: npm run eval
+
+  postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: yolo_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yolo_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      YOLO_PG_TEST_DATABASE: yolo_test
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install optional PostgreSQL driver for integration tests
+        run: npm install --no-save --package-lock=false pg
+      - name: Live PostgreSQL integration
+        run: node --test tests/postgresql.integration.test.js

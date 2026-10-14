@@ -8,10 +8,9 @@ import { CONTRACT_COMPILER_VERSION } from './contractVersion.js';
 import { normalizeSemanticPolicy } from './semanticPolicy.js';
 import { mergeThemeSemanticPolicy } from './themeSemanticRules.js';
 import {
-  mergeValueCandidates,
-  normalizeValueOrigin,
-  VALUE_DOMAIN_STATUSES,
+  mergeValueCandidates, normalizeValueOrigin, VALUE_DOMAIN_STATUSES,
 } from './semanticDomain.js';
+import { normalizeDataSource } from './dialects/index.js';
 
 function nowIso() {
   return new Date().toISOString();
@@ -2102,6 +2101,7 @@ export class PlatformDatabase {
 
   saveDataSource(payload, id = null) {
     const timestamp = nowIso();
+    payload = normalizeDataSource(payload);
     const code = String(payload.code ?? '').trim();
     const name = String(payload.name ?? '').trim();
     if (!code || !name) {
