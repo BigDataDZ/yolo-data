@@ -48,3 +48,20 @@ node --test tests/postgresql.integration.test.js
 ```
 
 覆盖元数据发现、条件聚合、HAVING、时间分桶、抽样、MIN/MAX、枚举取值和连接只读约束。无需安装 Testcontainers 或修改核心依赖。
+
+## 边界与浏览器验收
+
+CI 还通过独立任务生成一次性 CA/服务端证书，开启测试 PostgreSQL 的 TLS。`tests/postgresql.boundaries.test.js` 验证可信 CA 的真实加密连接、不可信证书拒绝、bigint/numeric 原始返回精度、错误凭据/数据库/端口、服务端及客户端超时、空闲连接断开后的恢复。精度验证覆盖驱动和数据集原始查询返回；不代表所有下游 JS 数值运算都支持任意精度。
+
+浏览器验收使用 Chromium、真实平台 HTTP 服务、临时 SQLite 元数据和测试 PostgreSQL，完成管理员登录、选择 PostgreSQL、填写并保存 SSL/CA、测试连接、创建 schema 下的数据集及抽样。截图随 CI 保存为 `postgresql-browser` artifact。
+
+本地执行浏览器验收时，先安装测试工具（不修改核心依赖）：
+
+```bash
+npm install --no-save --package-lock=false pg @playwright/test
+npx playwright install chromium
+```
+
+PowerShell 中设置 `$env:YOLO_BROWSER_TEST = '1'` 后运行 `node --test tests/postgresql.browser.test.js`。未设置 `YOLO_PG_TEST_DATABASE` 时，只验证表单、持久化及连接失败提示；设置专用测试库后才验证连接成功、数据集创建和抽样。需要 TLS 成功路径时，再设置 `YOLO_PG_TEST_CA` 为测试 CA PEM 文件路径。
+
+边界测试命令为 `node --test tests/postgresql.boundaries.test.js`，同样需要专用测试库。未配置 CA 时仅 TLS 用例跳过，其余网络与精度用例正常执行。

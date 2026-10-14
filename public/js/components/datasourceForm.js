@@ -24,7 +24,7 @@ export function datasourceFormHtml() {
       <div class="form-field"><label for="sourceUsername">用户名</label><input class="field" id="sourceUsername" /></div>
       <div class="form-field"><label for="sourcePassword">密码</label><input class="field" id="sourcePassword" type="password" /></div>
     </div>
-    <fieldset id="sourcePostgresOptions" hidden>
+    <fieldset id="sourcePostgresOptions" class="datasource-postgres-options" hidden>
       <div class="form-field"><label for="sourceSsl">SSL 连接</label><select class="select" id="sourceSsl"><option value="off">不启用</option><option value="verify">启用并验证服务器证书</option></select></div>
       <div class="form-field"><label for="sourceCa">CA 证书（可选，PEM 内容）</label><textarea class="textarea" id="sourceCa" placeholder="留空使用系统信任的证书"></textarea></div>
       <p class="muted">数据库用于建立连接；创建数据集时另行填写 schema（通常为 public）。</p>

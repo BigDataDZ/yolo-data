@@ -61,6 +61,21 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install optional PostgreSQL driver for integration tests
-        run: npm install --no-save --package-lock=false pg
+        run: npm install --no-save --package-lock=false pg @playwright/test
+      - name: Configure disposable PostgreSQL TLS certificates
+        run: bash scripts/setup-postgresql-test-tls.sh '${{ job.services.postgres.id }}'
       - name: Live PostgreSQL integration
-        run: node --test tests/postgresql.integration.test.js
+        run: node --test tests/postgresql.integration.test.js tests/postgresql.boundaries.test.js
+      - name: Install browser for end-to-end acceptance
+        run: npx playwright install --with-deps chromium
+      - name: Browser datasource acceptance
+        env:
+          YOLO_BROWSER_TEST: '1'
+          YOLO_BROWSER_ARTIFACT_DIR: artifacts/postgresql-browser
+        run: node --test tests/postgresql.browser.test.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgresql-browser
+          path: artifacts/postgresql-browser
+          if-no-files-found: ignore

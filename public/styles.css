@@ -5462,3 +5462,12 @@ body.is-auth .main-content {
     display: none;
   }
 }
+.datasource-postgres-options {
+  border: 0;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.datasource-postgres-options:not([hidden]) {
+  display: grid;
+  gap: 16px;
+}
