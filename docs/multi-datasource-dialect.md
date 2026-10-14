@@ -26,7 +26,22 @@
 | dbType 字段 | `src/database.js` L227 `db_type TEXT DEFAULT 'DORIS'`、L2113 写入归一化 | 扩枚举值即可，**零迁移**（新列值走新代码路径） |
 | 方言适配模式 | 成熟查询引擎方言适配层：每方言实现引号规则、时间分桶、元数据发现、类型分类 + Factory 注册；接口取 4 个与查询构建相关的最小能力点 | 接口形状直接对标 |
 
-## 3. 必须先确认的冲突与前置阻塞
+## 3. 前端管理页面适配（数据源创建/编辑）
+
+数据源管理页（`public/js/components/datasourceEditor.js`）已有 `DATASOURCE_TYPES` 类型选择器，当前支持 MYSQL / TIDB / DORIS 三种，点击后自动填入默认端口。方言扩展需要在此基础上补充：
+
+| 变更点 | 内容 |
+| --- | --- |
+| 类型列表新增 | `POSTGRESQL`（默认端口 5432）、`CLICKHOUSE`（默认端口 8123，HTTP 协议） |
+| 类型图标 | PostgreSQL 复用 `database`、ClickHouse 复用 `workflow` 或新增 |
+| 连接表单自适应 | SSL/CA 证书字段仅 PG 显示；ClickHouse 默认走 HTTP 端口 8123 而非 MySQL 3306；非 MySQL 协议类型隐藏"默认数据库"输入（PG 按 schema 区分，CK 按 database 区分但名称含义不同） |
+| 前端 token | `dbType` 归一化为 `MYSQL | TIDB | DORIS | POSTGRESQL | CLICKHOUSE`，前端 `DATASOURCE_TYPES[].type` 与后端 `saveDataSource` 的 `dbType` 枚举对齐 |
+| 连接测试适配 | `POST /api/data-sources/:id/test` 内部按 `dbType` 走对应 dialect 的 `createPool` + `SELECT 1`，返回格式不变 |
+| P1 扩展 | 类型列表支持配置化（从后端接口读取支持的类型列表，前端不再硬编码）——但这需要先确认是否有动态扩展场景 |
+
+前端改动量小（一个组件文件扩展 `DATASOURCE_TYPES` + 条件显示），但需要和后端 dialect 分层同步上线，避免用户看到 PostgreSQL 选项但实际连不上。
+
+## 4. 必须先确认的冲突与前置阻塞
 
 1. **零依赖原则 vs 新驱动**（package.json 目前仅 mysql2）
    - 与 mysql2 同级处理：pg/ClickHouse 驱动列为**可选依赖**，运行时 try-import，缺失时引导安装（现有 `requireMysql()` 模式已定调）。核心包依赖不变。
@@ -35,9 +50,9 @@
 4. **元数据发现差异**：`listTables/listColumns` 现走 `information_schema`（MySQL 语法）。PG 的 information_schema 兼容度高（小差异）；ClickHouse 需改 `system.tables/system.columns`——列入 Dialect 的 `metadataSql()`。
 5. **上传文件通道的口径冲突**（沿用 local-file-analysis.md §3.2 结论）：方言化不改变"正式业务数值只来自在线指标/数据集"的口径原则。
 
-## 4. 设计
+## 5. 设计
 
-### 4.1 Dialect 接口（每方言一个小模块，新目录 src/dialects/）
+### 5.1 Dialect 接口（每方言一个小模块，新目录 src/dialects/）
 
 ```js
 // src/dialects/types.js —— 接口契约（JSDoc，不引入类型系统）
@@ -51,7 +66,7 @@
 //   createPool(source): Pool }           // 驱动适配
 ```
 
-### 4.2 方言差异表（P0 两个实现 + P1 预留）
+### 5.2 方言差异表（P0 两个实现 + P1 预留）
 
 | 语法点 | MySQL / Doris（现状） | PostgreSQL（P0） | ClickHouse（P1） |
 | --- | --- | --- | --- |
@@ -65,7 +80,7 @@
 | 元数据 | `information_schema.tables/columns` | 同左（schema 语义小差异） | `system.tables/columns` |
 | 连接驱动 | `mysql2/promise` | `pg` | `@clickhouse/client` 或 mysql 协议端口 |
 
-### 4.3 接入点（等价替换，不动主链）
+### 5.3 接入点（等价替换，不动主链）
 
 ```
 buildQuery() ──拼接点──> dialect.quoteIdentifier / timeGrainExpr / countDistinct / limitClause
@@ -75,18 +90,18 @@ createPool() ──> dialect.createPool（懒加载驱动，缺失时与 require
 
 契约编译、行级权限注入、结果稳定化、审计**零改动**——方言只活在"契约 → 物理 SQL"的最后一步。
 
-### 4.4 测试策略
+### 5.4 测试策略
 
 - **方言语法单测**（P0 必做）：每 dialect 一组快照断言（timeGrain 五粒度 × quote/countDistinct），不连真实库
 - **集成测试（可选）**：Testcontainers 拉 PG 容器跑 buildQuery 真实结果比对；不进默认 `npm test`，独立脚本按需跑——符合零常驻依赖原则
 - 既有 `tests/businessDatasets.test.js`（15K）必须全绿——重构是行为不变的等价替换，这是验收线
 
-## 5. 分期
+## 6. 分期
 
 - **P0（本方案落地）**：`src/dialects/` 目录 + Dialect 接口 + MYSQL/DORIS 实现（行为不变重构）+ POSTGRESQL 实现 + 语法单测 + 集成测试脚手架。预计 3 个文件新增（types/mysql/postgresql）+ `businessDatasets.js` 少量等价替换。
 - **P1**：ClickHouse / StarRocks 方言；连接参数工厂（SSL、连接池参数按方言归一）；`dbType` 枚举迁移期兼容提示。
 - **不做**：SQL 反向解析、方言互转、写操作——只读 SELECT Builder 的边界不动。
 
-## 6. 与阶段演进的关系
+## 7. 与阶段演进的关系
 
 对应 `docs/architecture.md` §20 之外的已知约束 #6（"接入其他方言需要独立 Builder"）：本方案即该 Builder 的分层形态；P0 完成后，README"后续规划"中的"多类型数据源支持"即可勾掉一条腿。
