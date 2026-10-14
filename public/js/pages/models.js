@@ -92,9 +92,7 @@ function openModelEditor(model = null) {
       <button class="btn btn-primary" type="button" data-model-save>${icon('saved', '保存模型')}保存模型</button>
     `,
   });
-  // 部分旧配置仍通过环境变量提供密钥，但编辑表单不展示该内部字段；
-  // 缺省字段按空值处理，避免测试连通性时读取 null.value。
-  const value = (selector) => modal.querySelector(selector)?.value ?? '';
+  const value = (selector) => modal.querySelector(selector)?.value ?? ''; // Hidden legacy fields default to empty.
   const modelPayload = () => ({
     ...(model?.id ? { id: model.id } : {}),
     name: value('#modelName').trim(),
