@@ -18,11 +18,13 @@
 4. 所有关键步骤保留证据，可审计、可复现、可回放。
 
 ## 页面截图
-### 开始问数
-![开始问数](docs/screenshots/query.png) 
 
-### 智能体
+![开始问数](docs/screenshots/query_index.png) 
+
+![实际问数](docs/screenshots/query.png) 
+
 ![智能体](docs/screenshots/agent.png)
+
 
 ## 核心能力
 

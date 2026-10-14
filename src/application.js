@@ -48,7 +48,10 @@ export async function createApplication(
       : new UnavailableIndicatorClient());
   function getSupersonicEnabled() {
     const stored = database.getPlatformSetting('supersonic.enabled', true);
-    return Boolean(stored?.value ?? stored);
+    // 指标平台是可选集成。没有配置可用客户端时，不应把“未配置”
+    // 视为降级运行，而是默认使用本地指标/业务数据集直连模式。
+    const clientConfigured = indicatorClient.mode === 'supersonic' || Boolean(config.supersonic.baseUrl);
+    return clientConfigured && Boolean(stored?.value ?? stored);
   }
   const harness = createHarness(config.deepseek);
   const llmAudit = new LlmAuditService(database);
