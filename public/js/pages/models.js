@@ -59,7 +59,7 @@ function modelEditorMarkup(model = {}) {
       </div>
       <div class="form-field span-2">
         <label for="modelApiKeyEnv">API Key 环境变量</label>
-        <input class="field mono" id="modelApiKeyEnv" value="${escapeAttr(model.apiKeyEnv ?? '')}" placeholder="DEEPSEEK_API_KEY" />
+        <input class="field mono" id="modelApiKeyEnv" value="${escapeAttr(model.apiKeyEnv ?? '')}" placeholder="API_KEY" />
       </div>
       <div class="form-field">
         <label for="modelTemperature">温度</label>

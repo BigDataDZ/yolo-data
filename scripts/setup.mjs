@@ -141,5 +141,5 @@ await verifyMysqlDriver();
 resolvePythonRuntime();
 
 console.log('\n完成。下一步：');
-console.log('  1. 编辑 .env 配置 DEEPSEEK_API_KEY / SUPERSONIC_* / Doris 连接');
+console.log('  1. 编辑 .env 配置 API_KEY / SUPERSONIC_* / Doris 连接');
 console.log('  2. npm run dev   然后打开 http://localhost:8088/\n');

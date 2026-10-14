@@ -70,15 +70,16 @@ export function loadConfig(env = process.env) {
       timeoutMs: readInt(env.SUPERSONIC_TIMEOUT_MS, 30_000),
     },
     deepseek: {
-      baseUrl: normalizeBaseUrl(env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'),
-      apiKey: String(env.DEEPSEEK_API_KEY ?? '').trim(),
-      model: String(env.DEEPSEEK_MODEL || 'deepseek-chat').trim(),
-      temperature: Number.isFinite(Number(env.DEEPSEEK_TEMPERATURE))
-        ? Number(env.DEEPSEEK_TEMPERATURE)
+      // 通用环境变量优先；保留旧变量作为兼容回退。
+      baseUrl: normalizeBaseUrl(env.API_BASE_URL || env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'),
+      apiKey: String(env.API_KEY ?? env.DEEPSEEK_API_KEY ?? '').trim(),
+      model: String(env.MODEL || env.DEEPSEEK_MODEL || 'deepseek-chat').trim(),
+      temperature: Number.isFinite(Number(env.TEMPERATURE ?? env.DEEPSEEK_TEMPERATURE))
+        ? Number(env.TEMPERATURE ?? env.DEEPSEEK_TEMPERATURE)
         : 0,
-      maxTokens: readInt(env.DEEPSEEK_MAX_TOKENS, 0),
-      timeoutMs: readInt(env.DEEPSEEK_TIMEOUT_MS, 180_000),
-      maxToolRounds: readInt(env.DEEPSEEK_MAX_TOOL_ROUNDS, 12),
+      maxTokens: readInt(env.MAX_TOKENS ?? env.DEEPSEEK_MAX_TOKENS, 0),
+      timeoutMs: readInt(env.TIMEOUT_MS ?? env.DEEPSEEK_TIMEOUT_MS, 180_000),
+      maxToolRounds: readInt(env.MAX_TOOL_ROUNDS ?? env.DEEPSEEK_MAX_TOOL_ROUNDS, 12),
     },
     chatMemoryMessageLimit: readInt(env.CHAT_MEMORY_MESSAGE_LIMIT, 20),
     // 长期记忆的自动整理：攒够多少条笔记自动合并、正文到预算多少比例自动压缩、
