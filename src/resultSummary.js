@@ -1,8 +1,5 @@
 import { formatPresentationCell } from './resultPresentation.js';
-import {
-  summarizeAnalysisResult,
-  validateAnalysisResult,
-} from './analysisContract.js';
+import { summarizeAnalysisResult, validateAnalysisResult } from './analysisContract.js';
 import {
   getPlatformLexicon,
   lexiconPattern,
