@@ -3,6 +3,7 @@
 // 不猜测文件语义，也不参与业务口径。
 
 import * as core from '../core/runtime.js';
+import { describeUpload, extensionOf, readAsBase64 } from './fileUploadHelpers.js';
 
 const { icon, escapeHtml, escapeAttr, toast } = core;
 
@@ -67,29 +68,6 @@ export function pendingUploadAttachments() {
       name: item.name,
       label: item.label,
     }));
-}
-
-function extensionOf(name) {
-  const match = String(name ?? '').match(/\.([A-Za-z0-9]+)$/);
-  return match ? match[1].toLowerCase() : '';
-}
-
-function readAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? '').split(',')[1] ?? '');
-    reader.onerror = () => reject(new Error('本地文件读取失败'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function describeUpload(result) {
-  if (!result?.table) {
-    const note = result?.warnings?.[0] ? ` · ${result.warnings[0]}` : ' · 已保存';
-    return `${result.file.name}${note}`;
-  }
-  const sheet = result.table.sheetName ? `工作表「${result.table.sheetName}」· ` : '';
-  return `${result.file.name} · ${sheet}${result.table.rowCount} 行 / ${result.table.columnCount} 列`;
 }
 
 async function uploadOne(file, { ensureSession, refresh }) {

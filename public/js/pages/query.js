@@ -1,10 +1,8 @@
 import * as core from '../core/runtime.js';
 import { renderDataTable } from '../components/table.js';
 import {
-  bindFileUpload,
-  clearLocalFileUploads,
-  fileUploadChipsMarkup,
-  fileUploadTriggerMarkup,
+  bindFileUpload, clearLocalFileUploads,
+  fileUploadChipsMarkup, fileUploadTriggerMarkup,
   pendingUploadAttachments,
 } from '../components/fileUpload.js';
 import {
