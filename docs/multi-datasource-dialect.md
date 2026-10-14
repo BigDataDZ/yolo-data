@@ -12,7 +12,7 @@
 3. 元数据发现 SQL（`information_schema` 各家实现差异）
 4. 连接池工厂（mysql2 → pg 各自驱动，沿用现有 try-import 懒加载模式）
 
-抽象形态照抄 **SuperSonic `headless/core/adaptor/db` 的 DbAdaptor 分层**（已核对其 9 个方言实现）：每方言一个小模块 + 一个 factory，接口只覆盖查询构建真正有差异的点，不做大而全的 SQL 生成器。
+抽象形态采用**方言适配层（adapter/factory）模式**：每方言一个小模块 + 一个 factory，接口只覆盖查询构建真正有差异的点，不做大而全的 SQL 生成器。
 
 ## 2. 现有可复用资产（已核对源码）
 
@@ -24,7 +24,7 @@
 | 驱动懒加载 | `src/businessDatasets.js` L17-33（`try import('mysql2/promise')` + `requireMysql()` 报错引导） | **如法炮制** `requirePg()` 等；报错信息同样写清"哪类数据源需要装什么" |
 | 连接测试 | `testDataSource` 的 `SELECT 1` | PG/CK 同样支持，零改动 |
 | dbType 字段 | `src/database.js` L227 `db_type TEXT DEFAULT 'DORIS'`、L2113 写入归一化 | 扩枚举值即可，**零迁移**（新列值走新代码路径） |
-| 方言分层参照 | SuperSonic `adaptor/db`：`DbAdaptor`（getDateFormat/rewriteSql/getTables/getColumns/classifyColumnType）+ 9 实现 + Factory | 接口形状直接对标；yolo 只需其中 4 个能力点 |
+| 方言适配模式 | 成熟查询引擎方言适配层：每方言实现引号规则、时间分桶、元数据发现、类型分类 + Factory 注册；接口取 4 个与查询构建相关的最小能力点 | 接口形状直接对标 |
 
 ## 3. 必须先确认的冲突与前置阻塞
 
