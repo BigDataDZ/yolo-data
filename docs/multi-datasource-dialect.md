@@ -1,7 +1,7 @@
 # 多类型数据源方言适配方案（多数据源支持 × Dialect 分层）
 
 > 目标：让业务数据集通道支持多类型数据源（PostgreSQL 优先），把只读查询构建器里写死的 MySQL/Doris 方言抽象成可替换的 Dialect 层，并保持 Contract-first 主链、零依赖原则与架构棘轮约束不破。
-> 本文只描述改造方案，不含实现。（方向已与作者微信确认：未 release 阶段，方式不限）
+> 本文记录设计方案。P0 实现与使用方式见 [PostgreSQL 接入](postgresql.md)；ClickHouse/StarRocks 属于 P1。
 
 ## 1. 结论先行
 
@@ -34,7 +34,7 @@
 | --- | --- |
 | 类型列表新增 | `POSTGRESQL`（默认端口 5432）、`CLICKHOUSE`（默认端口 8123，HTTP 协议） |
 | 类型图标 | PostgreSQL 复用 `database`、ClickHouse 复用 `workflow` 或新增 |
-| 连接表单自适应 | SSL/CA 证书字段仅 PG 显示；ClickHouse 默认走 HTTP 端口 8123 而非 MySQL 3306；非 MySQL 协议类型隐藏"默认数据库"输入（PG 按 schema 区分，CK 按 database 区分但名称含义不同） |
+| 连接表单自适应 | SSL/CA 证书字段仅 PG 显示；PG 保留必填的连接数据库，创建数据集时单独填写 schema；ClickHouse 默认走 HTTP 端口 8123，列入 P1 |
 | 前端 token | `dbType` 归一化为 `MYSQL | TIDB | DORIS | POSTGRESQL | CLICKHOUSE`，前端 `DATASOURCE_TYPES[].type` 与后端 `saveDataSource` 的 `dbType` 枚举对齐 |
 | 连接测试适配 | `POST /api/data-sources/:id/test` 内部按 `dbType` 走对应 dialect 的 `createPool` + `SELECT 1`，返回格式不变 |
 | P1 扩展 | 类型列表支持配置化（从后端接口读取支持的类型列表，前端不再硬编码）——但这需要先确认是否有动态扩展场景 |

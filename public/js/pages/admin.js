@@ -4,6 +4,7 @@ import { openDatasetProfiler } from '../components/datasetProfiler.js';
 import { openDatasetFields } from '../components/datasetFields.js';
 import { openUserEditor } from '../components/userEditor.js';
 import { openDatasourceEditor } from '../components/datasourceEditor.js';
+import { bindDatasetSource } from '../components/datasourceForm.js';
 
 const {
   ICONS,
@@ -292,9 +293,8 @@ function openDatasetCreator() {
       <button class="btn btn-primary" type="button" id="saveDatasetBtn">扫描字段并保存</button>
     `,
   });
-  modal.querySelectorAll('[data-close-modal]').forEach((button) => {
-    button.addEventListener('click', closeModal);
-  });
+  bindDatasetSource(modal, state.dataSources);
+  modal.querySelectorAll('[data-close-modal]').forEach((button) => button.addEventListener('click', closeModal));
   modal.querySelector('#saveDatasetBtn').addEventListener('click', async (event) => {
     setBusy(event.currentTarget, true, '扫描中');
     try {

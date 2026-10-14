@@ -3,26 +3,14 @@
 // 不猜测文件语义，也不参与业务口径。
 
 import * as core from '../core/runtime.js';
+import { chipsMarkup, describeUpload, extensionOf, readAsBase64 } from './fileUploadHelpers.js';
 
-const { icon, escapeHtml, escapeAttr, toast } = core;
+const { icon, toast } = core;
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const ACCEPT_EXTENSIONS = ['csv', 'xls', 'xlsx'];
 
 let uploads = [];
-
-function chipsMarkup() {
-  if (uploads.length === 0) {
-    return '';
-  }
-  return uploads.map((item) => `
-    <span class="attachment-chip${item.status === 'error' ? ' is-error' : ''}"
-      title="${escapeAttr(item.message ?? item.label ?? '')}">
-      ${icon(item.status === 'error' ? 'circle-alert' : 'file-spreadsheet', item.label)}
-      <span>${escapeHtml(item.label)}</span>
-    </span>
-  `).join('');
-}
 
 // 触发按钮放进输入区，与发送按钮同一行、靠左；这样"上传入口"和"发送"处于同一操作带，
 // 不再单独占一行。
@@ -41,7 +29,7 @@ export function fileUploadTriggerMarkup() {
 export function fileUploadChipsMarkup() {
   return `
     <div class="chat-attachment-bar" id="chatAttachmentBar"${uploads.length > 0 ? '' : ' hidden'}>
-      <span class="attachment-chips" id="chatAttachmentChips">${chipsMarkup()}</span>
+      <span class="attachment-chips" id="chatAttachmentChips">${chipsMarkup(uploads)}</span>
     </div>
   `;
 }
@@ -67,29 +55,6 @@ export function pendingUploadAttachments() {
       name: item.name,
       label: item.label,
     }));
-}
-
-function extensionOf(name) {
-  const match = String(name ?? '').match(/\.([A-Za-z0-9]+)$/);
-  return match ? match[1].toLowerCase() : '';
-}
-
-function readAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? '').split(',')[1] ?? '');
-    reader.onerror = () => reject(new Error('本地文件读取失败'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function describeUpload(result) {
-  if (!result?.table) {
-    const note = result?.warnings?.[0] ? ` · ${result.warnings[0]}` : ' · 已保存';
-    return `${result.file.name}${note}`;
-  }
-  const sheet = result.table.sheetName ? `工作表「${result.table.sheetName}」· ` : '';
-  return `${result.file.name} · ${sheet}${result.table.rowCount} 行 / ${result.table.columnCount} 列`;
 }
 
 async function uploadOne(file, { ensureSession, refresh }) {
@@ -122,7 +87,7 @@ export function bindFileUpload(root, { ensureSession, onUploaded } = {}) {
   // 保证"拖文件进来就能上传"在有无附件时都成立。
   const dropZone = root.querySelector('.chat-composer-inner') ?? bar;
   const repaint = () => {
-    chipHost.innerHTML = chipsMarkup();
+    chipHost.innerHTML = chipsMarkup(uploads);
     if (bar) {
       bar.hidden = uploads.length === 0;
     }
