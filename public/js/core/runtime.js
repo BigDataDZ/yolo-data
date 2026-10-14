@@ -58,6 +58,7 @@ const PAGE_META = {
   indicators: ['指标管理', '管理指标快照、主题挂载关系和在线指标口径'],
   models: ['模型管理', '统一管理模型连接、运行参数和平台默认模型'],
   themes: ['智能体', '按业务主题限定指标范围、维度和回答策略'],
+  skills: ['公共 Skills', '管理平台级 Skill 资产池：查看来源与引用、启停公共 Skill、上传新 Skill'],
   themeEditor: ['编辑智能体', '配置主题的数据范围、运行模型、Skills 和独立提示词'],
   datasets: ['数据集', '管理 MySQL、TiDB、Doris 数据源、业务数据集和字段语义'],
   permissions: ['数据权限', '配置用户可见主题、指标、行级过滤和列级脱敏'],
@@ -810,10 +811,14 @@ function renderRuntime(health) {
   const level = indicatorReady && llmReady
     ? 'ready'
     : indicatorBroken ? 'alert' : (indicatorReady || llmReady) ? 'warning' : 'alert';
+  // 运行状态同时体现在右上角的头像状态点和账号面板里的状态行。
   const runtimeBox = document.getElementById('runtimeBox');
-  runtimeBox.classList.toggle('is-ready', level === 'ready');
-  runtimeBox.classList.toggle('is-warning', level === 'warning');
-  runtimeBox.classList.toggle('is-alert', level === 'alert');
+  const statusDot = document.getElementById('userMenuStatus');
+  for (const element of [runtimeBox, statusDot]) {
+    element?.classList.toggle('is-ready', level === 'ready');
+    element?.classList.toggle('is-warning', level === 'warning');
+    element?.classList.toggle('is-alert', level === 'alert');
+  }
   document.getElementById('runtimeTitle').textContent = level === 'ready'
     ? '运行就绪'
     : level === 'warning' ? '降级运行' : indicatorBroken ? '运行异常' : '尚未就绪';
@@ -837,8 +842,9 @@ function renderRuntime(health) {
     snapshotText,
     `大模型：${llmDetail}`,
   ].filter(Boolean).join(' · ');
-  runtimeBox.setAttribute('title', tooltip);
-  runtimeBox.setAttribute('aria-label', tooltip);
+  runtimeBox?.setAttribute('title', tooltip);
+  runtimeBox?.setAttribute('aria-label', tooltip);
+  statusDot?.setAttribute('title', tooltip);
 }
 
 function setActivePage(page) {
@@ -864,8 +870,8 @@ function setActivePage(page) {
       );
     });
   }
-  // 合并入口的导航高亮：/guide 归「帮助中心」，/models 与主题编辑页归「智能体」。
-  const navPageMap = { themeEditor: 'themes', models: 'themes', guide: 'help' };
+  // 合并入口的导航高亮：/guide 归「帮助中心」，/models、/skills 与主题编辑页归「智能体」。
+  const navPageMap = { themeEditor: 'themes', models: 'themes', skills: 'themes', guide: 'help' };
   const activeNavPage = navPageMap[page] ?? page;
   document.querySelectorAll('.nav-item').forEach((item) => {
     item.classList.toggle('is-active', item.dataset.page === activeNavPage);
@@ -944,6 +950,7 @@ const pageModuleSpecs = {
   indicators: () => import('../pages/indicators.js'),
   models: () => import('../pages/models.js'),
   themes: () => import('../pages/themes.js'),
+  skills: () => import('../pages/skills.js'),
   datasets: () => import('../pages/admin.js'),
   permissions: () => import('../pages/admin.js'),
   growth: () => import('../pages/growth.js'),
@@ -958,6 +965,7 @@ const pageRenderers = {
   models: 'renderModelsPage',
   themeEditor: 'renderThemeEditorPage',
   themes: 'renderThemesPage',
+  skills: 'renderSkillsPage',
   datasets: 'renderDatasetsPage',
   permissions: 'renderPermissionsPage',
   growth: 'renderGrowthPage',
@@ -973,6 +981,7 @@ const routeMatchers = [
   { pattern: /^\/themes\/new$/, page: 'themeEditor', themeId: null },
   { pattern: /^\/themes\/(\d+)$/, page: 'themeEditor' },
   { pattern: /^\/themes$/, page: 'themes' },
+  { pattern: /^\/skills$/, page: 'skills' },
   { pattern: /^\/datasets$/, page: 'datasets' },
   { pattern: /^\/permissions$/, page: 'permissions' },
   { pattern: /^\/growth$/, page: 'growth' },

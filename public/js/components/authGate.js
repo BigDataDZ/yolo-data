@@ -78,10 +78,8 @@ export function showLogin(message = '') {
       <form class="login-card" id="loginForm" novalidate>
         <div class="login-brand">
           <img src="/yolo-mark.svg" alt="" />
-          <div><strong>YOLO</strong><small>智能数据分析</small></div>
+          <div><strong>YOLO Data Agnet</strong><small>先进稳定的智能数据分析平台</small></div>
         </div>
-        <h1>登录</h1>
-        <p class="login-hint">${escapeHtml(message || '使用平台账号登录后开始问数')}</p>
         <label class="login-field">
           <span>用户名</span>
           <input id="loginUsername" name="username" autocomplete="username" required />

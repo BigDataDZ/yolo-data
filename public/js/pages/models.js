@@ -57,10 +57,6 @@ function modelEditorMarkup(model = {}) {
           ` : ''}
         </div>
       </div>
-      <div class="form-field span-2">
-        <label for="modelApiKeyEnv">API Key 环境变量</label>
-        <input class="field mono" id="modelApiKeyEnv" value="${escapeAttr(model.apiKeyEnv ?? '')}" placeholder="API_KEY" />
-      </div>
       <div class="form-field">
         <label for="modelTemperature">温度</label>
         <input class="field" id="modelTemperature" type="number" min="0" max="2" step="0.1" value="${escapeAttr(model.temperature ?? 0)}" />

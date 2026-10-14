@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <title>YOLO · 智能数据分析</title>
+    <title>YOLO Data Agnet· 先进稳定的智能数据分析引擎</title>
     <link rel="icon" type="image/svg+xml" href="/yolo-mark.svg" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/tokens.css" />
@@ -58,11 +58,32 @@
         <section class="sidebar-sessions" id="sessionSidebar" hidden></section>
 
         <div class="sidebar-foot">
-          <div class="runtime-box" id="runtimeBox" tabindex="0">
-            <span class="runtime-dot"></span>
-            <div>
-              <strong id="runtimeTitle">连接中</strong>
-              <small id="runtimeDetail">正在读取运行状态</small>
+          <div class="user-menu" id="userMenu" hidden>
+            <button class="user-menu-trigger" id="userMenuTrigger" type="button" aria-label="账号菜单"
+              aria-haspopup="true" aria-expanded="false">
+              <span class="user-menu-avatar-wrap">
+                <span class="user-menu-avatar" id="userMenuAvatar">U</span>
+                <span class="user-menu-status" id="userMenuStatus" aria-hidden="true"></span>
+              </span>
+              <span class="user-menu-name" id="userMenuName"></span>
+              <span class="user-menu-caret" data-icon="chevron-down"></span>
+            </button>
+            <div class="user-menu-panel" id="userMenuPanel" hidden>
+              <div class="user-menu-meta">
+                <strong id="userMenuDisplay"></strong>
+                <small id="userMenuRole"></small>
+              </div>
+              <div class="user-menu-runtime" id="runtimeBox" tabindex="0">
+                <span class="user-menu-runtime-dot"></span>
+                <div>
+                  <strong id="runtimeTitle">连接中</strong>
+                  <small id="runtimeDetail">正在读取运行状态</small>
+                </div>
+              </div>
+              <button class="user-menu-item" type="button" data-action="tour">使用引导</button>
+              <button class="user-menu-item" type="button" data-action="memory">我的记忆</button>
+              <button class="user-menu-item" type="button" data-action="password">修改密码</button>
+              <button class="user-menu-item is-danger" type="button" data-action="logout">退出登录</button>
             </div>
           </div>
         </div>
@@ -91,23 +112,6 @@
               <span class="topbar-icon-slot" data-icon="table"></span>
               <small class="topbar-count" id="workspaceCount">0</small>
             </button>
-            <div class="user-menu" id="userMenu" hidden>
-              <button class="topbar-icon-btn user-menu-trigger" id="userMenuTrigger" type="button"
-                data-tooltip="账号" aria-label="账号菜单" aria-haspopup="true" aria-expanded="false">
-                <span class="user-menu-avatar" id="userMenuAvatar">U</span>
-                <span class="user-menu-name" id="userMenuName"></span>
-              </button>
-              <div class="user-menu-panel" id="userMenuPanel" hidden>
-                <div class="user-menu-meta">
-                  <strong id="userMenuDisplay"></strong>
-                  <small id="userMenuRole"></small>
-                </div>
-                <button class="user-menu-item" type="button" data-action="tour">重播使用引导</button>
-                <button class="user-menu-item" type="button" data-action="memory">我的记忆</button>
-                <button class="user-menu-item" type="button" data-action="password">修改密码</button>
-                <button class="user-menu-item is-danger" type="button" data-action="logout">退出登录</button>
-              </div>
-            </div>
           </div>
         </header>
 

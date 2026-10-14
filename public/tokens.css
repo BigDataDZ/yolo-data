@@ -4291,6 +4291,128 @@ body.is-query-page .workspace-toggle {
   border-radius: 50%;
 }
 
+/* 公共 Skill 文件上传卡片 */
+.skill-upload-card {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2, #f8fafc);
+}
+
+.skill-upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.skill-upload-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 92px;
+  padding: 18px 20px;
+  border: 1px dashed var(--border-strong, #cbd5e1);
+  border-radius: 12px;
+  color: var(--text-2);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.skill-upload-dropzone:hover,
+.skill-upload-dropzone:focus-within,
+.skill-upload-dropzone.is-dragging,
+.skill-upload-card.is-dragging .skill-upload-dropzone {
+  border-color: var(--accent, #3478f6);
+  background: #f5f9ff;
+  box-shadow: 0 0 0 3px rgba(52, 120, 246, .08);
+}
+
+.skill-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  color: #3478f6;
+  background: #eaf2ff;
+}
+
+.skill-upload-icon .icon,
+.skill-upload-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.skill-upload-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.skill-upload-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.skill-upload-copy small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.skill-upload-select {
+  flex: 0 0 auto;
+}
+
+.skill-upload-selected {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 4px 2px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--text-2);
+  background: #eef5ff;
+  font-size: 12px;
+}
+
+.skill-upload-selected .icon,
+.skill-upload-selected svg {
+  width: 15px;
+  height: 15px;
+  color: var(--accent, #3478f6);
+}
+
+.skill-upload-selected small {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+#skillUploadBtn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .skill-upload-dropzone {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .skill-upload-copy {
+    flex-basis: calc(100% - 56px);
+  }
+
+  .skill-upload-select {
+    margin-left: 56px;
+  }
+}
+
 /* 回答内容与问数输入区共用的内容宽度。
    两处用同一个变量，避免各自写死后悄悄错位——改宽度只需改这一处。 */
 :root {

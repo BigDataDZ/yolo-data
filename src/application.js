@@ -13,6 +13,7 @@ import { UserMemoryStore } from './userMemory.js';
 import { UserMemoryDistiller } from './userMemoryDistiller.js';
 import { startMemoryMaintenance } from './userMemoryMaintenance.js';
 import { SkillRegistry } from './skills.js';
+import { SkillCatalog } from './skillCatalog.js';
 import { SemanticCompiler } from './semanticCompiler.js';
 import { QueryContractCompiler } from './queryContractCompiler.js';
 import { FeedbackService } from './feedback.js';
@@ -75,6 +76,7 @@ export async function createApplication(
   const skillRegistry = new SkillRegistry(database, {
     skillDirectories: config.skillDirectories ?? [],
   });
+  const skillCatalog = new SkillCatalog(database);
   const semanticCompiler = new SemanticCompiler();
   const queryContractCompiler = new QueryContractCompiler();
   const growth = new GrowthService(database);
@@ -418,6 +420,7 @@ export async function createApplication(
     userMemoryDistiller,
     memoryMaintenance,
     skillRegistry,
+    skillCatalog,
     semanticCompiler,
     queryContractCompiler,
     feedback,

@@ -1,5 +1,5 @@
 // 侧栏合并入口在页内使用的标签条。
-// 现在服务两组入口：帮助中心（使用引导 / 帮助中心）、智能体（智能体 / 模型管理）。
+// 现在服务两组入口：帮助中心（使用引导 / 帮助中心）、智能体（智能体 / 公共 Skills / 模型管理）。
 // 组件保持零依赖：只产出标记并绑定跳转回调，navigate 由页面模块传入。
 
 export const HELP_TABS = [
@@ -9,6 +9,7 @@ export const HELP_TABS = [
 
 export const ASSET_TABS = [
   { id: 'themes', route: '/themes', label: '智能体' },
+  { id: 'skills', route: '/skills', label: '公共 Skills' },
   { id: 'models', route: '/models', label: '模型管理' },
 ];
 

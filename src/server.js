@@ -24,6 +24,7 @@ import { registerSystemRoutes } from './http/routes/system.js';
 import { registerModelRoutes } from './http/routes/models.js';
 import { registerUserRoutes } from './http/routes/users.js';
 import { registerThemeRoutes } from './http/routes/themes.js';
+import { registerSkillRoutes } from './http/routes/skills.js';
 import { registerDatasetRoutes } from './http/routes/datasets.js';
 import { registerIndicatorRoutes } from './http/routes/indicators.js';
 import { registerChatRoutes } from './http/routes/chat.js';
@@ -41,6 +42,7 @@ export function buildRouteTable() {
   registerModelRoutes(table);
   registerUserRoutes(table);
   registerThemeRoutes(table);
+  registerSkillRoutes(table);
   registerOpeningRoutes(table);
   registerDatasetRoutes(table);
   registerIndicatorRoutes(table);
