@@ -1,6 +1,6 @@
 // 公共 Skill 目录：与「某个智能体勾选了哪些 Skill」解耦，只管平台级资产本身。
-// 写操作统一用 POST + body 传 code —— Skill code 形如 `external:xxx` / `upload:xxx`，
-// 冒号放进 URL 路径段容易与路由参数解析打架，用 body 更稳。
+// 写操作用 POST + body 传 `external:xxx` / `upload:xxx` code，避免冒号与路径参数解析冲突。
+import { skillCatalogPayload } from '../../skillUpload.js';
 export function registerSkillRoutes(table) {
   table.add({
     id: 'skillCatalog.read',
@@ -34,7 +34,7 @@ export function registerSkillRoutes(table) {
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const body = await readJson(request);
+      const body = skillCatalogPayload(await readJson(request));
       const skill = application.skillCatalog.saveUpload({
         content: body.content,
         fileName: body.fileName,
@@ -62,8 +62,8 @@ export function registerSkillRoutes(table) {
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const body = await readJson(request);
-      const status = Number(body.status) === 0 ? 0 : 1;
+      const body = skillCatalogPayload(await readJson(request));
+      const status = body.status;
       const result = application.skillCatalog.setStatus(body.code, status);
       database.addAuditLog({
         userId: user.id,
@@ -88,7 +88,7 @@ export function registerSkillRoutes(table) {
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const body = await readJson(request);
+      const body = skillCatalogPayload(await readJson(request));
       const result = application.skillCatalog.remove(body.code);
       database.addAuditLog({
         userId: user.id,
