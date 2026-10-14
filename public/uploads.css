@@ -43,6 +43,43 @@
   height: 12px;
 }
 
+/* 文件选择框是隐藏的；显式声明避免被任何 display 规则抬出来变成栅格项。 */
+.attachment-input[hidden] {
+  display: none;
+}
+
+/* 上传入口与发送按钮同一行平铺；uploads.css 在 tokens.css 之后加载，
+   这里的 align-self 会覆盖输入区的对齐设置，必须与按钮行保持一致（垂直居中）。 */
+.chat-input-shell .attachment-trigger {
+  align-self: center;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.chat-input-shell .attachment-trigger .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* 拖拽热区已上移到整个 composer，高亮反馈落在输入框上，避免"看不出往哪拖"。 */
+.chat-composer-inner.is-dragging .chat-input-shell {
+  outline: 1px dashed var(--accent, #3478f6);
+  outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  /* 窄屏只留图标，把宽度让给输入区。 */
+  .chat-input-shell .attachment-trigger {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .chat-input-shell .attachment-trigger span {
+    display: none;
+  }
+}
+
 .attachment-chips {
   display: inline-flex;
   flex-wrap: wrap;

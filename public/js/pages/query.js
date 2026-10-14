@@ -3,7 +3,8 @@ import { renderDataTable } from '../components/table.js';
 import {
   bindFileUpload,
   clearLocalFileUploads,
-  fileUploadMarkup,
+  fileUploadChipsMarkup,
+  fileUploadTriggerMarkup,
   pendingUploadAttachments,
 } from '../components/fileUpload.js';
 import {
@@ -105,8 +106,9 @@ async function renderQueryPage(root) {
         </div>
         <footer class="chat-composer">
           <div class="chat-composer-inner">
-            ${fileUploadMarkup()}
+            ${fileUploadChipsMarkup()}
             <div class="chat-input-shell">
+              ${fileUploadTriggerMarkup()}
               <textarea class="chat-input" id="questionInput" rows="1" placeholder="${escapeAttr(composerPlaceholder())}" aria-label="问数问题"></textarea>
               <div class="chat-input-actions">
                 ${modelOptions.length > 0 ? `
@@ -588,14 +590,14 @@ function renderQuestionAxis() {
     return '';
   }
   return `
-    <aside class="chat-question-rail" id="chatQuestionAxis" aria-label="会话问题导航">
-      <div class="question-rail-label">问题轴</div>
+    <aside class="chat-question-rail" id="chatQuestionAxis" aria-label="会话线索链">
+      <div class="question-rail-label">线索链</div>
       <div class="question-rail-track">
         ${questions.map((message, index) => `
           <button class="question-rail-item" type="button"
             data-question-target="${message.id}"
             title="${escapeAttr(message.content)}"
-            aria-label="跳转到问题 ${index + 1}">
+            aria-label="跳转到线索 ${index + 1}">
             <span class="question-rail-dot"></span>
             <span class="question-rail-copy">${escapeHtml(message.content)}</span>
           </button>

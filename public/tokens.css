@@ -2285,7 +2285,8 @@ textarea::placeholder {
 .chat-input-shell {
   min-height: 54px;
   padding: 6px 7px 6px 14px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* 左侧上传入口 / 中间输入区 / 右侧模型选择与发送 */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   background: var(--surface);
@@ -2311,7 +2312,7 @@ textarea::placeholder {
   min-width: 36px;
   height: 36px;
   min-height: 36px;
-  border-radius: 10px;
+  border-radius: 50%;
   color: #ffffff;
   background: var(--text);
   box-shadow: none;
@@ -2338,7 +2339,8 @@ textarea::placeholder {
   height: 36px;
   min-height: 36px;
   border: 1px solid #c65f53;
-  border-radius: 10px;
+  /* 与发送按钮同一个位置互相替换，形状保持一致 */
+  border-radius: 50%;
   color: #ffffff;
   background: var(--bad);
   box-shadow: 0 4px 12px rgba(210, 106, 92, 0.24);
@@ -3361,7 +3363,7 @@ body {
 }
 
 .chat-thread {
-  width: min(100%, 780px);
+  width: min(100%, var(--chat-content-width));
 }
 
 .chat-question-layout {
@@ -4242,4 +4244,55 @@ body.is-query-page .workspace-toggle {
   body.is-query-page .main-content.is-chat {
     height: calc(100vh - 42px);
   }
+}
+
+/* 问数输入区：文字输入独占上方一整行，操作按钮放在下方。 */
+.chat-composer-inner {
+  width: 100%;
+  max-width: none;
+}
+
+.chat-input-shell {
+  /* 与回答内容（.chat-thread）共用同一个宽度变量，左右边界对齐；
+     这里是"问答可视区域"的宽度，不是铺满整个页面的全局宽度。 */
+  width: min(100%, var(--chat-content-width));
+  margin-inline: auto;
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: 0;
+  padding: 10px 12px 8px;
+}
+
+.chat-input {
+  order: 1;
+  width: 100%;
+  min-height: 44px;
+  flex: 1 1 auto;
+}
+
+/* 上传入口与发送按钮平铺在同一行：上传靠左，模型选择与发送靠右。 */
+.chat-input-shell .attachment-trigger {
+  order: 2;
+  flex: 0 0 auto;
+}
+
+.chat-input-actions {
+  order: 3;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  padding-bottom: 0;
+}
+
+.chat-send-btn,
+.chat-stop-btn {
+  flex: 0 0 38px;
+  border-radius: 50%;
+}
+
+/* 回答内容与问数输入区共用的内容宽度。
+   两处用同一个变量，避免各自写死后悄悄错位——改宽度只需改这一处。 */
+:root {
+  --chat-content-width: 780px;
 }

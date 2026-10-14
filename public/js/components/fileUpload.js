@@ -24,14 +24,23 @@ function chipsMarkup() {
   `).join('');
 }
 
-export function fileUploadMarkup() {
+// 触发按钮放进输入区，与发送按钮同一行、靠左；这样"上传入口"和"发送"处于同一操作带，
+// 不再单独占一行。
+export function fileUploadTriggerMarkup() {
   return `
-    <div class="chat-attachment-bar" id="chatAttachmentBar">
-      <button class="attachment-add" id="attachmentAddBtn" type="button">
-        ${icon('plus', '上传本地文件')}<span>本地文件</span>
-      </button>
-      <input type="file" class="attachment-input" id="attachmentInput" hidden
-        multiple accept="${ACCEPT_EXTENSIONS.map((item) => `.${item}`).join(',')}" />
+    <button class="attachment-add attachment-trigger" id="attachmentAddBtn" type="button"
+      title="上传本地 CSV / XLS / XLSX 参与问数" aria-label="上传本地文件">
+      ${icon('plus', '上传本地文件')}<span>本地文件</span>
+    </button>
+    <input type="file" class="attachment-input" id="attachmentInput" hidden
+      multiple accept="${ACCEPT_EXTENSIONS.map((item) => `.${item}`).join(',')}" />
+  `;
+}
+
+// 已上传文件的 chips 单独一行；没有附件时整行隐藏，避免空行占位。
+export function fileUploadChipsMarkup() {
+  return `
+    <div class="chat-attachment-bar" id="chatAttachmentBar"${uploads.length > 0 ? '' : ' hidden'}>
       <span class="attachment-chips" id="chatAttachmentChips">${chipsMarkup()}</span>
     </div>
   `;
@@ -42,6 +51,10 @@ export function clearLocalFileUploads() {
   const host = document.getElementById('chatAttachmentChips');
   if (host) {
     host.innerHTML = '';
+  }
+  const bar = document.getElementById('chatAttachmentBar');
+  if (bar) {
+    bar.hidden = true;
   }
 }
 
@@ -102,11 +115,17 @@ export function bindFileUpload(root, { ensureSession, onUploaded } = {}) {
   const input = root.querySelector('#attachmentInput');
   const addButton = root.querySelector('#attachmentAddBtn');
   const chipHost = root.querySelector('#chatAttachmentChips');
-  if (!bar || !input || !addButton || !chipHost) {
+  if (!input || !addButton || !chipHost) {
     return;
   }
+  // chips 行在没有附件时是隐藏的，因此拖拽热区上移到整个 composer，
+  // 保证"拖文件进来就能上传"在有无附件时都成立。
+  const dropZone = root.querySelector('.chat-composer-inner') ?? bar;
   const repaint = () => {
     chipHost.innerHTML = chipsMarkup();
+    if (bar) {
+      bar.hidden = uploads.length === 0;
+    }
   };
   let busy = false;
   const handleFiles = async (fileList) => {
@@ -151,14 +170,23 @@ export function bindFileUpload(root, { ensureSession, onUploaded } = {}) {
     input.value = '';
     handleFiles(files);
   });
-  bar.addEventListener('dragover', (event) => {
+  if (!dropZone) {
+    return;
+  }
+  dropZone.addEventListener('dragover', (event) => {
     event.preventDefault();
-    bar.classList.add('is-dragging');
+    dropZone.classList.add('is-dragging');
   });
-  bar.addEventListener('dragleave', () => bar.classList.remove('is-dragging'));
-  bar.addEventListener('drop', (event) => {
+  dropZone.addEventListener('dragleave', (event) => {
+    // 拖过子元素时也会触发 dragleave，只有真正离开热区才撤销高亮。
+    if (event.relatedTarget && dropZone.contains(event.relatedTarget)) {
+      return;
+    }
+    dropZone.classList.remove('is-dragging');
+  });
+  dropZone.addEventListener('drop', (event) => {
     event.preventDefault();
-    bar.classList.remove('is-dragging');
+    dropZone.classList.remove('is-dragging');
     handleFiles(event.dataTransfer?.files);
   });
 }

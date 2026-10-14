@@ -220,12 +220,12 @@ function openDocumentEditor(doc) {
       <div class="form-grid">
         <div class="form-field span-2">
           <label for="memoryDocSummary">常驻摘要</label>
-          <textarea class="field" id="memoryDocSummary" rows="3" maxlength="${Number(doc.summaryBudget) || 1200}" placeholder="注入模型上下文的一句话摘要">${escapeHtml(doc.summary)}</textarea>
+          <textarea class="field memory-doc-editor-textarea memory-doc-summary-textarea" id="memoryDocSummary" rows="5" maxlength="${Number(doc.summaryBudget) || 1200}" placeholder="注入模型上下文的一句话摘要">${escapeHtml(doc.summary)}</textarea>
           <small>这段摘要会常驻问数上下文，建议只写覆盖范围与关键默认口径。</small>
         </div>
         <div class="form-field span-2">
           <label for="memoryDocContent">手册正文（Markdown）</label>
-          <textarea class="field memory-doc-textarea" id="memoryDocContent" rows="16">${escapeHtml(doc.content)}</textarea>
+          <textarea class="field memory-doc-textarea memory-doc-editor-textarea" id="memoryDocContent" rows="24">${escapeHtml(doc.content)}</textarea>
           <small>按「## 分节」组织，每条写成可独立读懂的一句或两句。保存会生成新版本，可回滚。</small>
         </div>
       </div>

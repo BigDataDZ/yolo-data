@@ -1793,6 +1793,18 @@ body.workspace-open .app-shell {
   line-height: 1.55;
 }
 
+.memory-doc-editor-textarea {
+  min-height: 128px;
+}
+
+.memory-doc-editor-textarea.memory-doc-summary-textarea {
+  min-height: 118px;
+}
+
+.memory-doc-editor-textarea.memory-doc-textarea {
+  min-height: 420px;
+}
+
 .field:focus,
 .select:focus,
 .textarea:focus {
