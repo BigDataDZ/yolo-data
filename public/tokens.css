@@ -199,11 +199,6 @@ a {
   font-weight: 620;
 }
 
-.nav-item [data-icon],
-.nav-item.is-active [data-icon] {
-  display: none;
-}
-
 .nav-item > span:last-child {
   min-width: 0;
   overflow: hidden;
@@ -3240,14 +3235,14 @@ body {
 }
 
 .nav-item.is-active {
-  color: #ffffff;
-  background: var(--ink, var(--text));
+  color: #333333;
+  background: #e8e8e8;
   box-shadow: none;
 }
 
 .nav-item.is-active .nav-count,
 .nav-item.is-active .nav-badge {
-  color: rgba(255, 255, 255, 0.78);
+  color: #666666;
 }
 
 .runtime-box {
@@ -3370,11 +3365,9 @@ body {
 }
 
 .chat-question-layout {
-  width: min(100%, 856px);
+  width: min(100%, 780px);
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 46px minmax(0, 780px);
-  gap: 18px;
+  display: block;
   align-items: start;
 }
 
@@ -3387,7 +3380,8 @@ body {
   width: 46px;
   height: min(64vh, 620px);
   padding: 8px 0;
-  position: sticky;
+  position: fixed;
+  left: calc(var(--sidebar-w) + 10px);
   top: 84px;
   z-index: 12;
   overflow: hidden;
@@ -3479,8 +3473,8 @@ body {
 }
 
 .question-rail-dot {
-  width: 10px;
-  height: 10px;
+  width: 3px;
+  height: 3px;
   display: block;
   border-radius: 50%;
   background: var(--border-strong);
@@ -3489,7 +3483,7 @@ body {
 
 .question-rail-item.is-active .question-rail-dot {
   background: var(--text);
-  box-shadow: 0 0 0 4px var(--accent-weak);
+  box-shadow: 0 0 0 1.5px var(--accent-weak);
   transform: scale(1.08);
 }
 
@@ -4116,19 +4110,34 @@ body {
   }
 
   .chat-question-layout {
-    width: 100%;
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 8px;
+    width: min(100%, 780px);
+    display: block;
   }
 
   .chat-question-rail {
     width: 38px;
+    left: 86px;
     top: 72px;
   }
 
   .chat-question-rail:hover,
   .chat-question-rail:focus-within {
     width: 200px;
+  }
+}
+
+@media (max-width: 760px) {
+  .chat-question-layout {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .chat-question-rail {
+    position: sticky;
+    left: auto;
+    top: 72px;
   }
 }
 
