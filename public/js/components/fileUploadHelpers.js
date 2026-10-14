@@ -1,3 +1,18 @@
+import { icon, escapeHtml, escapeAttr } from '../core/runtime.js';
+
+export function chipsMarkup(uploads) {
+  if (uploads.length === 0) {
+    return '';
+  }
+  return uploads.map((item) => `
+    <span class="attachment-chip${item.status === 'error' ? ' is-error' : ''}"
+      title="${escapeAttr(item.message ?? item.label ?? '')}">
+      ${icon(item.status === 'error' ? 'circle-alert' : 'file-spreadsheet', item.label)}
+      <span>${escapeHtml(item.label)}</span>
+    </span>
+  `).join('');
+}
+
 export function extensionOf(name) {
   const match = String(name ?? '').match(/\.([A-Za-z0-9]+)$/);
   return match ? match[1].toLowerCase() : '';
