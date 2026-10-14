@@ -245,11 +245,11 @@ export function buildResultAnalysisText(facts, {
 } = {}) {
   const lines = [];
   if (facts.rowCount === 0) {
-    return '**结果分析**\n- 当前条件下未返回数据。';
+    return '**结果分析**\n当前条件下没有查到符合条件的数据，暂时无法形成趋势或排名判断。';
   }
-  lines.push(`共 ${facts.rowCount} 行，${facts.columnCount} 列。`);
+  lines.push(`从返回结果看，本次共覆盖 ${facts.rowCount} 行数据，下面是最值得关注的变化。`);
   for (const total of facts.metricTotals ?? []) {
-    lines.push(`${total.name}合计 ${formatValue(total.total, total.presentation)}`);
+      lines.push(`${total.name}合计 ${formatValue(total.total, total.presentation)}`);
   }
   for (const item of facts.primaryValues ?? []) {
     if (item.value !== null && item.value !== undefined) {
@@ -258,7 +258,7 @@ export function buildResultAnalysisText(facts, {
           ? `${item.name} ${item.presentation
             ? formatPresentationCell(item.value, item.presentation)
             : `${(item.value * 100).toFixed(2)}%`}`
-          : `${item.name} ${formatValue(item.value, item.presentation)}`,
+          : `${item.name}为 ${formatValue(item.value, item.presentation)}`,
       );
     }
   }
@@ -268,7 +268,7 @@ export function buildResultAnalysisText(facts, {
       .map((row) => `${row.label} ${formatValue(row.value, item.presentation)}`)
       .join('、');
     if (topText) {
-      lines.push(`${item.name} TOP${Math.min(topLimit, item.top.length)}：${topText}`);
+      lines.push(`${item.name} TOP${Math.min(topLimit, item.top.length)}：${topText}（排名靠前的对象）`);
     }
   }
   for (const trend of facts.trends ?? []) {
@@ -280,20 +280,20 @@ export function buildResultAnalysisText(facts, {
     const rateText = trend.changeRate === null
       ? ''
       : `，变化率 ${(trend.changeRate * 100).toFixed(2)}%`;
-    lines.push(`${trend.metric}趋势：${trend.firstLabel} ${
+      lines.push(`${trend.metric}趋势：从 ${trend.firstLabel} 的 ${
       formatValue(trend.firstValue, trend.presentation)
-    } -> ${trend.lastLabel} ${
-      formatValue(trend.lastValue, trend.presentation)
-    }，${direction}${rateText}`);
+      } 变为 ${trend.lastLabel} 的 ${
+        formatValue(trend.lastValue, trend.presentation)
+      }，整体呈${direction}${rateText}`);
   }
   for (const anomaly of facts.anomalies ?? []) {
     if (anomaly.points.length > 0) {
-      lines.push(`${anomaly.name}异常点：${anomaly.points
+      lines.push(`${anomaly.name}出现需要关注的异常值：${anomaly.points
         .map((point) => formatValue(point.value, anomaly.presentation))
         .join('、')}`);
     }
   }
-  return `**结果分析**\n${lines.map((line) => `- ${line}`).join('\n')}`;
+  return `**结果分析**\n${lines.join('\n')}`;
 }
 
 export function buildResultAnalysisPrompt(facts) {

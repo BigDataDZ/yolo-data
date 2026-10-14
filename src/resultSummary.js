@@ -623,14 +623,16 @@ export function buildDeterministicSummary({
 
   if (comparisons.length > 0) {
     return [
+      `整体来看，本期结果相较对比期${comparisons.every((item) => item.delta >= 0) ? '表现更好' : '存在分化'}，下面列出具体变化。`,
       conclusion,
       ...(findings.length > 0 ? ['', findings.join('；') + '。'] : []),
     ].join('\n');
   }
   return [
+    rows.length > 0 ? '整体来看，以下是这次查询最值得关注的结果。' : '',
     conclusion,
     ...(findings.length > 0 ? ['', '**关键结果**', ...findings.map((item) => `- ${item}`)] : []),
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 export function buildQueryScopeSummary({

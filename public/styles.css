@@ -993,6 +993,13 @@ body.workspace-open .app-shell {
   margin: 0 0 10px;
 }
 
+.chat-answer-text strong {
+  color: #135fc2;
+  font-weight: 700;
+  background: linear-gradient(transparent 62%, #e8f1ff 62%);
+  padding: 0 2px;
+}
+
 .chat-answer-text h2,
 .chat-answer-text h3,
 .chat-answer-text h4,
