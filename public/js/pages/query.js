@@ -130,9 +130,6 @@ async function renderQueryPage(root) {
                 </button>
               </div>
             </div>
-            <div class="composer-hint">
-              <span>Enter 发送</span>
-            </div>
           </div>
         </footer>
       </section>
