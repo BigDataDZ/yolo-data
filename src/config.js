@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url';
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Python 沙箱解释器的兜底候选。Windows 装的是 `python`，macOS/Linux 上是 `python3`；
-// 这里必须和 .env.example 的 `PYTHON_BIN=python3` 以及 scripts/setup.mjs 的探测顺序一致，
-// 否则「文档说 python3、代码默认 python」会在没装别名的机器上静默失败。
+// 必须和 .env.example 的 `PYTHON_BIN=python3` 及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
 export const DEFAULT_PYTHON_BIN = process.platform === 'win32' ? 'python' : 'python3';
 
 function readInt(value, fallback) {
