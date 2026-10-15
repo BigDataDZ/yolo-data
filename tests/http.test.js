@@ -134,9 +134,48 @@ test('P0-8 timeout middleware rejects slow handlers without leaking late failure
   });
 });
 
-test('Supersonic is optional: indicator reads degrade to the local snapshot', async () => {
+test('unconfigured Supersonic defaults to local HTTP reads and supports explicit mode changes', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-local-'));
+  const { server, application } = await startServer(testConfig(directory), null);
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const headers = { 'x-user-id': '1', 'content-type': 'application/json' };
+  try {
+    const settings = await (await fetch(`${baseUrl}/api/settings`, { headers })).json();
+    assert.equal(settings.supersonic.enabled, false);
+    assert.equal(settings.supersonic.localIndicatorManagement, true);
+    const indicators = await (await fetch(`${baseUrl}/api/indicators`, { headers })).json();
+    assert.equal(indicators.localMode, true);
+    assert.equal(indicators.source.source, 'LOCAL');
+    assert.deepEqual(indicators.items, []);
+    const scoped = await (await fetch(`${baseUrl}/api/indicators?themeId=1`, {
+      headers: { 'x-user-id': '2' },
+    })).json();
+    assert.equal(scoped.localMode, true);
+    assert.equal(scoped.source.source, 'LOCAL');
+    for (const enabled of [true, false]) {
+      const response = await fetch(`${baseUrl}/api/settings/supersonic`, {
+        method: 'PUT', headers, body: JSON.stringify({ enabled }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.supersonic.enabled, enabled);
+      assert.equal(body.health.source.enabled, enabled);
+      assert.equal(body.health.source.mode, enabled ? 'unconfigured' : 'direct-llm');
+      assert.equal(application.agent.isSupersonicEnabled(), enabled);
+      const current = await (await fetch(`${baseUrl}/api/settings`, { headers })).json();
+      assert.equal(current.supersonic.enabled, enabled);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    application.database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('explicitly enabled but unconfigured Supersonic serves the offline snapshot', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-offline-'));
   const { server, application } = await startServer(testConfig(directory), null);
+  application.database.savePlatformSetting('supersonic.enabled', true);
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   const admin = { 'x-user-id': '1' };
   const analyst = { 'x-user-id': '2' };

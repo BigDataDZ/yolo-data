@@ -46,12 +46,10 @@ export async function createApplication(
     ?? (config.supersonic.baseUrl
       ? createSupersonicIndicatorClient(config.supersonic)
       : new UnavailableIndicatorClient());
-  function getSupersonicEnabled() {
-    const stored = database.getPlatformSetting('supersonic.enabled', true);
-    // 指标平台是可选集成。没有配置可用客户端时，不应把“未配置”
-    // 视为降级运行，而是默认使用本地指标/业务数据集直连模式。
+  function getSupersonicEnabled() { // Default to local mode; explicit administrator settings take precedence.
     const clientConfigured = indicatorClient.mode === 'supersonic' || Boolean(config.supersonic.baseUrl);
-    return clientConfigured && Boolean(stored?.value ?? stored);
+    const stored = database.getPlatformSetting('supersonic.enabled', clientConfigured);
+    return Boolean(stored?.value ?? stored);
   }
   const harness = createHarness(config.deepseek);
   const llmAudit = new LlmAuditService(database);
@@ -104,6 +102,7 @@ export async function createApplication(
     codeExecution,
     semanticValues,
     userMemories,
+    getSupersonicEnabled,
   });
   // 长期记忆沉淀依赖主题可用模型：有 key 时用模型提炼并压缩，否则只沉淀用户显式要求记住的内容。
   const userMemoryConfig = config.userMemory ?? {};
@@ -336,9 +335,7 @@ export async function createApplication(
 
   function currentHealth() {
     runtime.supersonicEnabled = getSupersonicEnabled();
-    if (!runtime.supersonicEnabled) {
-      runtime.sourceMode = 'direct-llm';
-    }
+    runtime.sourceMode = runtime.supersonicEnabled ? indicatorClient.mode ?? 'unconfigured' : 'direct-llm';
     const indicatorSource = resolveIndicatorSource();
     return {
       status: 'ok',

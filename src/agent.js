@@ -1649,6 +1649,7 @@ export class MetricAgentService {
     codeExecution,
     semanticValues,
     userMemories,
+    getSupersonicEnabled,
   }) {
     this.database = database;
     this.indicatorClient = indicatorClient;
@@ -1656,6 +1657,7 @@ export class MetricAgentService {
     this.harnessFactory = harnessFactory;
     this.memory = memory;
     this.userMemories = userMemories;
+    this.getSupersonicEnabled = getSupersonicEnabled;
     this.skillRegistry = skillRegistry;
     this.semanticCompiler = semanticCompiler;
     this.queryContractCompiler = queryContractCompiler ?? new QueryContractCompiler();
@@ -1671,7 +1673,7 @@ export class MetricAgentService {
 
   isSupersonicEnabled() {
     const stored = this.database?.getPlatformSetting?.('supersonic.enabled', true);
-    return Boolean(stored?.value ?? stored);
+    return this.getSupersonicEnabled?.() ?? Boolean(stored?.value ?? stored);
   }
 
   resolveThemeModel(theme, modelIdOverride = null) {
@@ -1762,14 +1764,12 @@ export class MetricAgentService {
     const limit = Math.max(1, Math.min(Number(filters.limit) || 500, 500));
     const liveAvailable = this.isSupersonicEnabled()
       && this.indicatorClient.mode !== 'unconfigured';
-    // Supersonic is optional: when it is disabled or not wired up, degrade to
-    // the local indicator snapshot (P0-1) instead of failing the request, so
-    // theme and permission editing keep working without the external platform.
+    // Disabled: local catalog. Enabled but unconfigured: persisted snapshot (P0-1).
     if (!liveAvailable) {
       const snapshot = this.isSupersonicEnabled()
         ? this.database.listIndicators({ keyword, typeId, limit })
         : {
-          items: this.database.localIndicators?.list({ keyword, typeId, limit }) ?? [],
+          items: this.database.localIndicators?.list({ keyword, typeId, limit, enabledOnly: true }) ?? [],
           source: 'LOCAL',
           freshAt: null,
         };
@@ -2105,7 +2105,7 @@ export class MetricAgentService {
     const profile = this.database.getPermissionProfile(user.id);
     const scope = resolveAccessScope({ user, theme, permissionProfile: profile });
     if (!scope.allowed) {
-      throw new Error(scope.reason || 'theme permission denied');
+      throw Object.assign(new Error(scope.reason || 'theme permission denied'), { statusCode: 403 });
     }
     const skills = this.skillRegistry.listForTheme(theme);
     const { businessDatasets, primaryBusinessDatasetId } = resolveThemeBusinessDatasets({
