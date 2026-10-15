@@ -304,9 +304,35 @@ test('agent emits auditable runtime events while answering', async () => {
   );
 });
 
-test('production runtime requires a configured Supersonic indicator source', async () => {
+test('unconfigured Supersonic defaults to the same local mode in health and agent execution', async () => {
   const config = testConfig();
   const application = await createApplication(config);
+  try {
+    await application.init();
+    assert.equal(application.getSupersonicEnabled(), false);
+    assert.equal(application.agent.isSupersonicEnabled(), false);
+    assert.equal(application.currentHealth().source.mode, 'direct-llm');
+    const user = application.database.getUserByUsername('east_manager');
+    const theme = application.database.listThemes().find((item) => item.name === '经营总览');
+    const events = [];
+    const answer = await application.agent.answer({
+      userId: user.id, themeId: theme.id, question: '近7天销售额趋势',
+      onEvent: (event) => events.push(event),
+    });
+    assert.equal(answer.runtime.executionAdapter, 'direct-llm');
+    assert.equal(events.find((event) => event.type === 'runtime_selected').source.mode, 'direct-llm');
+    assert.ok(!events.some((event) => event.code === 'SUPERSONIC_NOT_CONFIGURED'));
+    assert.equal(application.database.getPlatformSetting('supersonic.enabled', null), null);
+  } finally {
+    application.database.close();
+    fs.rmSync(path.dirname(config.dbPath), { recursive: true, force: true });
+  }
+});
+
+test('explicitly enabled Supersonic requires a configured indicator source', async () => {
+  const config = testConfig();
+  const application = await createApplication(config);
+  application.database.savePlatformSetting('supersonic.enabled', true);
   await application.init();
   const user = application.database.getUserByUsername('east_manager');
   const theme = application.database.listThemes().find((item) => item.name === '经营总览');
