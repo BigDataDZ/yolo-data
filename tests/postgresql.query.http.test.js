@@ -58,7 +58,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
             cookie: admin, method: 'PUT', body,
           })).response.status, 200);
         };
-        const question = '2026年1月1日至2026年3月31日 west 的 amount 合计';
+        const question = '2026年1月1日至2026年3月31日 west amount';
         let attempts = 0;
         application.agent.harnessFactory = { forTheme: () => ({
           mode: 'local-rule', model: 'deterministic-acceptance', capabilities: {},
@@ -114,7 +114,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         const sessionId = success.data.sessionId;
         assert.ok(sessionId);
         await setPermissions(profile);
-        const revoked = await query({ sessionId, question: '重新查询：2026年1月1日至2026年3月31日 west 的 amount 合计' });
+        const revoked = await query({ sessionId, question: '重新查询：2026年1月1日至2026年3月31日 west amount' });
         assert.equal(revoked.response.status, 200, JSON.stringify(revoked.data));
         assert.deepEqual(revoked.data.executionResults, []);
         assert.deepEqual(logs(), audit);
