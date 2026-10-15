@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-
+import { datasetExecution } from './datasetExecution.js';
 function uniqueStrings(values) {
   return [...new Set((values ?? []).map((value) => String(value)).filter(Boolean))];
 }
@@ -227,7 +227,7 @@ export class SemanticCompiler {
       question: String(question ?? '').trim(),
       source,
       dataset: {
-        id: Number(dataset.id),
+        id: Number(dataset.id), dbType: datasetExecution(dataset).dbType,
         code: dataset.code,
         name: dataset.name,
         schemaName: dataset.schemaName,
@@ -244,7 +244,7 @@ export class SemanticCompiler {
       order: order ?? [],
       limit: Math.max(1, Math.min(Number(limit) || 200, 1000)),
       execution: {
-        adapter: 'doris-dataset',
+        adapter: datasetExecution(dataset).adapter,
         operation: 'queryBusinessDataset',
         rawSqlAllowed: false,
       },
@@ -379,8 +379,8 @@ export class SemanticCompiler {
       policyFilters: plan.policyFilters,
       dateInfo: plan.dateRange,
       execution: {
-        adapter: 'doris-dataset',
-        endpoint: 'Doris SQL SELECT',
+        adapter: datasetExecution(plan.dataset).adapter,
+        endpoint: `${datasetExecution(plan.dataset).label} SQL SELECT`,
         rowCount: result.rows.length,
         columnCount: result.columns.length,
         rawSqlExposed: false,
