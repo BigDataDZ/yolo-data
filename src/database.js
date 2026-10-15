@@ -498,6 +498,33 @@ export class PlatformDatabase {
         updated_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS mcp_api_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key_id TEXT NOT NULL UNIQUE,
+        key_hash TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL DEFAULT 'mcp',
+        tenant_id TEXT NOT NULL DEFAULT 'default',
+        scopes TEXT NOT NULL DEFAULT '"mcp"',
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        revoked INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS mcp_query_contracts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        contract_id TEXT NOT NULL UNIQUE,
+        tenant_id TEXT NOT NULL DEFAULT 'default',
+        user_id INTEGER,
+        theme_id INTEGER,
+        source_type TEXT NOT NULL,
+        indicator_id TEXT,
+        dataset_id TEXT,
+        contract_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'FROZEN',
+        created_at TEXT NOT NULL,
+        expires_at TEXT
+      );
+
       CREATE TABLE IF NOT EXISTS conversations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -3527,6 +3554,88 @@ export class PlatformDatabase {
       nowIso(),
     );
     return Number(result.lastInsertRowid);
+  }
+
+  // ---- MCP: API Key 生命周期（仅存哈希，不存明文）----
+  createMcpApiKey({ name, tenantId, createdBy, scopes = 'mcp' }) {
+    const rawKey = `mcp_${crypto.randomBytes(24).toString('hex')}`;
+    const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
+    const keyId = `key_${crypto.randomBytes(6).toString('hex')}`;
+    this.db.prepare(`
+      INSERT INTO mcp_api_keys (key_id, key_hash, name, tenant_id, scopes, created_by, created_at, revoked)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    `).run(
+      keyId,
+      keyHash,
+      String(name ?? 'mcp'),
+      String(tenantId ?? 'default'),
+      JSON.stringify(scopes),
+      Number(createdBy) || null,
+      nowIso(),
+    );
+    return { keyId, rawKey, name: name ?? 'mcp', tenantId: tenantId ?? 'default' };
+  }
+
+  getMcpApiKeyByHash(keyHash) {
+    const row = this.db.prepare(`
+      SELECT key_id AS keyId, name, tenant_id AS tenantId, scopes, created_at AS createdAt, revoked
+      FROM mcp_api_keys WHERE key_hash = ? AND revoked = 0
+    `).get(String(keyHash ?? ''));
+    if (!row) {
+      return null;
+    }
+    return { ...row, scopes: parseJson(row.scopes, 'mcp') };
+  }
+
+  listMcpApiKeys() {
+    return this.db.prepare(`
+      SELECT key_id AS keyId, name, tenant_id AS tenantId, scopes, created_at AS createdAt, revoked
+      FROM mcp_api_keys ORDER BY created_at DESC
+    `).all().map((row) => ({ ...row, scopes: parseJson(row.scopes, 'mcp') }));
+  }
+
+  revokeMcpApiKey(keyId) {
+    return this.db.prepare('UPDATE mcp_api_keys SET revoked = 1 WHERE key_id = ?')
+      .run(String(keyId)).changes > 0;
+  }
+
+  // ---- MCP: 查询契约持久化（resolve_query 冻结，execute_query 取用）----
+  saveMcpQueryContract({
+    contractId, tenantId, userId, themeId,
+    sourceType, indicatorId, datasetId, contractJson, status = 'FROZEN', expiresAt,
+  }) {
+    this.db.prepare(`
+      INSERT INTO mcp_query_contracts
+        (contract_id, tenant_id, user_id, theme_id, source_type, indicator_id, dataset_id,
+         contract_json, status, created_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      String(contractId),
+      String(tenantId ?? 'default'),
+      Number(userId) || null,
+      themeId ? Number(themeId) : null,
+      String(sourceType),
+      indicatorId ? String(indicatorId) : null,
+      datasetId ? String(datasetId) : null,
+      JSON.stringify(contractJson),
+      String(status),
+      nowIso(),
+      expiresAt ?? null,
+    );
+    return String(contractId);
+  }
+
+  getMcpQueryContract(contractId) {
+    const row = this.db.prepare(`
+      SELECT contract_id AS contractId, tenant_id AS tenantId, user_id AS userId, theme_id AS themeId,
+             source_type AS sourceType, indicator_id AS indicatorId, dataset_id AS datasetId,
+             contract_json AS contractJson, status, created_at AS createdAt, expires_at AS expiresAt
+      FROM mcp_query_contracts WHERE contract_id = ?
+    `).get(String(contractId));
+    if (!row) {
+      return null;
+    }
+    return { ...row, contractJson: parseJson(row.contractJson, null) };
   }
 
   listAuditLogs(limit = 100, { traceId = null } = {}) {

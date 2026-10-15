@@ -19,6 +19,7 @@ const EXTRA_ICONS = {
   compass: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15A2.5 2.5 0 0 0 6.5 22H20v-2.5"/>',
   'life-buoy': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="m5.6 5.6 3.5 3.5M14.9 14.9l3.5 3.5M18.4 5.6l-3.5 3.5M9.1 14.9l-3.5 3.5"/>',
+  plug: '<path d="M12 22v-5M9 8V2M15 8V2M6 8h12v4a6 6 0 0 1-12 0Z"/>',
 };
 
 function pageIcon(name) {
@@ -30,6 +31,7 @@ const HELP_CATS = [
   { id: 'quick', name: '快速上手', icon: 'compass', desc: '第一次使用，从这里开始' },
   { id: 'skill', name: '问数技巧', icon: 'sparkles', desc: '把问题问清楚，答案更稳定' },
   { id: 'admin', name: '管理员配置', icon: 'settings', desc: '模型、数据集、主题与权限' },
+  { id: 'integration', name: '集成与连接器', icon: 'plug', desc: '通过 MCP 把能力开放给外部客户端' },
   { id: 'concept', name: '核心概念', icon: 'book', desc: '智能体 / 指标口径 / 查询契约' },
   { id: 'faq', name: '常见问题', icon: 'life-buoy', desc: '排错与口径差异排查' },
   { id: 'file', name: '本地文件', icon: 'file', desc: '上传表格，与问数结果一起算' },
@@ -42,6 +44,7 @@ const HELP_ARTICLES = [
   { id: 'core-concepts', cat: 'concept', title: '核心概念速查', file: '04-core-concepts.md', kw: '智能体 指标口径 查询契约 T-1 工作区产物 会话记忆' },
   { id: 'faq', cat: 'faq', title: '常见问题与排错', file: '05-faq.md', kw: '数字对不上 含税 未税 未配置 导出 CSV XLSX 密码 会话失效' },
   { id: 'local-file', cat: 'file', title: '结合本地文件算数', file: '06-local-file.md', kw: '上传 本地文件 附件 CSV XLS XLSX Excel 对账 合并 预算 编码 截断 行数 配额' },
+  { id: 'mcp-connector', cat: 'integration', title: 'MCP 连接器与外部接入', file: '07-mcp-connector.md', kw: 'MCP 连接器 下载 API Key 令牌  Claude Cursor 接入 问数 list_metrics resolve_query execute_query' },
 ];
 
 let docsPromise = null;
@@ -232,6 +235,19 @@ export async function renderHelpArticle(root, articleId) {
   const previous = index > 0 ? HELP_ARTICLES[index - 1] : null;
   const next = index >= 0 && index < HELP_ARTICLES.length - 1 ? HELP_ARTICLES[index + 1] : null;
 
+  // MCP 文章专用操作条：markdown 渲染器不外链，下载按钮/入口在此用真实 DOM 提供。
+  const isAdmin = core.state?.currentUser?.role === 'ADMIN';
+  const mcpActions = doc.id === 'mcp-connector' ? `
+    <div class="section-band mcp-help-actions">
+      <div class="page-toolbar">
+        <a class="btn btn-primary" href="/api/mcp/connector/download" download>下载连接器包（.zip）</a>
+        ${isAdmin
+          ? '<button class="btn btn-quiet" type="button" data-mcp-open-tokens>打开令牌管理</button>'
+          : '<span class="muted">访问令牌需由平台管理员创建</span>'}
+      </div>
+      <p class="muted">下载连接器包后按下方指南接入你的 MCP 客户端；访问令牌在「MCP 令牌」页创建（仅管理员）。</p>
+    </div>` : '';
+
   root.innerHTML = `
     <div class="onboarding-page help-article-page">
       ${sectionTabsMarkup(HELP_TABS, 'help', '使用引导与帮助中心')}
@@ -247,6 +263,7 @@ export async function renderHelpArticle(root, articleId) {
             <span>/</span><span>${escapeHtml(catName(doc.cat))}</span>
             <span>/</span><span>${escapeHtml(doc.title)}</span>
           </div>
+          ${mcpActions}
           <div class="article-content" id="articleContent">
             ${doc.text ? renderSafeMarkdown(doc.text) : '<p>文档内容暂时不可用，请稍后重试。</p>'}
           </div>
@@ -307,6 +324,7 @@ export async function renderHelpArticle(root, articleId) {
     },
   });
   root.querySelector('[data-help-home]').addEventListener('click', () => renderHelpPage(root));
+  root.querySelector('[data-mcp-open-tokens]')?.addEventListener('click', () => navigate('/mcp'));
   root.querySelectorAll('[data-article-nav]').forEach((button) => {
     button.addEventListener('click', () => renderHelpArticle(root, button.dataset.articleNav));
   });

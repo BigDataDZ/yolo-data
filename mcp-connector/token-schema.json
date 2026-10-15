@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "YOLO Data MCP API Key",
+  "type": "object",
+  "description": "连接器持有的 MCP 调用凭证。明文 API Key 仅在创建时由后台返回一次，之后只能看到哈希。",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "bearer",
+      "description": "鉴权方式，固定为 bearer"
+    },
+    "token": {
+      "type": "string",
+      "pattern": "^mcp_[A-Za-z0-9]{24,}$",
+      "description": "API Key 明文，形如 mcp_ 开头，仅创建时返回"
+    },
+    "tenantId": {
+      "type": "string",
+      "description": "租户 ID，用于作用域隔离与审计"
+    },
+    "endpoint": {
+      "type": "string",
+      "format": "uri-reference",
+      "description": "MCP 端点路径，默认为 /mcp"
+    }
+  },
+  "required": ["type", "token"],
+  "additionalProperties": false
+}
