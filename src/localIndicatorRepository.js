@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-
+import { validateLocalIndicator } from './localIndicatorValidation.js';
 function nowIso() {
   return new Date().toISOString();
 }
@@ -44,17 +44,15 @@ export class LocalIndicatorRepository {
   }
 
   save(payload, id = null) {
+    payload = validateLocalIndicator(payload);
     const indicatorId = id
       ? String(id).trim()
       : `local:${crypto.randomUUID()}`;
     if (!indicatorId.startsWith('local:')) {
-      throw new Error('local indicator id must use the local: prefix');
+      throw Object.assign(new Error('local indicator id must use the local: prefix'), { statusCode: 400 });
     }
     const name = String(payload.name ?? '').trim();
     const bizName = String(payload.bizName ?? '').trim();
-    if (!name || !bizName) {
-      throw new Error('指标名称和指标标识不能为空');
-    }
     const timestamp = nowIso();
     const indicator = {
       id: indicatorId,
@@ -139,7 +137,7 @@ export class LocalIndicatorRepository {
     return Number(result.changes ?? 0) > 0;
   }
 
-  list({ keyword = '', typeId = '', limit = 500 } = {}) {
+  list({ keyword = '', typeId = '', limit = 500, enabledOnly = false } = {}) {
     const normalizedKeyword = String(keyword).trim().toLowerCase();
     const normalizedTypeId = String(typeId ?? '').trim();
     const rows = this.db.prepare(`
@@ -149,8 +147,8 @@ export class LocalIndicatorRepository {
              status, metrics_json AS metricsJson, dimensions_json AS dimensionsJson,
              models_json AS modelsJson, raw_json AS rawJson,
              synced_at AS syncedAt, updated_at AS updatedAt
-      FROM local_indicators ORDER BY name
-    `).all().map((row) => this.mapRow(row));
+      FROM local_indicators WHERE (? = 0 OR status = 1) ORDER BY name
+    `).all(enabledOnly ? 1 : 0).map((row) => this.mapRow(row));
     return rows
       .filter((item) => !normalizedTypeId || String(item.typeId) === normalizedTypeId)
       .filter((item) => !normalizedKeyword || [
