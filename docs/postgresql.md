@@ -65,3 +65,9 @@ npx playwright install chromium
 PowerShell 中设置 `$env:YOLO_BROWSER_TEST = '1'` 后运行 `node --test tests/postgresql.browser.test.js`。未设置 `YOLO_PG_TEST_DATABASE` 时，只验证表单、持久化及连接失败提示；设置专用测试库后才验证连接成功、数据集创建和抽样。需要 TLS 成功路径时，再设置 `YOLO_PG_TEST_CA` 为测试 CA PEM 文件路径。
 
 边界测试命令为 `node --test tests/postgresql.boundaries.test.js`，同样需要专用测试库。未配置 CA 时仅 TLS 用例跳过，其余网络与精度用例正常执行。
+
+## Agent 问数与撤权验收
+
+`node --test tests/postgresql.query.http.test.js` 使用相同的专用 PostgreSQL 环境变量，覆盖真实登录会话、HTTP 数据源/数据集创建、字段发现、智能体绑定、用户授权、查询契约编译、实际 SQL 取数和持久化审计。测试数据中 east 合计为 40、west 为 1000；即使工具请求 west，用户的 east 行策略也必须覆盖请求，实际结果只能为 40。
+
+随后在同一会话撤销数据集权限，验证不能产生新的执行结果或成功 SQL 审计；再撤销智能体权限，验证问数返回 403。模型使用固定工具调用序列，HTTP、SQLite、查询编译和 PostgreSQL 执行保持真实；这不是对外部大模型选工具能力的验收。测试只创建并删除随机 schema，未设置 `YOLO_PG_TEST_DATABASE` 时明确跳过，CI 的 PostgreSQL 任务必须实际执行。
