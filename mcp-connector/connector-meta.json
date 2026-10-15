@@ -1,0 +1,27 @@
+{
+  "name": "yolo-data-mcp",
+  "displayName": "YOLO Data Agent · MCP 连接器",
+  "version": "1.0.0",
+  "description": "将 YOLO Data 智能问数平台的 5 个核心能力（列指标 / 查策略 / 取产物 / 编译契约 / 执行契约）以 MCP 协议暴露给任意 MCP 客户端（Claude Desktop、Cursor、WorkBuddy 等）。",
+  "transport": "streamable-http",
+  "endpoint": "/mcp",
+  "protocolVersion": "2024-11-05",
+  "auth": {
+    "type": "bearer",
+    "header": "Authorization",
+    "tokenPrefix": "mcp_",
+    "obtain": "由管理员在后台调用 POST /admin/mcp/keys 创建，明文 API Key 仅返回一次"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false,
+    "logging": false
+  },
+  "modes": {
+    "read": "仅 list_metrics / get_policy 可见",
+    "standard": "+ get_snapshot / resolve_query / execute_query",
+    "full": "全部 5 个工具"
+  },
+  "homepage": "https://github.com/your-org/metric-ask-platform"
+}

@@ -10,6 +10,7 @@ export const ASSET_TABS = [
   { id: 'themes', route: '/themes', label: '智能体' },
   { id: 'skills', route: '/skills', label: '公共 Skills' },
   { id: 'models', route: '/models', label: '模型管理' },
+  { id: 'mcp', route: '/mcp', label: 'MCP 令牌' },
 ];
 
 function escapeHtml(value) {

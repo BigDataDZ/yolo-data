@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="YOLO Data MCP">
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="#1f6feb"/>
+  <g fill="#ffffff">
+    <rect x="14" y="34" width="8" height="16" rx="2"/>
+    <rect x="28" y="24" width="8" height="26" rx="2"/>
+    <rect x="42" y="14" width="8" height="36" rx="2"/>
+  </g>
+  <path d="M14 26 L30 18 L46 24" fill="none" stroke="#ffd33d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

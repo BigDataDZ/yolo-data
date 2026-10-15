@@ -1854,7 +1854,8 @@ textarea::placeholder {
 
 /* 开场：继续上次入口 */
 .welcome-resume {
-  width: min(100%, 720px);
+  /* 与问数列宽 --chat-content-width（960px）对齐，保持开场白与对话区同一可视宽度 */
+  width: min(100%, var(--chat-content-width));
   margin-top: 20px;
   padding: 11px 13px;
   border: 1px solid var(--border);
@@ -1925,7 +1926,8 @@ textarea::placeholder {
 
 /* 开场：能力示例卡 */
 .welcome-cards {
-  width: min(100%, 720px);
+  /* 与问数列宽 --chat-content-width（960px）对齐，保持开场白与对话区同一可视宽度 */
+  width: min(100%, var(--chat-content-width));
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;

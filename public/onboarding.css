@@ -6,7 +6,8 @@
 .onboarding-page {
   display: grid;
   gap: 22px;
-  max-width: 1120px;
+  /* 与全局 .main-content（max-width 1560px）保持一致，不再收窄到 1120px */
+  max-width: none;
 }
 
 .onboarding-page h2,
