@@ -5141,8 +5141,8 @@ export class MetricAgentService {
         lastSemanticParse = snapshot.payload?.semanticParse ?? null;
         // 还原结果来源，保证引用同一个 artifact 的展示层回答也能通过来源校验。
         lastBusinessDataset = snapshotSource?.type === 'BUSINESS_DATASET'
-          ? businessDatasets.find((dataset) => String(dataset.id) === sourceId)
-            ?? { id: snapshotSource.id, name: snapshotSource.name ?? null }
+          ? { ...(businessDatasets.find((dataset) => String(dataset.id) === sourceId) ?? { id: snapshotSource.id, name: snapshotSource.name ?? null }),
+            dbType: lastSemanticParse?.matchedDataset?.dbType }
           : null;
         lastIndicator = snapshotSource?.type === 'INDICATOR'
           ? allowedIndicators.find((item) => String(item.id) === sourceId)

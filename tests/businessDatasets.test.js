@@ -415,6 +415,24 @@ test(`agent routes and labels the authorized ${dbType} dataset executor`, async 
     answer.semanticParse.filters[0].value,
     ['华东大区'],
   );
+  application.database.saveBusinessDataset({ ...dataset, status: 0 }, dataset.id);
+  const restyled = await application.agent.answer({
+    userId: user.id, sessionId: answer.sessionId, question: '换成柱状图展示',
+  });
+  assert.equal(restyled.executionResults[0].kind, 'chart_restyle');
+  assert.equal(restyled.executionResults[0].artifactId, artifact.id);
+  assert.equal(restyled.semanticParse.execution.adapter, adapter);
+  assert.equal(restyled.runtime.executionAdapter, adapter);
+  application.database.saveBusinessDataset({ ...dataset, status: 1 }, dataset.id);
+  const source = application.database.getDataSource(dataset.datasourceId);
+  application.database.saveDataSource({ ...source, dbType: dbType === 'DORIS' ? 'MYSQL' : 'DORIS' }, source.id);
+  const afterSourceEdit = await application.agent.answer({
+    userId: user.id, sessionId: answer.sessionId, question: '换成折线图展示',
+  });
+  assert.equal(afterSourceEdit.executionResults[0].artifactId, artifact.id);
+  assert.equal(afterSourceEdit.runtime.executionAdapter, adapter);
+  assert.equal(afterSourceEdit.dataset.id, answer.dataset.id);
+  application.database.saveDataSource(source, source.id);
   application.businessDatasets.executeQuery = async () => { throw new Error('execution label fixture failure'); };
   const failures = [];
   const recordGap = application.growth.record.bind(application.growth);
