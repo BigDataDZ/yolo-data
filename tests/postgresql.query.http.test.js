@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { withSkillServer } from './fixtures/skillServer.js';
 
@@ -9,14 +11,13 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
   const { default: pg } = await import('pg');
   const setup = new pg.Pool({ database: process.env.YOLO_PG_TEST_DATABASE });
   const schema = `yolo_query_${process.pid}_${Date.now()}`;
-  let platformDirectory;
+  const platformDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-pg-query-'));
   try {
     await setup.query(`CREATE SCHEMA "${schema}"`);
     await setup.query(`CREATE TABLE "${schema}".sales(day date, region text, amount numeric(12,2))`);
     await setup.query(`INSERT INTO "${schema}".sales VALUES
       ('2026-01-01','east',10),('2026-02-01','east',30),('2026-02-01','west',1000)`);
-    await withSkillServer(async ({ application, request, login, directory }) => {
-      platformDirectory = directory;
+    await withSkillServer(async ({ application, request, login }) => {
       try {
         const admin = await login('admin');
         const analyst = await login('east_manager');
@@ -43,6 +44,15 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         const fields = await request(`/api/business-datasets/${dataset.id}/fields`, { cookie: admin });
         assert.equal(fields.response.status, 200);
         assert.equal(fields.data.find((field) => field.fieldName === 'amount').role, 'METRIC');
+        // Observe actual bound values while delegating every call unchanged to the real driver.
+        const statements = [];
+        const pool = application.businessDatasets.getPoolById(source.id);
+        const realQuery = pool.query.bind(pool);
+        pool.query = (config, ...args) => {
+          statements.push(typeof config === 'string' ? { sql: config, values: [] }
+            : { sql: config.sql, values: structuredClone(config.values ?? []) });
+          return realQuery(config, ...args);
+        };
         const theme = application.database.getTheme(1);
         assert.equal((await request('/api/themes/1', { cookie: admin, method: 'PUT', body: {
           ...theme, indicatorIds: [], businessDatasetIds: [dataset.id], primaryBusinessDatasetId: dataset.id,
@@ -67,6 +77,12 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
             const listing = await executeTool('list_business_datasets', {});
             if (!listing.datasets.some((item) => item.id === dataset.id)) {
               await assert.rejects(executeTool('get_business_dataset_definition', { datasetId: dataset.id }), /permission denied/);
+              await assert.rejects(executeTool('query_business_dataset', { datasetId: dataset.id,
+                metrics: [{ field: 'amount', aggregator: 'SUM' }],
+              }), /permission denied/);
+              await assert.rejects(executeTool('compile_query_contract', {
+                sourceType: 'BUSINESS_DATASET', datasetId: dataset.id,
+              }), /必须先确认|permission denied/);
               return { content: '数据集权限不足。', trace: [] };
             }
             await executeTool('get_business_dataset_definition', { datasetId: dataset.id });
@@ -96,6 +112,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         const denied = await query({ themeId: 1, question });
         assert.equal(denied.response.status, 200, JSON.stringify(denied.data));
         assert.deepEqual(denied.data.executionResults, []);
+        assert.deepEqual(denied.data.data.rows, []);
         assert.deepEqual(logs(), []);
         const granted = { ...profile, datasetGrants: [{ datasetId: dataset.id, canQuery: true }] };
         await setPermissions(granted);
@@ -111,23 +128,34 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         assert.equal(Number(audit[0].success), 1);
         assert.match(audit[0].sqlText, new RegExp(`"${schema}"\\."sales"`));
         assert.match(audit[0].sqlText, /"region"\s+IN\s*\(/);
+        const executedStatement = statements.find((statement) => statement.sql === audit[0].sqlText);
+        assert.ok(executedStatement, 'successful audit must match an observed real driver call');
+        assert.ok(executedStatement.values.flat(Infinity).includes('east'));
+        assert.ok(!executedStatement.values.flat(Infinity).includes('west'));
+        const statementCount = statements.length;
         const sessionId = success.data.sessionId;
         assert.ok(sessionId);
         await setPermissions(profile);
         const revoked = await query({ sessionId, question: '重新查询：2026年1月1日至2026年3月31日 west amount' });
         assert.equal(revoked.response.status, 200, JSON.stringify(revoked.data));
         assert.deepEqual(revoked.data.executionResults, []);
+        assert.deepEqual(revoked.data.data.rows, []);
+        assert.equal(revoked.data.queryFingerprint, null);
+        assert.equal(revoked.data.dataHash, null);
+        assert.equal(revoked.data.deterministic, false);
         assert.deepEqual(logs(), audit);
+        assert.equal(statements.length, statementCount);
         await setPermissions({ ...granted, themeGrants: [] });
         const forbidden = await query({ sessionId, question: '重新查询销售额' });
         assert.equal(forbidden.response.status, 403);
         assert.deepEqual(logs(), audit);
+        assert.equal(statements.length, statementCount);
         assert.ok(attempts >= 3);
         t.diagnostic('Real HTTP/session/SQLite/PostgreSQL execution; deterministic model tools, no external LLM.');
       } finally {
         await application.businessDatasets.close();
       }
-    });
+    }, { directory: platformDirectory });
   } finally {
     try { await setup.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); }
     finally {

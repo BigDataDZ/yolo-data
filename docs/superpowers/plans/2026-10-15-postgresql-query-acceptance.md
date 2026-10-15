@@ -1,6 +1,6 @@
 # PostgreSQL Query Acceptance Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Restore the latest main regression suite and prove authenticated Agent queries execute real PostgreSQL SQL with enforced user permissions.
 
@@ -32,22 +32,22 @@
 **Interfaces:** Existing `compile_query_contract` guard returns `BUSINESS_DATASET_EXECUTION_REQUIRED`; no production interface changes.
 
 - [x] Reproduce full coverage failure on main `3ec4234` and isolate the failing test. Author changed the user-facing error to Chinese; the test still requires an English source-type token.
-- [ ] Replace the `/BUSINESS_DATASET/` message assertion with `assert.equal(answer.message, blockedError.message)`. Retain existing assertions for the stable error code, recoverable flag and excluded indicator tool.
-- [ ] Run the focused test, `node --test --experimental-test-coverage`, `npm run lint`, and `npm run eval`; require zero failures.
-- [ ] Commit the test-only correction separately.
+- [x] Replace the `/BUSINESS_DATASET/` message assertion with `assert.equal(answer.message, blockedError.message)`. Retain existing assertions for the stable error code, recoverable flag and excluded indicator tool.
+- [x] Run the focused test, `node --test --experimental-test-coverage`, `npm run lint`, and `npm run eval`; require zero failures.
+- [x] Commit the test-only correction separately.
 
 ### Task 2: Real PostgreSQL query and revocation acceptance
 
 **Files:** Create `tests/postgresql.query.http.test.js`; modify `.github/workflows/ci.yml`; extend `docs/postgresql.md` validation instructions.
 **Interfaces:** Use existing session login and `/api/chat/query`; read `database.listDatasetQueryLogs()` for persisted SQL/user/dataset/success evidence. Reuse `compile_query_contract` and `execute_query_contract` tool schemas in `src/agent.js`.
 
-- [ ] Add an opt-in test with temporary platform storage, session credentials, a random PostgreSQL schema and `sales(day date, region text, amount numeric)` containing east=10, east=30, west=1000. Close all resources in `finally`.
-- [ ] Through authenticated management HTTP requests create the PG source/dataset, discover fields, bind the dataset to a theme, and grant the analyst access with a forced east row policy. Use fixed dates covering the fixture rows.
-- [ ] Submit a deterministic Agent tool sequence through the real query HTTP endpoint. Ask for west while the row policy requires east; assert actual returned aggregate=40, no west rows, a locked execution result, and successful persisted query audit for the correct user/dataset. Never stub `executeQuery`, pool access or result rows.
-- [ ] Revoke dataset access over HTTP and retry in the same session; assert no new successful SQL audit and no fresh executable result. Restore dataset access, revoke theme access, retry in the same session and assert HTTP 403 with no SQL execution. Include an unauthorized-user attempt before granting access.
-- [ ] Register this file in the existing PostgreSQL integration CI step. Without a local PG server, default suite must explicitly skip; the CI job must execute the test with zero skips.
-- [ ] Document that this proves real database execution under deterministic tool selection, not live external-model quality.
-- [ ] Run full coverage/lint/eval, then create and attach a PR. Require successful PostgreSQL integration and existing browser acceptance before reporting completion.
+- [x] Add an opt-in test with temporary platform storage, session credentials, a random PostgreSQL schema and `sales(day date, region text, amount numeric)` containing east=10, east=30, west=1000. Close all resources in `finally`.
+- [x] Through authenticated management HTTP requests create the PG source/dataset, discover fields, bind the dataset to a theme, and grant the analyst access with a forced east row policy. Use fixed dates covering the fixture rows.
+- [x] Submit a deterministic Agent tool sequence through the real query HTTP endpoint. Ask for west while the row policy requires east; assert actual returned aggregate=40, no west rows, a locked execution result, and successful persisted query audit for the correct user/dataset. Never stub `executeQuery`, pool access or result rows.
+- [x] Revoke dataset access over HTTP and retry in the same session; assert no new successful SQL audit and no fresh executable result. Restore dataset access, revoke theme access, retry in the same session and assert HTTP 403 with no SQL execution. Include an unauthorized-user attempt before granting access.
+- [x] Register this file in the existing PostgreSQL integration CI step. Without a local PG server, default suite must explicitly skip; the CI job must execute the test with zero skips.
+- [x] Document that this proves real database execution under deterministic tool selection, not live external-model quality.
+- [x] Run full coverage/lint/eval, then create and attach a PR. Require successful PostgreSQL integration and existing browser acceptance before reporting completion.
 
 ## Execution Evidence So Far
 
@@ -61,3 +61,7 @@
 ## Self-Review
 
 The two tasks cover every requested acceptance item. Production execution must stay real; the deterministic harness is limited to tool selection. Existing CI provides the disposable PG service, and default local skips cannot satisfy database acceptance. Resource cleanup and both dataset/theme revocation cases are explicit checks.
+
+## Final Verification Record
+
+Local final coverage: 405 tests, 396 passed, 9 explicitly environment-gated skipped, zero failures; line coverage 85.64%. Lint has zero errors and eval passes 4/4. The first real PG acceptance passed in CI run 38739771379. Independent review led to stronger revoked-response/tool-bypass assertions, driver-parameter observation and a setup-failure cleanup regression test; that cleanup test was verified RED then GREEN. The updated final head must pass the PostgreSQL and browser CI jobs before the PR leaves draft. External-model quality is explicitly outside this acceptance scope.
