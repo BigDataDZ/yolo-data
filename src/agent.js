@@ -1769,7 +1769,7 @@ export class MetricAgentService {
       const snapshot = this.isSupersonicEnabled()
         ? this.database.listIndicators({ keyword, typeId, limit })
         : {
-          items: this.database.localIndicators?.list({ keyword, typeId, limit }) ?? [],
+          items: this.database.localIndicators?.list({ keyword, typeId, limit, enabledOnly: true }) ?? [],
           source: 'LOCAL',
           freshAt: null,
         };
@@ -2105,7 +2105,7 @@ export class MetricAgentService {
     const profile = this.database.getPermissionProfile(user.id);
     const scope = resolveAccessScope({ user, theme, permissionProfile: profile });
     if (!scope.allowed) {
-      throw new Error(scope.reason || 'theme permission denied');
+      throw Object.assign(new Error(scope.reason || 'theme permission denied'), { statusCode: 403 });
     }
     const skills = this.skillRegistry.listForTheme(theme);
     const { businessDatasets, primaryBusinessDatasetId } = resolveThemeBusinessDatasets({

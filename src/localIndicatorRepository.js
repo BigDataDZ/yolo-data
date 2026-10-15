@@ -137,7 +137,7 @@ export class LocalIndicatorRepository {
     return Number(result.changes ?? 0) > 0;
   }
 
-  list({ keyword = '', typeId = '', limit = 500 } = {}) {
+  list({ keyword = '', typeId = '', limit = 500, enabledOnly = false } = {}) {
     const normalizedKeyword = String(keyword).trim().toLowerCase();
     const normalizedTypeId = String(typeId ?? '').trim();
     const rows = this.db.prepare(`
@@ -147,8 +147,8 @@ export class LocalIndicatorRepository {
              status, metrics_json AS metricsJson, dimensions_json AS dimensionsJson,
              models_json AS modelsJson, raw_json AS rawJson,
              synced_at AS syncedAt, updated_at AS updatedAt
-      FROM local_indicators ORDER BY name
-    `).all().map((row) => this.mapRow(row));
+      FROM local_indicators WHERE (? = 0 OR status = 1) ORDER BY name
+    `).all(enabledOnly ? 1 : 0).map((row) => this.mapRow(row));
     return rows
       .filter((item) => !normalizedTypeId || String(item.typeId) === normalizedTypeId)
       .filter((item) => !normalizedKeyword || [
