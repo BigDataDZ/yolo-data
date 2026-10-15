@@ -1463,7 +1463,7 @@ function buildSystemPrompt({
   const analysisModeText = analysisMode?.mode ?? 'METRIC_QUERY';
   const clarificationAllowed = clarificationPolicy?.allowed !== false;
 
-  return `你是企业指标问数智能体。你必须只通过提供的工具访问指标，不允许生成、拼接或执行 SQL。
+  return `你是企业指标问数智能体。你必须只通过提供的工具访问指标，不允许生成、拼接或执行SQL。
 
 查询契约是唯一的执行入口：
 1. 你只能先调用 compile_query_contract 提交条件账本，再调用 execute_query_contract 执行。
@@ -1548,10 +1548,10 @@ ${describeClarificationOption(clarificationOptionId)}
 2. 不得使用代码内隐含业务规则、模型经验或历史答案替代当前主题提示词。
 3. 若业务词、枚举映射、分组口径或计算口径无法从上述来源唯一确定，必须停止查询并提示用户补充主题提示词；回复中列出缺少的规则项，不得猜测后返回正式数据。
 
-当前启用的 Skills：
+当前启用的Skills：
 ${skillLines}
 
-规划前 Skill 口径审计：
+规划前Skill口径审计：
 ${skillAuditLines || '- 当前主题未启用外部审计 Skill'}
 
 查询规划阶段 Skill 约束：
@@ -2286,20 +2286,20 @@ export class MetricAgentService {
       emit({
         type: 'warning',
         code: 'SUPERSONIC_MODULE_DISABLED',
-        message: '系统设置已停用指标平台模块，本轮采用大模型直连业务数据模式。',
+        message: '未检测到对应的指标，本轮采用大模型直连业务数据模式。',
       });
     } else if (this.indicatorClient.mode !== 'supersonic') {
       emit({
         type: 'warning',
         code: 'SUPERSONIC_NOT_CONFIGURED',
-        message: '指标平台尚未配置，本轮优先使用已接入的真实业务数据集。',
+        message: '本轮优先使用已接入的真实业务数据集。',
       });
     }
     if (activeHarness.mode === 'local-rule') {
       emit({
         type: 'warning',
         code: 'LLM_NOT_CONFIGURED',
-        message: 'DeepSeek API Key 未配置，本轮使用本地规则引擎执行。',
+        message: 'LLM API Key 未配置，本轮使用本地规则引擎执行。',
       });
     }
     let allowedIndicators = [];
@@ -2331,7 +2331,7 @@ export class MetricAgentService {
       } catch (error) {
         emit({
           type: 'warning',
-          code: 'SUPERSONIC_REALTIME_CATALOG_FAILED',
+          code: 'REALTIME_CATALOG_FAILED',
           message: `实时读取指标平台失败：${error.message}`,
         });
         indicatorSourceState = describeIndicatorSource({
@@ -4305,7 +4305,7 @@ export class MetricAgentService {
       }
       if (businessDatasets.length > 0 && sourceType !== 'BUSINESS_DATASET') {
         const sourceError = new Error(
-          '当前主题已配置业务数据集，最终取数必须使用 BUSINESS_DATASET；指标平台只用于指标口径确认。',
+          '当前主题已配置业务数据集，指标平台只用于指标口径确认。',
         );
         sourceError.code = 'BUSINESS_DATASET_EXECUTION_REQUIRED';
         sourceError.recoverable = true;

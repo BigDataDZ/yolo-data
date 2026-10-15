@@ -368,9 +368,8 @@ a {
   background: var(--bg);
 }
 
+/* 高度与内边距统一由下方「全站统一紧凑顶栏」（body .topbar）控制，这里只保留外观。 */
 .topbar {
-  min-height: 68px;
-  padding: 14px 24px 12px;
   border-bottom: 1px solid var(--border);
   background: #ffffff;
   box-shadow: none;
@@ -2925,17 +2924,6 @@ textarea::placeholder {
     padding-bottom: 58px;
   }
 
-  .topbar {
-    min-height: 60px;
-    padding: 9px 12px;
-  }
-
-  .topbar h1,
-  .topbar .topbar-title-row h1 {
-    font-size: 15px;
-  }
-
-  .topbar p,
   .theme-breadcrumb-separator {
     display: none;
   }
@@ -3253,9 +3241,8 @@ body {
   box-shadow: var(--shadow-s);
 }
 
+/* 高度与内边距由下方「全站统一紧凑顶栏」（body .topbar）统一控制，这里只保留外观。 */
 .topbar {
-  min-height: 68px;
-  padding: 16px 28px 12px;
   border-bottom-color: var(--border);
   background: var(--bg);
 }
@@ -3367,7 +3354,7 @@ body {
 }
 
 .chat-question-layout {
-  width: min(100%, 780px);
+  width: min(100%, var(--chat-content-width));
   margin: 0 auto;
   display: block;
   align-items: start;
@@ -4112,7 +4099,7 @@ body {
   }
 
   .chat-question-layout {
-    width: min(100%, 780px);
+    width: min(100%, var(--chat-content-width));
     display: block;
   }
 
@@ -4182,36 +4169,38 @@ body {
   }
 }
 
-body.is-query-page .topbar {
+/* 全站统一紧凑顶栏：42px、无副标题、标题 16px/26px 行高。
+   原先只有问数页（body.is-query-page）单独做了一套，导致其他页面顶栏是 68px 且带副标题，
+   同一套界面高低不一。这里把 topbar 相关规则提升为全局默认，
+   页面各自的内容差异交给 .main-content 自己控制，顶栏不再有高低之分。 */
+body .topbar {
   min-height: 42px;
   padding: 4px 24px;
 }
 
-body.is-query-page .topbar h1,
-body.is-query-page .topbar .topbar-title-row h1 {
+body .topbar h1,
+body .topbar .topbar-title-row h1 {
   font-size: 16px;
+  line-height: 26px;
 }
 
-body.is-query-page .topbar p {
+/* 副标题全站不再渲染：PAGE_META 里的副标题文案仍保留（runtime.js 的 memory 特例还依赖该结构），
+   只是不再展示，避免顶栏被撑高。 */
+body .topbar p {
   display: none;
 }
 
-body.is-query-page .topbar-title-row {
+body .topbar-title-row {
   min-height: 26px;
 }
 
-body.is-query-page .topbar h1,
-body.is-query-page .topbar .topbar-title-row h1 {
-  line-height: 26px;
+body .topbar-actions {
+  gap: 8px;
 }
 
 body.is-query-page .theme-breadcrumb .ui-select-trigger {
   height: 26px;
   min-height: 26px;
-}
-
-body.is-query-page .topbar-actions {
-  gap: 8px;
 }
 
 body.is-query-page .user-switch {
@@ -4420,5 +4409,5 @@ body.is-query-page .workspace-toggle {
 /* 回答内容与问数输入区共用的内容宽度。
    两处用同一个变量，避免各自写死后悄悄错位——改宽度只需改这一处。 */
 :root {
-  --chat-content-width: 780px;
+  --chat-content-width: 960px;
 }

@@ -1,9 +1,9 @@
 {
   "name": "yolo-data",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
-  "description": "YOLO Data intelligent query platform with a Supersonic indicator-system adapter.",
+  "description": "YOLO Data intelligent query platform",
   "engines": {
     "node": ">=22.5.0"
   },

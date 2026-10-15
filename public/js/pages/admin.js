@@ -73,8 +73,7 @@ async function renderPermissionsPage(root) {
     state.permissionUserId = users[0]?.id ?? null;
   }
   root.innerHTML = `
-    <div class="editor-page-shell">
-      <div class="two-column">
+    <div class="two-column">
         <aside class="list-pane">
           <div class="list-pane-head">
             <strong>平台用户</strong>
@@ -95,7 +94,6 @@ async function renderPermissionsPage(root) {
         <section class="section-band" id="permissionEditor">
           <div class="loading-state"><span class="spinner"></span>正在读取用户权限</div>
         </section>
-      </div>
     </div>
   `;
   root.querySelectorAll('[data-permission-user]').forEach((button) => {

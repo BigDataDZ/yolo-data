@@ -669,7 +669,7 @@ function renderLiveExecution() {
     <div class="live-execution-head">
       <span class="spinner"></span>
       <div>
-        <strong>${escapeHtml(activeStage?.summary || activeStage?.name || '正在启动 DataAgent 工作流')}</strong>
+        <strong>${escapeHtml(activeStage?.summary || activeStage?.name || '正在启动DataAgent工作流')}</strong>
         <small>${escapeHtml(modelText)} · Data Agent · ${escapeHtml(sourceText)} · ${workflow?.progress?.completed ?? 0}/${workflow?.progress?.total ?? 8} 步</small>
       </div>
     </div>
@@ -690,10 +690,10 @@ function renderQuestionAttachments(attachments) {
     return '';
   }
   const chips = list.map((item) => {
-    const title = item.title ?? item.name ?? '本地文件';
-    const name = item.name ?? item.title ?? '本地文件';
+    const title = item.title ?? item.name ?? '文件';
+    const name = item.name ?? item.title ?? '文件';
     return `<span class="user-bubble-file" title="${escapeAttr(title)}">`
-      + `${icon('file-spreadsheet', '本地文件')}`
+      + `${icon('file-spreadsheet', '文件')}`
       + `<span class="user-bubble-file-name">${escapeHtml(name)}</span>`
       + '</span>';
   }).join('');
@@ -819,8 +819,8 @@ function renderAssistantContent(message) {
       ${queryFingerprint ? `
         <button class="btn btn-quiet btn-icon chat-action-icon fingerprint-copy-btn" type="button"
           data-copy-fingerprint="${escapeAttr(queryFingerprint)}"
-          title="复制查询指纹" aria-label="复制查询指纹">
-          ${icon('copy', '复制查询指纹')}
+          title="复制查询指纹" aria-label="复制指纹">
+          ${icon('copy', '复制指纹')}
         </button>
       ` : ''}
     </div>
@@ -856,17 +856,17 @@ function renderArtifactResultLink(result) {
 }
 
 const EXECUTION_PHASE_DEFINITIONS = [
-  { code: 'INTENT', name: '理解问题', description: '识别意图、上下文和澄清策略' },
-  { code: 'SKILL_AUDIT', name: 'Skill 口径审计', description: '按主题 Skill 审计问题口径与数据粒度' },
-  { code: 'SEMANTIC_RESOLVE', name: '语义解析', description: '对指标、维度和枚举候选执行多策略裁决' },
+  { code: 'INTENT', name: '理解问题', description: 'AI识别意图、上下文和澄清策略' },
+  { code: 'SKILL_AUDIT', name: 'Skill口径审计', description: 'Skill审计问题口径与数据粒度' },
+  { code: 'SEMANTIC_RESOLVE', name: '语义解析', description: '拆解指标、维度和枚举候选' },
   { code: 'SEMANTIC_DISCOVERY', name: '检索语义对象', description: '检索指标或业务数据集' },
-  { code: 'SEMANTIC_CONFIRM', name: '确认口径', description: '确认指标、字段和枚举值域' },
-  { code: 'PLAN', name: '生成查询计划', description: '编译查询契约和查询计划' },
+  { code: 'SEMANTIC_CONFIRM', name: '确认口径', description: '确认指标、字段和枚举值' },
+  { code: 'PLAN', name: '生成查询计划', description: '生成查询契约和查询计划' },
   { code: 'VALIDATE', name: '校验门禁', description: '校验条件、权限和只读边界' },
   { code: 'EXECUTE', name: '执行查询', description: '执行指标或数据集查询' },
   { code: 'RESULT_ANALYST', name: '结果分析', description: '生成合计、TopN、趋势、异常和业务判断' },
   { code: 'ANALYSIS_CODE', name: '代码驱动分析', description: '生成分析代码在沙箱内处理已锁定快照并产出契约化结果' },
-  { code: 'RESULT_VALIDATION', name: 'Skill 结果验证', description: '按主题 Skill 验证结果和回答证据' },
+  { code: 'RESULT_VALIDATION', name: 'Skill结果验证', description: '按Skill验证结果和回答证据' },
   { code: 'CODE', name: '代码分析', description: '生成并运行分析代码' },
   { code: 'ANALYZE', name: '分析结果', description: '整理透视、校验和可视化' },
   { code: 'RESPOND', name: '生成回答', description: '生成业务回答与交付说明' },

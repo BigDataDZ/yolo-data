@@ -485,8 +485,6 @@ body.workspace-open .app-shell {
 }
 
 .topbar {
-  min-height: 77px;
-  padding: 15px 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2439,11 +2437,6 @@ body.workspace-open .app-shell {
   gap: 14px;
 }
 
-.editor-page-shell {
-  width: min(var(--editor-max-width), 100%);
-  margin: 0 auto;
-}
-
 .theme-editor-page-head {
   min-height: 64px;
   display: flex;
@@ -3023,10 +3016,6 @@ body.workspace-open .app-shell {
     padding: 12px 8px;
   }
 
-  .topbar {
-    padding-inline: 18px;
-  }
-
   .main-content {
     padding: 18px;
   }
@@ -3093,12 +3082,6 @@ body.workspace-open .app-shell {
     padding-bottom: 64px;
   }
 
-  .topbar {
-    min-height: 66px;
-    padding: 10px 14px;
-  }
-
-  .topbar p,
   .status-chip {
     display: none;
   }
@@ -3764,9 +3747,8 @@ body {
   box-shadow: 0 0 0 4px rgba(16, 163, 127, 0.1);
 }
 
+/* 高度与内边距统一由 tokens.css 的「全站统一紧凑顶栏」（body .topbar）控制。 */
 .topbar {
-  min-height: 64px;
-  padding: 10px 24px;
   border-bottom-color: #ececec;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(12px);
