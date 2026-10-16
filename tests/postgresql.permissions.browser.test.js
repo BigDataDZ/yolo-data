@@ -227,8 +227,15 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         await admin.locator(`[name="themeGrant"][value="${theme.id}"]`).uncheck();
         await savePermissions();
         const forbidden = await ask(`重新查询：${QUESTION}`);
-        assert.equal(forbidden.response.status(), 403);
+        assert.equal(forbidden.response.status(), 200, 'an established NDJSON stream reports errors as events');
+        const forbiddenEvents = forbidden.body.trim().split('\n').map(line => JSON.parse(line));
+        assert.match(forbiddenEvents.find(event => event.type === 'stream_error')?.message ?? '', /no query grant/);
+        assert.equal(forbiddenEvents.some(event => event.type === 'final'), false);
         assert.equal(forbidden.response.request().postDataJSON().sessionId, answer.sessionId);
+        const synchronous = await analyst.request.post(`${baseUrl}/api/chat/query`, {
+          data: { themeId: theme.id, sessionId: answer.sessionId, question: QUESTION },
+        });
+        assert.equal(synchronous.status(), 403);
         assert.equal(attempts(), 2, 'theme revocation must block before invoking the model');
         assert.deepEqual(logs(), audit);
         assert.equal(statements.length, statementCount);
