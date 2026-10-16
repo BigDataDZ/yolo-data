@@ -11,7 +11,7 @@ import {
   mergeValueCandidates, normalizeValueOrigin, VALUE_DOMAIN_STATUSES,
 } from './semanticDomain.js';
 import { normalizeDataSource } from './dialects/index.js';
-
+import { dataSourceTestState } from './datasourceLifecycle.js';
 function nowIso() {
   return new Date().toISOString();
 }
@@ -2127,14 +2127,14 @@ export class PlatformDatabase {
       }
       this.db.prepare(`
         UPDATE data_sources
-        SET code = ?, name = ?, db_type = ?, host = ?, port = ?,
-            database_name = ?, username = ?, encrypted_password = ?,
-            options_json = ?, status = ?, updated_at = ?
+        SET code = ?, name = ?, db_type = ?, host = ?, port = ?, database_name = ?, username = ?, encrypted_password = ?,
+            options_json = ?, status = ?, updated_at = ?,
+            last_test_at = ?, last_test_ok = ?, last_test_message = ?
         WHERE id = ?
       `).run(
         values[0], values[1], values[2], values[3], values[4], values[5],
         values[6], values[7] || current.encryptedPassword, values[8], values[9],
-        timestamp, Number(id),
+        timestamp, ...dataSourceTestState(current, values.slice(2, 9)), Number(id),
       );
       return this.getDataSource(id);
     }

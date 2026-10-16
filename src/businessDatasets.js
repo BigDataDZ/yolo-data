@@ -121,12 +121,11 @@ export class BusinessDatasetService {
   }
 
   saveDataSource(payload, id = null) {
-    const encryptedPassword = payload.password
-      ? this.crypto.encrypt(payload.password)
-      : payload.encryptedPassword;
+    const encryptedPassword = payload.password ? this.crypto.encrypt(payload.password) : payload.encryptedPassword;
     const current = id ? this.database.getDataSource(id) : null;
     const code = String(payload.code ?? '').trim() || current?.code || this.nextSourceCode(payload.name);
     const source = this.database.saveDataSource(normalizeDataSource({ ...payload, code, encryptedPassword }), id);
+    if (current && current.code !== source.code) this.closePool(current.code);
     this.closePool(source.code);
     return source;
   }
