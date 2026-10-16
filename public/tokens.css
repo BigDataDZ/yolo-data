@@ -805,6 +805,20 @@ textarea::placeholder {
   line-height: 1.5;
 }
 
+/* MCP 令牌页：创建按钮与名称/租户输入框并排（三列，按钮沉到底部与输入框底边齐平）。
+   ≤760px 时下方 .form-grid 的 1 列媒体查询特异性相同且在后，自动覆盖为纵向堆叠。 */
+.mcp-create-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mcp-create-action {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  /* 防止 flex 默认 stretch 把按钮横向拉满整列 */
+  align-items: flex-start;
+}
+
 .datasource-type-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

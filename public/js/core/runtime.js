@@ -750,8 +750,14 @@ function renderRuntime(health) {
   const indicatorSource = source?.indicatorSource;
   const snapshot = !directLlm && indicatorSource === 'SNAPSHOT';
   const catalogUnavailable = !directLlm && indicatorSource === 'UNAVAILABLE';
-  const indicatorReady = !directLlm && !unconfigured && !connectionError && !catalogUnavailable;
-  const indicatorDetail = directLlm ? '已停用'
+  // 集成指标管理是平台默认形态：不接外部指标平台时，指标侧由平台内置指标库承担，
+  // 属于正常就绪状态，不再按"外部平台已停用"降级展示；仅库为空时提示待录入。
+  const localMgmt = directLlm || source?.localIndicatorManagement === true;
+  const localCount = Number(source?.localIndicatorCount ?? 0);
+  const indicatorLabel = localMgmt ? '指标库' : '指标平台';
+  const indicatorReady = localMgmt ? localCount > 0 : !unconfigured && !connectionError && !catalogUnavailable;
+  const indicatorDetail = localMgmt
+    ? (localCount > 0 ? `已录入 ${localCount} 个指标` : '暂无指标')
     : unconfigured ? '未配置'
       : connectionError ? '连接异常'
         : catalogUnavailable ? '目录不可用'
@@ -764,7 +770,7 @@ function renderRuntime(health) {
     : themeCredentials > 0
       ? `本地规则 · ${themeCredentials} 个主题已配置`
       : '未配置';
-  // 三色状态：绿=指标平台与大模型都就绪，黄=仅一侧可用，橙=两侧都未就绪。
+  // 三色状态：绿=指标侧与大模型都就绪，黄=仅一侧可用，橙=两侧都未就绪。
   // 指标平台已启用却连接异常或目录不可用时，直接标记为橙色异常。
   const indicatorBroken = !directLlm && !unconfigured && (connectionError || catalogUnavailable);
   const level = indicatorReady && llmReady
@@ -780,11 +786,11 @@ function renderRuntime(health) {
   }
   document.getElementById('runtimeTitle').textContent = level === 'ready'
     ? '运行就绪'
-    : level === 'warning' ? '降级运行' : indicatorBroken ? '运行异常' : '尚未就绪';
+    : level === 'warning' ? '部分就绪' : indicatorBroken ? '运行异常' : '尚未就绪';
   document.getElementById('runtimeDetail').textContent =
-    `指标平台 ${indicatorDetail} · 大模型 ${llmDetail}`;
-  const syncText = directLlm
-    ? '指标平台匹配已停用'
+    `${indicatorLabel} ${indicatorDetail} · 大模型 ${llmDetail}`;
+  const syncText = localMgmt
+    ? (localCount > 0 ? `本地指标管理 · ${localCount} 个指标，无需外部同步` : '本地指标管理 · 尚未录入指标')
     : unconfigured
       ? '尚未配置指标平台服务地址'
       : connectionError
@@ -796,7 +802,7 @@ function renderRuntime(health) {
     ? `快照时间 ${source?.indicatorSourceDetail?.freshAt ? formatDate(source.indicatorSourceDetail.freshAt) : '未知'}，可能已过期`
     : '';
   const tooltip = [
-    `指标平台：${indicatorDetail}`,
+    `${indicatorLabel}：${indicatorDetail}`,
     syncText,
     snapshotText,
     `大模型：${llmDetail}`,
