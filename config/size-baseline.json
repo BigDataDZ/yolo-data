@@ -57,6 +57,7 @@
   "src/database.js": 4107,
   "src/datasetProfiler.js": 402,
   "src/datasourceCrypto.js": 55,
+  "src/datasourceLifecycle.js": 15,
   "src/derivedMetrics.js": 391,
   "src/dialects/common.js": 25,
   "src/dialects/index.js": 27,
