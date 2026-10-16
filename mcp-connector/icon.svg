@@ -1,9 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="YOLO Data MCP">
-  <rect x="4" y="4" width="56" height="56" rx="12" fill="#1f6feb"/>
-  <g fill="#ffffff">
-    <rect x="14" y="34" width="8" height="16" rx="2"/>
-    <rect x="28" y="24" width="8" height="26" rx="2"/>
-    <rect x="42" y="14" width="8" height="36" rx="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="512" height="512" role="img" aria-label="Yolo App 图标">
+  <title>Yolo App 图标 · 02-B 浅底玻璃</title>
+  <defs>
+    <linearGradient id="gAI" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#4C7EF3"/>
+      <stop offset=".52" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="gAI2" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B6FF5"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="gTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset=".55" stop-color="#F2F6FF"/>
+      <stop offset="1" stop-color="#E9EEFF"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4664B4" flood-opacity=".18"/>
+    </filter>
+  </defs>
+  <!-- 浅底玻璃方块 -->
+  <rect x="3" y="3" width="114" height="114" rx="30" fill="url(#gTile)" stroke="#E2E8F6" stroke-width="1.5" filter="url(#sh)"/>
+  <!-- 标志（内缩 74%） -->
+  <g transform="translate(15.6,15.6) scale(0.74)">
+    <path d="M90 12 C92 24 94 26 106 28 C94 30 92 32 90 44 C88 32 86 30 74 28 C86 26 88 24 90 12 Z" fill="url(#gAI)"/>
+    <circle cx="24" cy="34" r="3" fill="#8B5CF6" opacity=".65"/>
+    <circle cx="15" cy="74" r="2.4" fill="#38BDF8" opacity=".8"/>
+    <g fill="none" stroke="url(#gAI2)" stroke-width="15" stroke-linecap="round">
+      <path d="M36 36 L60 62"/>
+      <path d="M84 36 L60 62"/>
+    </g>
+    <rect x="52.5" y="60" width="15" height="42" rx="7" fill="url(#gAI2)"/>
+    <circle cx="60" cy="62" r="14" fill="#38BDF8" opacity=".18"/>
+    <circle cx="60" cy="62" r="7" fill="#22D3EE"/>
   </g>
-  <path d="M14 26 L30 18 L46 24" fill="none" stroke="#ffd33d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

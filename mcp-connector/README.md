@@ -1,6 +1,6 @@
-# YOLO Data · MCP 连接器
+# YOLO Data Agent· MCP 连接器
 
-将 YOLO Data 智能问数平台的能力以 [Model Context Protocol](https://modelcontextprotocol.io)（Streamable HTTP）暴露给任意 MCP 客户端。
+将YOLO Data智能问数平台的能力以 [Model Context Protocol](https://modelcontextprotocol.io)（Streamable HTTP）暴露给任意 MCP 客户端。
 
 ## 包含文件
 | 文件 | 作用 |
