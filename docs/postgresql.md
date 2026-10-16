@@ -10,11 +10,16 @@ npm install --no-save --package-lock=false pg
 
 部署流程如果运行 `npm ci`，应在其后执行上述命令。未安装 pg 时平台仍可启动，PostgreSQL 连接测试会返回驱动安装提示。
 
+Docker 部署请在构建时安装驱动：`docker build --build-arg INSTALL_PG=true -t yolo-data .`。
+使用 Compose 时，在 POSIX shell 中执行 `INSTALL_PG=true docker compose up -d --build`；PowerShell 先执行 `$env:INSTALL_PG='true'`，再执行 `docker compose up -d --build`。仅给运行中的容器设置环境变量不会安装驱动。
+
 在「数据源管理 → 新增数据源」选择 PostgreSQL，填写 Host、端口（默认 5432）、连接数据库、用户名和密码。连接数据库是 PostgreSQL database 名称，如 `analytics`，不能为空。
 
 需要 TLS 时选择「启用并验证服务器证书」，可粘贴 PEM 格式 CA 内容；留空使用系统信任的证书。TLS 开启后始终验证服务器证书。
 
 保存后执行连接测试，再新增业务数据集：选择该数据源，填写 Schema（默认 `public`）和物理表名。连接数据库与 Schema 是不同层级，例如数据库 `analytics` 中的 `public.sales`。当前标识符仍使用平台原有白名单：字母/下划线开头，仅含字母、数字和下划线；支持大小写标识符，查询时使用双引号保留大小写。
+
+已有连接可在数据源列表点击「编辑」修改地址、端口、连接数据库、用户名、密码和 SSL/CA。密码留空保留原值，类型和标识不能修改。更改连接参数后请重新测试；编辑连接数据库时，应确认已有数据集的 schema 和表在目标数据库中仍然存在。
 
 ## 实现边界
 
