@@ -137,6 +137,37 @@ export function registerMemoryRoutes(table) {
   });
 
   table.add({
+    id: 'memories.search',
+    method: 'GET',
+    path: '/api/memories/search',
+    tags: ['memory'],
+    summary: '按问题检索用户长期记忆命中（用于预览前置注入内容）',
+    middleware: ['auth'],
+    handler: async (ctx) => {
+      const { response, url, database, application, sendJson, parseIntParam } = ctx;
+      const user = requireUser(ctx);
+      const scope = resolveScope({
+        database,
+        user,
+        requestedUserId: parseIntParam(url.searchParams.get('userId'), 0),
+      });
+      const themeId = parseIntParam(url.searchParams.get('themeId'), 0) || null;
+      const query = String(url.searchParams.get('q') ?? '').trim();
+      const limit = Math.max(1, Math.min(parseIntParam(url.searchParams.get('limit'), 6), 30));
+      if (!query) {
+        sendJson(response, 200, { query: '', hits: [], total: 0 });
+        return;
+      }
+      const hits = application.userMemories.search(scope.userId, themeId, query, limit);
+      sendJson(response, 200, {
+        query,
+        hits,
+        total: hits.length,
+      });
+    },
+  });
+
+  table.add({
     id: 'memories.notes.create',
     method: 'POST',
     path: '/api/memories/notes',

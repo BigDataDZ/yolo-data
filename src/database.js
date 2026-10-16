@@ -4008,6 +4008,39 @@ export class PlatformDatabase {
     };
   }
 
+  // P0-4：按用户/主题/时间窗口汇总已消耗的 Token（total_tokens，缺字段时回退 prompt+completion）。
+  // created_at 为 ISO 字符串，按字典序比较即可覆盖时间窗口（与 logLlmCall 写入格式一致）。
+  sumTokenUsage({ userId = null, themeId = null, sinceIso = null } = {}) {
+    const clauses = [];
+    const params = [];
+    if (userId != null) {
+      clauses.push('user_id = ?');
+      params.push(Number(userId));
+    }
+    if (themeId != null) {
+      clauses.push('theme_id = ?');
+      params.push(Number(themeId));
+    }
+    if (sinceIso) {
+      clauses.push('created_at >= ?');
+      params.push(String(sinceIso));
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = this.db.prepare(`
+      SELECT token_usage_json AS tokenUsageJson FROM llm_call_logs ${where}
+    `).all(...params);
+    let total = 0;
+    for (const row of rows) {
+      const usage = parseJson(row.tokenUsageJson, {});
+      const node = Number(
+        usage.total_tokens
+          ?? (Number(usage.prompt_tokens || 0) + Number(usage.completion_tokens || 0)),
+      ) || 0;
+      total += node;
+    }
+    return total;
+  }
+
   getPlatformSetting(key, fallback = null) {
     const row = this.db.prepare(`
       SELECT key, value_json AS valueJson, updated_at AS updatedAt

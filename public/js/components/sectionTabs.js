@@ -11,6 +11,7 @@ export const ASSET_TABS = [
   { id: 'skills', route: '/skills', label: '公共 Skills' },
   { id: 'models', route: '/models', label: '模型管理' },
   { id: 'mcp', route: '/mcp', label: 'MCP 令牌' },
+  { id: 'eval', route: '/eval', label: '评测看板' },
 ];
 
 function escapeHtml(value) {

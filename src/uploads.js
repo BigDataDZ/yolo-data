@@ -7,6 +7,7 @@ import { profileDataset } from './datasetProfiler.js';
 import { getPlatformLexicon } from './businessLexicon.js';
 import { buildTable, decodeBuffer, parseTabularContent } from './fileParsing.js';
 import { readXlsxSheet } from './xlsxReader.js';
+import { sanitizeTable } from './promptSanitizer.js';
 
 // 问数入口只暴露 csv / xls / xlsx；其余文本格式保留解析能力，可由配置开启。
 const TABULAR_EXTENSIONS = new Set(['csv', 'tsv', 'txt', 'json']);
@@ -354,6 +355,16 @@ export class UploadService {
       parsed = this.parseSpreadsheet({ buffer, extension });
     } else if (TABULAR_EXTENSIONS.has(extension)) {
       parsed = this.parseTextTable({ buffer, extension });
+    }
+    // P0-2：上传内容是不可信外部输入，进模型上下文前先清洗单元格，中和提示注入特征。
+    if (parsed && !parsed.unparsed && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+      const cleaned = sanitizeTable(parsed);
+      parsed = { ...parsed, columns: cleaned.columns, rows: cleaned.rows };
+      if (cleaned.sanitized) {
+        warnings.push(
+          `检测到上传内容含疑似提示注入特征（${cleaned.findings.map((f) => f.id).join(', ')}），已中和并隔离，不影响数据本身。`,
+        );
+      }
     }
     if (parsed) {
       warnings.push(...(parsed.warnings ?? []));

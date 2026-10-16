@@ -1,0 +1,26 @@
+{
+  "id": "L2-TOPN-CUSTOMER",
+  "description": "周粒度前10客户应产出按销售额降序、≤10 行、列与总额正确的聚合结果",
+  "now": "2026-09-22T03:00:00Z",
+  "question": "本月销售额按每周分组排名前10的客户",
+  "draft": {
+    "sourceType": "INDICATOR",
+    "indicatorId": "sales",
+    "metricFields": [{ "field": "sale_amt", "aggregator": "SUM" }],
+    "dimensionFields": [{ "field": "customer_name" }],
+    "filterFields": [{ "field": "business_type_name", "operator": "IN", "value": ["企业客户", "零售客户", "大客户"] }],
+    "limit": 10,
+    "order": [{ "field": "sale_amt", "dir": "DESC" }]
+  },
+  "fixtureRows": [
+    { "customer_name": "客户A", "business_type_name": "企业客户", "sale_amt": 5000 },
+    { "customer_name": "客户B", "business_type_name": "零售客户", "sale_amt": 3000 },
+    { "customer_name": "客户C", "business_type_name": "大客户", "sale_amt": 1200 },
+    { "customer_name": "客户D", "business_type_name": "企业客户", "sale_amt": 800 }
+  ],
+  "expectResult": {
+    "rowCount": 4,
+    "columns": ["customer_name", "sale_amt"],
+    "totals": { "sale_amt": 10000 }
+  }
+}

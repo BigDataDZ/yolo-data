@@ -412,6 +412,19 @@ export class CodeExecutionService {
     );
     this.pythonBin = String(config.pythonBin ?? process.env.PYTHON_BIN ?? '').trim()
       || DEFAULT_PYTHON_BIN;
+    // P0-3：代码执行隔离后端。默认 'inprocess'（当前行为，非安全边界）；
+    // 设为 'container' / 'podman' 时改为独立低权容器 + seccomp + 无网络运行（多租户推荐）。
+    this.backend = String(
+      config.codeExecution?.backend ?? process.env.SANDBOX_BACKEND ?? 'inprocess',
+    ).toLowerCase().trim();
+    this.sandboxImage = String(
+      config.codeExecution?.image ?? process.env.SANDBOX_IMAGE ?? 'python:3.12-slim',
+    ).trim();
+    this.seccompProfile = String(
+      config.codeExecution?.seccompProfile
+        ?? process.env.SANDBOX_SECCOMP
+        ?? path.join(config.projectRoot ?? process.cwd(), 'config', 'sandbox', 'seccomp-profile.json'),
+    );
   }
 
   materializeArtifact({ artifact, runInputDir, index }) {
@@ -532,6 +545,35 @@ export class CodeExecutionService {
     return outputs;
   }
 
+  // 容器后端：把 run.py 放进独立低权容器执行。真正的安全边界在此（区别于 inprocess 的仅"吓阻"）。
+  // 需要宿主具备 docker/podman 且已拉取 sandboxImage；任何缺失都会在执行时以 stderr 形式暴露，不静默降级。
+  async runContainerProcess({ runRoot, timeoutSeconds }) {
+    const runtime = this.backend === 'podman' ? 'podman' : 'docker';
+    const args = [
+      'run', '--rm',
+      '--user', '65534:65534',
+      '--network', 'none',
+      '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges',
+      '--security-opt', `seccomp=${this.seccompProfile}`,
+      '--memory', '512m', '--memory-swap', '512m',
+      '--pids-limit', '128',
+      '--shm-size', '64m',
+      '--read-only',
+      '-v', `${runRoot}:/work:rw`,
+      '-w', '/work',
+      this.sandboxImage,
+      'python', '-I', '-B', 'run.py',
+    ];
+    return runProcess({
+      command: runtime,
+      args,
+      cwd: runRoot,
+      env: safeEnv(runRoot),
+      timeoutSeconds,
+    });
+  }
+
   async run({
     userId,
     workspaceId,
@@ -597,13 +639,16 @@ export class CodeExecutionService {
     );
 
     const timeout = normalizeTimeout(timeoutSeconds);
-    const processResult = await runProcess({
-      command: this.pythonBin,
-      args: ['-I', '-B', 'run.py'],
-      cwd: runRoot,
-      env: safeEnv(runRoot),
-      timeoutSeconds: timeout,
-    });
+    // P0-3：隔离后端分流。默认 inprocess 行为不变；container/podman 走独立低权容器。
+    const processResult = (this.backend === 'container' || this.backend === 'podman')
+      ? await this.runContainerProcess({ runRoot, timeoutSeconds: timeout })
+      : await runProcess({
+        command: this.pythonBin,
+        args: ['-I', '-B', 'run.py'],
+        cwd: runRoot,
+        env: safeEnv(runRoot),
+        timeoutSeconds: timeout,
+      });
     const outputs = this.importOutputs({
       runRoot,
       userId,
