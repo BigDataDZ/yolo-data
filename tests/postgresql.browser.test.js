@@ -141,7 +141,9 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
       const sourceUrl = `http://127.0.0.1:${server.address().port}/api/data-sources/${saved.id}`;
       const sampleUrl = `http://127.0.0.1:${server.address().port}/api/business-datasets/${dataset.id}/sample`;
       assert.equal((await page.request.put(sourceUrl, { data: { port: 1, password: '' } })).status(), 200);
-      assert.equal((await page.request.get(sampleUrl)).status(), 500, 'queries must use the changed connection, not a stale cached pool');
+      const refused = await page.request.get(sampleUrl);
+      assert.equal(refused.status(), 400, 'queries must use the changed connection, not a stale cached pool');
+      assert.match((await refused.json()).message, /ECONNREFUSED.*:1\b/);
       assert.equal((await page.request.put(sourceUrl, { data: { port: Number(originalPort) } })).status(), 200);
       const reconnected = await page.request.get(sampleUrl);
       assert.equal(reconnected.status(), 200);
