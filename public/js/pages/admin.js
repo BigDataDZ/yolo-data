@@ -159,17 +159,13 @@ async function renderDatasetsPage(root) {
       renderPage();
     });
   });
-  document.getElementById('addDatasourceBtn')?.addEventListener('click', () => {
-    openDatasourceEditor({
-      api,
-      toast,
-      openModal,
-      closeModal,
-      setBusy,
-      hydrateIcons,
-      loadBootstrap,
-      renderPage,
-      state,
+  const editSource = (source = null) => openDatasourceEditor({
+    api, toast, openModal, closeModal, setBusy, hydrateIcons, loadBootstrap, renderPage, state, source,
+  });
+  document.getElementById('addDatasourceBtn')?.addEventListener('click', () => editSource());
+  root.querySelectorAll('[data-edit-source]').forEach(button => {
+    button.addEventListener('click', () => {
+      editSource(sources.find(source => String(source.id) === button.dataset.editSource));
     });
   });
   document.getElementById('addDatasetBtn')?.addEventListener('click', openDatasetCreator);
@@ -180,7 +176,7 @@ async function renderDatasetsPage(root) {
         const result = await api(`/api/data-sources/${button.dataset.testSource}/test`, {
           method: 'POST',
         });
-        toast(result.lastTestOk ? '连接成功' : result.lastTestMessage);
+        toast(result.lastTestOk === null ? '连接配置已变更，请重新测试' : result.lastTestOk ? '连接成功' : result.lastTestMessage);
         renderPage();
       } catch (error) {
         toast(error.message, 'error');
@@ -256,7 +252,7 @@ function renderDatasetSourcesTable(sources) {
               <td class="mono">${escapeHtml(source.host)}:${source.port}</td>
               <td>${escapeHtml(source.databaseName)}</td>
               <td><span class="tag ${source.lastTestOk === true ? 'tag-teal' : source.lastTestOk === false ? 'tag-red' : ''}">${source.lastTestOk === true ? '成功' : source.lastTestOk === false ? '失败' : '未测试'}</span></td>
-              <td><button class="btn btn-small" data-test-source="${source.id}" type="button">测试连接</button></td>
+              <td><button class="btn btn-small" data-edit-source="${source.id}" type="button">编辑</button> <button class="btn btn-small" data-test-source="${source.id}" type="button">测试连接</button></td>
             </tr>
           `).join('') || '<tr><td colspan="6">暂无数据源</td></tr>'}
         </tbody>
