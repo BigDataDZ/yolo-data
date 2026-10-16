@@ -2,6 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SemanticCompiler } from '../src/semanticCompiler.js';
 
+for (const [dbType, adapter, label] of [
+  ['POSTGRESQL', 'postgresql-dataset', 'PostgreSQL'],
+  ['PG', 'postgresql-dataset', 'PostgreSQL'],
+  ['MYSQL', 'mysql-dataset', 'MySQL'],
+  ['TIDB', 'tidb-dataset', 'TiDB'],
+  ['DORIS', 'doris-dataset', 'Doris'],
+  [undefined, 'doris-dataset', 'Doris'],
+  ['unknown', 'mysql-dataset', 'MySQL'],
+]) {
+  test(`dataset plan and evidence label the actual source: ${dbType ?? 'legacy'}`, () => {
+    const compiler = new SemanticCompiler();
+    const plan = compiler.compileDatasetQuery({
+      question: 'amount', dataset: { id: 1, name: 'sales', dbType }, metrics: ['amount'],
+    });
+    assert.equal(plan.execution.adapter, adapter);
+    const evidence = compiler.buildDatasetEvidence(plan, {
+      rows: [{ amount: 40 }], columns: [{ name: 'amount' }],
+    }, { generatedSql: 'SELECT SUM(amount)', rowPolicyCount: 0, columnPolicyCount: 0 });
+    assert.equal(evidence.execution.adapter, adapter);
+    assert.equal(evidence.execution.endpoint, `${label} SQL SELECT`);
+  });
+}
+
 const indicator = {
   id: 'sales_amount',
   name: '销售额',

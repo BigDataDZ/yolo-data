@@ -37,6 +37,11 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
       await setup.query(`INSERT INTO "${schema}".sales VALUES ('2026-01-01','east',10),('2026-02-01','west',20)`);
     }
     await page.goto(`http://127.0.0.1:${server.address().port}/datasets`);
+    const sourceLabels = await page.evaluate(async () => {
+      const { formatSourceMode } = await import('/js/core/runtime.js');
+      return ['postgresql-dataset', 'mysql-dataset', 'tidb-dataset', 'doris-dataset', 'constructor', 'unknown-mode'].map(formatSourceMode);
+    });
+    assert.deepEqual(sourceLabels, ['PostgreSQL 业务数据集', 'MySQL 业务数据集', 'TiDB 业务数据集', 'Doris 业务数据集', 'constructor', 'unknown-mode']);
     await page.locator('#loginUsername').fill('admin');
     await page.locator('#loginPassword').fill('browser-test-password');
     await page.getByRole('button', { name: '登录', exact: true }).click();

@@ -17,7 +17,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
     await setup.query(`CREATE TABLE "${schema}".sales(day date, region text, amount numeric(12,2))`);
     await setup.query(`INSERT INTO "${schema}".sales VALUES
       ('2026-01-01','east',10),('2026-02-01','east',30),('2026-02-01','west',1000)`);
-    await withSkillServer(async ({ application, request, login }) => {
+    await withSkillServer(async ({ application, request, login, baseUrl }) => {
       try {
         const admin = await login('admin');
         const analyst = await login('east_manager');
@@ -116,8 +116,29 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         assert.deepEqual(logs(), []);
         const granted = { ...profile, datasetGrants: [{ datasetId: dataset.id, canQuery: true }] };
         await setPermissions(granted);
-        const success = await query({ themeId: 1, question });
+        const streamed = await fetch(`${baseUrl}/api/chat/query/stream`, {
+          method: 'POST', headers: { Cookie: analyst, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ themeId: 1, question }),
+        });
+        assert.equal(streamed.status, 200);
+        const events = (await streamed.text()).trim().split('\n').map((line) => JSON.parse(line));
+        assert.ok(!events.some((event) => event.type === 'stream_error'), JSON.stringify(events));
+        const success = { response: streamed, data: events.find((event) => event.type === 'final')?.answer };
         assert.equal(success.response.status, 200, JSON.stringify(success.data));
+        assert.ok(success.data);
+        assert.equal(events.find((event) => event.type === 'execution_selected').source.mode, 'postgresql-dataset');
+        assert.equal(success.data.runtime.executionAdapter, 'postgresql-dataset');
+        assert.equal(success.data.semanticParse.execution.adapter, 'postgresql-dataset');
+        assert.equal(success.data.semanticParse.execution.endpoint, 'PostgreSQL SQL SELECT');
+        const executionStage = success.data.workflow.stages.find((stage) => stage.code === 'EXECUTE');
+        assert.match(executionStage.summary, /PostgreSQL/);
+        assert.ok(executionStage.evidence.some((item) => item.adapter === 'postgresql-dataset'));
+        const resultArtifact = application.workspace.getArtifact({
+          artifactId: success.data.executionResults[0].artifactId, userId: user.id,
+        });
+        assert.equal(resultArtifact.metadata.source.adapter, 'postgresql-dataset');
+        const plan = application.database.getQueryPlan(success.data.semanticParse.planId, user.id);
+        assert.equal(plan.evidence.execution.adapter, 'postgresql-dataset');
         assert.equal(success.data.deterministic, true);
         assert.equal(success.data.data.rows.length, 1);
         assert.equal(Number(success.data.data.rows[0].amount), 40);

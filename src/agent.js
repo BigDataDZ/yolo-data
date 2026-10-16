@@ -53,7 +53,7 @@ import { createProcessArtifactRecorder } from './processArtifacts.js';
 import { appendUserQuestionWithAttachments } from './chatAttachments.js';
 import { buildMetricResolverPrompt } from './metricResolver.js';
 import { USER_MEMORY_TOOLS, createUserMemoryToolHandler } from './userMemoryTools.js';
-import { resolveWithPlugins } from './analysisPluginRegistry.js';
+import { analyzeWithPlugins, resolveWithPlugins } from './analysisPluginRegistry.js';
 import {
   buildSemanticFastPathDraft,
 } from './fastQueryPath.js';
@@ -81,7 +81,7 @@ import {
   buildPresentationEvidence,
   PresentationPlanner,
 } from './resultPresentation.js';
-import { analyzeWithPlugins } from './analysisPluginRegistry.js';
+import { datasetExecution } from './datasetExecution.js';
 import { LOCAL_FILE_GUIDANCE } from './localFileGuidance.js';
 import { buildResultAnalysisText } from './resultAnalyst.js';
 import { prepareBoundDatasetExecution } from './scopedMetrics.js';
@@ -3742,7 +3742,7 @@ export class MetricAgentService {
       emit({
         type: 'execution_selected',
         source: {
-          mode: 'doris-dataset',
+          mode: datasetExecution(dataset).adapter,
           configured: true,
           datasetId: dataset.id,
           datasetName: dataset.name,
@@ -3801,7 +3801,7 @@ export class MetricAgentService {
         this.growth?.record({
           term: normalizedQuestion,
           kind: 'DATASET_EXECUTION',
-          source: 'DORIS_DATASET',
+          source: `${datasetExecution(dataset).dbType}_DATASET`,
           context: {
             themeId: theme.id,
             userId: user.id,
@@ -4101,11 +4101,11 @@ export class MetricAgentService {
         rows: displayResult.rows,
       };
       completeWorkflowStage('EXECUTE', {
-        summary: `通过 Doris 数据集执行只读查询`,
+        summary: `通过 ${datasetExecution(dataset).label} 数据集执行只读查询`,
         detail: `返回 ${secureResult.rows.length} 行 / ${secureResult.columns.length} 列`,
         evidence: [{
           type: 'EXECUTION',
-          adapter: 'doris-dataset',
+          adapter: datasetExecution(dataset).adapter,
           rowCount: secureResult.rows.length,
           generatedSql: results.map((item) => item.sql).filter(Boolean).join('; '),
           queryFingerprint: fingerprint,
@@ -4211,7 +4211,7 @@ export class MetricAgentService {
           id: String(dataset.id),
           name: dataset.name,
           table: `${dataset.schemaName}.${dataset.primaryTable}`,
-          adapter: 'doris-dataset',
+          adapter: datasetExecution(dataset).adapter,
         },
         dataset: {
           id: dataset.id,
@@ -5141,8 +5141,8 @@ export class MetricAgentService {
         lastSemanticParse = snapshot.payload?.semanticParse ?? null;
         // 还原结果来源，保证引用同一个 artifact 的展示层回答也能通过来源校验。
         lastBusinessDataset = snapshotSource?.type === 'BUSINESS_DATASET'
-          ? businessDatasets.find((dataset) => String(dataset.id) === sourceId)
-            ?? { id: snapshotSource.id, name: snapshotSource.name ?? null }
+          ? { ...(businessDatasets.find((dataset) => String(dataset.id) === sourceId) ?? { id: snapshotSource.id, name: snapshotSource.name ?? null }),
+            dbType: lastSemanticParse?.matchedDataset?.dbType }
           : null;
         lastIndicator = snapshotSource?.type === 'INDICATOR'
           ? allowedIndicators.find((item) => String(item.id) === sourceId)
@@ -5608,7 +5608,7 @@ export class MetricAgentService {
           : 'direct-llm',
         sourceConfigured: supersonicEnabled && this.indicatorClient.mode === 'supersonic',
         executionAdapter: lastBusinessDataset
-          ? 'doris-dataset'
+          ? datasetExecution(lastBusinessDataset).adapter
           : !supersonicEnabled
             ? 'direct-llm'
             : this.indicatorClient.mode === 'supersonic'
