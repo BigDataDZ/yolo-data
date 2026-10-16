@@ -662,8 +662,17 @@ flowchart LR
 
 配套的可量化评测（`scripts/run-eval.mjs`，`GET /api/eval` 看板）把“95% 准确率”变成三层回归指标：
 `L1` 契约级（门禁）、`L2` 结果级（`eval/resultSim.mjs` 在夹具表上模拟聚合校验行数/列/总额）、
-`L3` 答案级（LLM-as-Judge 反思；未配置 Judge 时标记 `judgePending`，不造假通过）。基线按 level 记录于
+`L3` 答案级（LLM-as-Judge 反思；Judge 缺失、调用失败或返回无法解析时均标记 `judgePending`）。基线按 level 记录于
 `eval/baseline.json`，看板展示通过率、门禁分布与回归 diff。
+
+评测报告中的 `passed` / `passRate` / `overall.accuracy` 仍表示夹具断言符合预期的比例，
+不是 Judge 判定通过率；例如正确识别出数字错误的负向夹具也算通过。
+L3 每例和 level `totals` 新增 `judgeAttempted`（实际发起调用，包括异常）和
+`judgeCompleted`（取得可解析且未降级的判定，包括负向判定）；每例为布尔值，汇总为数量。
+这里的“完成”沿用生产反思解析器的接受规则，不额外执行完整字段或类型校验。
+无数据而跳过策略检查的用例不计为尝试、完成或待判定。`judgePending` 表示仍需有效判定的降级用例。
+兼容旧报告消费者，`judgeAvailable` 和 `totals.judgeRan` 保留原有 `reflection.judgeUsed` 语义：
+返回坏 JSON 仍计入，调用抛异常不计入，因此它们不能表示有效判定已完成。看板使用 `judgeCompleted`。
 
 ## 6. 端到端问数时序
 

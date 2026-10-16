@@ -17,7 +17,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileEvalCase } from '../eval/fixtures.mjs';
 import { simulateContractResult, checkL2Result } from '../eval/resultSim.mjs';
-import { reflectOnAnswer } from '../src/reflection.js';
+import { runL3Case } from '../eval/answerCase.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const evalRoot = path.join(projectRoot, 'eval');
@@ -129,47 +129,6 @@ function runL2Case(evalCase) {
 }
 
 // ---------------------------------------------------------------------------
-// L3
-// ---------------------------------------------------------------------------
-
-async function runL3Case(evalCase, judge) {
-  const reflection = await reflectOnAnswer({
-    question: evalCase.question,
-    answer: evalCase.answer,
-    result: evalCase.result,
-    judge,
-  });
-  const expect = evalCase.expectReflect ?? {};
-  const checks = [];
-  if (expect.shouldPass !== undefined) {
-    checks.push({
-      assertion: 'shouldPass',
-      ok: reflection.passed === expect.shouldPass,
-      expected: expect.shouldPass,
-      actual: reflection.passed,
-    });
-  }
-  if (expect.needsReplan !== undefined) {
-    checks.push({
-      assertion: 'needsReplan',
-      ok: reflection.needsReplan === expect.needsReplan,
-      expected: expect.needsReplan,
-      actual: reflection.needsReplan,
-    });
-  }
-  const judgePending = reflection.degraded && !reflection.judgeUsed;
-  return {
-    id: evalCase.id,
-    description: evalCase.description ?? '',
-    passed: checks.every((check) => check.ok),
-    judgeAvailable: reflection.judgeUsed,
-    judgePending,
-    checks,
-    reflection,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // baseline / diff
 // ---------------------------------------------------------------------------
 
@@ -234,7 +193,10 @@ export async function runLevel(level, { judge = null } = {}) {
   const baseline = readBaseline();
   const baselineDiff = diffBaseline(baseline, level, results);
   const judgePending = results.filter((result) => result.judgePending).length;
+  // Legacy judgeRan follows reflection.judgeUsed; it does not imply a usable verdict.
   const judgeRan = results.filter((result) => result.judgeAvailable).length;
+  const judgeAttempted = results.filter((result) => result.judgeAttempted).length;
+  const judgeCompleted = results.filter((result) => result.judgeCompleted).length;
 
   return {
     level,
@@ -245,6 +207,8 @@ export async function runLevel(level, { judge = null } = {}) {
       passRate: results.length > 0 ? passed / results.length : 0,
       judgePending,
       judgeRan,
+      judgeAttempted,
+      judgeCompleted,
     },
     gateBlockDistribution,
     results,
@@ -348,7 +312,8 @@ async function main() {
     const r = allReport.levels[lvl];
     console.log(`[eval] ${lvl}: ${r.totals.passed}/${r.totals.cases} passed (pass rate ${(r.totals.passRate * 100).toFixed(1)}%)`
       + (r.totals.judgePending ? `, judgePending=${r.totals.judgePending}` : '')
-      + (r.totals.judgeRan ? `, judgeRan=${r.totals.judgeRan}` : ''));
+      + (r.totals.judgeAttempted ? `, judgeAttempted=${r.totals.judgeAttempted}` : '')
+      + (r.totals.judgeCompleted ? `, judgeCompleted=${r.totals.judgeCompleted}` : ''));
     if (Object.keys(r.gateBlockDistribution).length > 0) {
       console.log(`[eval] ${lvl} gate blocks:`, JSON.stringify(r.gateBlockDistribution));
     }
@@ -365,7 +330,7 @@ async function main() {
       }
     }
   }
-  console.log(`[eval] overall accuracy: ${(report.overall.accuracy * 100).toFixed(1)}% (${report.overall.passed}/${report.overall.cases})`);
+  console.log(`[eval] overall fixture pass rate: ${(report.overall.accuracy * 100).toFixed(1)}% (${report.overall.passed}/${report.overall.cases})`);
   console.log(`[eval] report -> ${path.relative(projectRoot, reportPath)}`);
 
   if (updateBaseline) {

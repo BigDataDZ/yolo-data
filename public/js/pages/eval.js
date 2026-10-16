@@ -9,7 +9,7 @@ const LEVELS = ['L1', 'L2', 'L3'];
 const LEVEL_HINT = {
   L1: '契约级：编译查询契约并校验门禁（确定性，CI 可跑）',
   L2: '结果级：在夹具表上模拟聚合，校验行数/列/总额（确定性）',
-  L3: '答案级：LLM-as-Judge 反思回答；未配置 Judge 时标记为「待 Judge」，不造假',
+  L3: '答案级：LLM-as-Judge 反思回答；Judge 缺失、调用失败或返回无法解析时标记为「待有效判定」',
 };
 
 function pct(rate) {
@@ -26,10 +26,10 @@ function levelCard(level, report) {
   const judgeTags = [];
   if (level === 'L3') {
     if (t.judgePending > 0) {
-      judgeTags.push(tag(`Judge 待配置 ${t.judgePending}`, 'amber'));
+      judgeTags.push(tag(`Judge 待有效判定 ${t.judgePending}`, 'amber'));
     }
-    if (t.judgeRan > 0) {
-      judgeTags.push(tag(`Judge 已运行 ${t.judgeRan}`, 'teal'));
+    if (t.judgeCompleted > 0) {
+      judgeTags.push(tag(`Judge 已完成判定 ${t.judgeCompleted}`, 'teal'));
     }
   }
   const gateBlocks = Object.entries(report?.gateBlockDistribution ?? {})
@@ -97,7 +97,7 @@ function renderReport(report) {
       <div class="section-head">
         <div>
           <h2>评测看板</h2>
-          <p>把「95% 准确率」变成可量化指标：L1 契约级 + L2 结果级 + L3 答案级（LLM-as-Judge）三层回归，随每次取数路径变更持续跟踪。</p>
+          <p>用例通过率衡量夹具断言是否符合预期；Judge 判定完成情况单独展示。L1 契约级 + L2 结果级 + L3 答案级（LLM-as-Judge）三层回归，随每次取数路径变更持续跟踪。</p>
         </div>
         <div class="page-toolbar">
           <button class="btn btn-quiet" type="button" data-eval-refresh>${icon('refresh', '重新评测')}重新评测</button>
@@ -107,7 +107,7 @@ function renderReport(report) {
       <div class="section-band">
         <div class="kpi-grid">
           <div class="kpi-item">
-            <span>总体准确率</span>
+            <span>总体用例通过率</span>
             <strong>${pct(overall.accuracy)}</strong>
             <span class="muted">${overall.passed}/${overall.cases} 通过</span>
             <span>${generatedAt ? tag(`生成于 ${generatedAt.toLocaleString('zh-CN')}`, 'blue') : ''}</span>
