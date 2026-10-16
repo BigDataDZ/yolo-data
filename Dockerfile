@@ -17,7 +17,12 @@ ENV PORT=8088
 # 先拷贝依赖清单以利用层缓存：改动源码不会触发重新装依赖。
 # 锁文件与 package.json 必须同步，否则 npm ci 会失败（这是有意的保险）。
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# 可选 PostgreSQL 镜像：docker build --build-arg INSTALL_PG=true -t yolo-data .
+ARG INSTALL_PG=false
+RUN case "$INSTALL_PG" in true|false) ;; *) echo 'INSTALL_PG must be true or false' >&2; exit 1 ;; esac \
+    && npm ci --omit=dev \
+    && if [ "$INSTALL_PG" = true ]; then npm install --omit=dev --no-save --package-lock=false pg@8; fi \
+    && npm cache clean --force
 
 COPY . .
 

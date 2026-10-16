@@ -118,20 +118,39 @@ flowchart LR
 
 ## 快速开始
 
-一键初始化（推荐，自动完成下面三步）：
+### Docker 一键部署
+
+Docker 配置目前位于 `v1.0.1` 分支，克隆时需明确选择该分支：
 
 ```bash
 # 克隆仓库
-git clone https://github.com/xiaour/yolo-data.git yolo-data
+git clone --branch v1.0.1 https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
-docker compose up -d
+docker compose up -d --build
 ```
-docker run` 启动（不用 compose）：
+使用 `docker run` 启动（不用 Compose）：
 
 ```bash
 docker build -t yolo-data .
 docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
 ```
+
+默认镜像包含 MySQL 兼容驱动与 Python 3。PostgreSQL 需要在构建时启用可选的 `pg` 驱动：
+
+```bash
+# Compose（POSIX shell；PowerShell 先执行 $env:INSTALL_PG='true'）
+INSTALL_PG=true docker compose up -d --build
+# 或直接构建
+docker build --build-arg INSTALL_PG=true -t yolo-data .
+```
+
+`INSTALL_PG` 是构建参数，修改后需要重新构建镜像。Python 的 `pandas`、`openpyxl` 仍是可选依赖，默认镜像不包含它们。
+
+数据卷 `/app/data` 保存 SQLite 数据库、数据源加密密钥和分析产物。`docker compose down` 后重新启动会保留数据；`docker compose down -v` 会删除数据卷。备份与迁移时应停止服务并保存整个数据卷，数据库和 `.datasource-key` 必须一起保留。
+
+`docker compose ps` 可查看容器健康状态，`docker compose logs yolo-data` 可查看启动日志。Compose 默认使用 `dev` 模式，仅供可信网络体验；需要登录鉴权时，在 `docker-compose.yml` 中设置 `AUTH_MODE: session` 并修改初始口令。生产环境通过 HTTPS 反向代理访问，参见下方生产部署说明。
+
+### 本地启动
 
 本地手动初始化：
 

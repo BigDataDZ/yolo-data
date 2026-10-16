@@ -359,7 +359,7 @@ test('agent rejects indicator execution when the theme has a business dataset', 
   assert.equal(blockedError?.terminal, undefined);
   assert.equal(blockedError?.recoverable, true);
   assert.equal(exposedTools.includes('query_indicator'), false);
-  assert.match(answer.message, /BUSINESS_DATASET/);
+  assert.equal(answer.message, blockedError.message);
   assert.equal(dataset.id, application.database.getTheme(
     application.database.listThemes().find((item) => item.name === '经营总览').id,
   ).businessDatasetIds[0]);
