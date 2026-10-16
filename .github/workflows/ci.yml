@@ -10,28 +10,28 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
 
       # codeExecution 生成式 Python 沙箱的测试可能依赖 python3
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
-      - name: Unit tests (node --test, 213 cases)
+      - name: Unit tests (node --test)
         run: npm test
 
       - name: Architecture guard (size ratchet + red lines)
         run: npm run lint
 
-      - name: Semantic eval L1 (baseline regression)
+      - name: Semantic eval L1/L2/L3 (fixture regression)
         run: npm run eval
 
   postgresql:
@@ -54,8 +54,8 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -83,19 +83,19 @@ jobs:
           YOLO_SKILL_BROWSER_TEST: '1'
           YOLO_SKILL_BROWSER_ARTIFACT_DIR: artifacts/skill-browser
         run: node --test tests/skillCatalog.browser.test.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: postgresql-browser
           path: artifacts/postgresql-browser
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: skill-browser
           path: artifacts/skill-browser
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: permission-browser
