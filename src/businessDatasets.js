@@ -158,12 +158,12 @@ export class BusinessDatasetService {
       return this.database.updateDataSourceTest(source.id, {
         ok: true,
         message: '连接成功',
-      });
+      }, source);
     } catch (error) {
       return this.database.updateDataSourceTest(source.id, {
         ok: false,
         message: error.message,
-      });
+      }, source);
     } finally {
       await pool?.end().catch(() => {});
     }

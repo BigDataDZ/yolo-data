@@ -12,6 +12,7 @@ import {
 } from './semanticDomain.js';
 import { normalizeDataSource } from './dialects/index.js';
 import { dataSourceTestState } from './datasourceLifecycle.js';
+import { saveDataSourceTest } from './datasourceConnectionTest.js';
 function nowIso() {
   return new Date().toISOString();
 }
@@ -2177,13 +2178,8 @@ export class PlatformDatabase {
     return this.getDataSource(Number(result.lastInsertRowid));
   }
 
-  updateDataSourceTest(id, { ok, message }) {
-    this.db.prepare(`
-      UPDATE data_sources
-      SET last_test_at = ?, last_test_ok = ?, last_test_message = ?, updated_at = ?
-      WHERE id = ?
-    `).run(nowIso(), ok ? 1 : 0, String(message ?? ''), nowIso(), Number(id));
-    return this.getDataSource(id);
+  updateDataSourceTest(id, result, testedSource = null) {
+    return saveDataSourceTest(this, id, result, testedSource);
   }
 
   listBusinessDatasets({ userId = null, includeDisabled = false } = {}) {

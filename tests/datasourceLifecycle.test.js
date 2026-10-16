@@ -96,3 +96,37 @@ test('non-connection edits and an omitted password preserve the previous test re
   assert.equal(saved.lastTestMessage, 'connection refused');
   assert.equal(saved.encryptedPassword, 'ciphertext');
 });
+
+for (const succeeds of [true, false]) {
+  test(`an in-flight ${succeeds ? 'successful' : 'failed'} connection test cannot overwrite an edited configuration`, async t => {
+    const { database, service } = fixture(t);
+    const source = service.saveDataSource(payload);
+    let resolveQuery;
+    let rejectQuery;
+    service.createPool = () => ({
+      query: () => new Promise((resolve, reject) => { resolveQuery = resolve; rejectQuery = reject; }),
+      end: async () => {},
+    });
+    const testing = service.testDataSource(source.id);
+    service.saveDataSource({ ...payload, host: 'new.example' }, source.id);
+    if (succeeds) resolveQuery([[]]); else rejectQuery(new Error('old host failed'));
+    const result = await testing;
+    assert.equal(result.host, 'new.example');
+    assert.equal(result.lastTestOk, null);
+    assert.equal(result.lastTestAt, null);
+    assert.equal(database.getDataSource(source.id).lastTestMessage, '');
+  });
+}
+
+test('an in-flight test remains valid when only the datasource name changes', async t => {
+  const { service } = fixture(t);
+  const source = service.saveDataSource(payload);
+  let resolveQuery;
+  service.createPool = () => ({ query: () => new Promise(resolve => { resolveQuery = resolve; }), end: async () => {} });
+  const testing = service.testDataSource(source.id);
+  service.saveDataSource({ ...payload, name: 'New name' }, source.id);
+  resolveQuery([[]]);
+  const result = await testing;
+  assert.equal(result.name, 'New name');
+  assert.equal(result.lastTestOk, true);
+});

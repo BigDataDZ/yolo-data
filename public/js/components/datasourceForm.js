@@ -1,3 +1,4 @@
+import { initializeDatasourceEdit, preserveDatasourceOptions } from './datasourceEditForm.js';
 export const DATASOURCE_TYPES = [
   { type: 'MYSQL', label: 'MySQL', description: 'MySQL 或兼容协议', iconName: 'database', port: 3306 },
   { type: 'TIDB', label: 'TiDB', description: '分布式 HTAP 数据库', iconName: 'workflow', port: 4000 },
@@ -30,8 +31,7 @@ export function datasourceFormHtml() {
       <p class="muted">数据库用于建立连接；创建数据集时另行填写 schema（通常为 public）。</p>
     </fieldset>`;
 }
-
-export function bindDatasourceForm(modal) {
+export function bindDatasourceForm(modal, source = null) {
   let type = 'MYSQL';
   let previousPort = '3306';
   modal.querySelectorAll('.datasource-type-tile').forEach((button) => {
@@ -50,20 +50,20 @@ export function bindDatasourceForm(modal) {
       modal.querySelector('#sourceDatabase').required = postgres;
     });
   });
+  if (source) initializeDatasourceEdit(modal, source);
   return () => {
     const value = (id) => modal.querySelector(`#${id}`).value.trim();
     const databaseName = value('sourceDatabase');
     if (type === 'POSTGRESQL' && !databaseName) throw new Error('请填写 PostgreSQL 连接数据库');
-    return {
+    return preserveDatasourceOptions({
       name: value('sourceName'), dbType: type, host: value('sourceHost'),
       port: Number(value('sourcePort')), databaseName, username: value('sourceUsername'),
       password: modal.querySelector('#sourcePassword').value,
       options: type === 'POSTGRESQL' && value('sourceSsl') === 'verify'
         ? { ssl: { ca: value('sourceCa') || undefined } } : {},
-    };
+    }, source);
   };
 }
-
 // PG databases cannot be used as schema names. Keep the existing text field,
 // but update its label/default when the selected source changes.
 export function bindDatasetSource(modal, sources) {
