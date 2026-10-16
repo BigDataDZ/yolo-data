@@ -1,4 +1,4 @@
-# YOLO Data
+# Yolo Data Agent
 
 面向企业的智能问数平台。YOLO Data 将大模型(LLM)、Agent、指标体系、业务数据集、数据权限、会话记忆和工作区产物整合为一条可审计、可复现、可治理的工作流。帮助企业简化繁杂的数据分析与处理流程，快速稳定进行数据分析与洞察。业务可以对同一个问题进行多轮追问，当需要用户澄清时主动反问。
 
@@ -42,7 +42,7 @@
   - 平台根据字段语义生成只读查询，不向模型暴露原始 SQL。
   - 支持字段同步、抽样、默认枚举值域和数据集查询审计。
   - 支持「智能识别」：抽样数据自动推断时间字段、常用指标与默认时间窗口，管理员确认后写入字段口径。
-- **Contract-first 契约先行查询**
+- **契约先行查询**
   - 自然语言被编译为条件账本和查询契约。
   - 查询契约冻结后才允许执行。
   - 时间范围、权限、排序和结果行序由平台确定性处理。
@@ -63,8 +63,14 @@
   - 支持规划前审计、规划约束、执行后结果验证。
   - 平台核心不写死具体行业口径。
 - **可观测性**
-  - 十三阶段 DataAgent Workflow（含代码驱动分析阶段）。
+  - 十四阶段 DataAgent Workflow，包含执行后反思（REFLECT）与有限次换策略重规划。
   - 流式执行事件、工具调用、查询计划、LLM Token、反馈和知识缺口。
+- **MCP接入**
+  - 通过 Streamable HTTP `/mcp` 暴露 `list_metrics`、`get_policy`、`get_snapshot`、`resolve_query`、`execute_query` 五个工具。
+  - 查询必须先解析契约再执行；详见 [MCP 连接器](mcp-connector/README.md)。
+- **生产化加固**
+  - 支持提示注入清洗、每日 Token 预算、OIDC/JWT 登录，以及 Docker/Podman + seccomp 代码执行隔离。
+  - 默认 `inprocess` 仅适合可信环境；多租户部署应配置 `SANDBOX_BACKEND=container` 或 `podman`。
 
 ## 业务规则与提示词设置
 
@@ -118,7 +124,7 @@ flowchart LR
 
 ## 快速开始
 
-一键初始化（推荐，自动完成下面三步）：
+一键初始化（推荐，自动构建并启动平台）：
 
 ```bash
 # 克隆仓库
@@ -126,7 +132,7 @@ git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
 docker compose up -d
 ```
-docker run` 启动（不用 compose）：
+不用 Compose 时也可以直接用 Docker：
 
 ```bash
 docker build -t yolo-data .
@@ -136,10 +142,15 @@ docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-
 本地手动初始化：
 
 ```bash
-npm install mysql2
-npm install            # 安装依赖（含 mysql2）
+npm install            # 安装依赖
 cp .env.example .env   # 生成配置；按需填写模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
+```
+
+PostgreSQL 仅在使用 PostgreSQL 数据源时额外安装可选驱动 `pg`：
+
+```bash
+npm install pg
 ```
 
 打开：
@@ -166,9 +177,8 @@ http://localhost:8088/
 
 ### 业务数据集
 
-目前支持 MySQL 协议数据库。
+支持 MySQL、TiDB、Doris，以及 PostgreSQL 数据源（需安装可选驱动 `pg`，参见 [PostgreSQL 接入](docs/postgresql.md)）。查询由平台根据字段语义编译，模型不会直接提交原始 SQL。
 
-所有数据源密码、主题模型密钥和模型独立密钥都会使用 AES-256-GCM 加密后保存。
 
 
 #### 数据集智能识别
@@ -183,8 +193,6 @@ http://localhost:8088/
 「同步结构」会保留禁用状态。
 
 ## API 示例
-
-```
 
 ### 流式问数
 
@@ -206,17 +214,24 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 - 行级权限在执行层强制生效，列级权限在浏览器返回前执行。
 - 数据源密码和模型密钥加密保存。
 - 关键操作写入审计日志。
+- 上传文件进入模型上下文前默认执行提示注入清洗。
+- 可设置每日 Token 上限。
+- 生产环境可使用 `AUTH_MODE=oidc` 接入 OIDC/JWT。
 
 ## 生产化注意事项
 
-- 已内置账号密码登录与会话，生产环境建议进一步接入 SSO 或 OIDC。
-- SQLite 为单节点存储，多实例部署前应迁移到外部数据库。
+- `docker compose up -d` 默认是开发体验配置（`AUTH_MODE=dev`）。对外部署必须改为 `AUTH_MODE=session` 或 `oidc`、修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
+- 代码执行默认 `SANDBOX_BACKEND=inprocess`，这不是安全边界。不可信用户场景应配置 Docker/Podman 容器、seccomp、无网络和只读根文件系统。
+- SQLite 为单节点存储，多实例部署前应迁移到外部数据库，并配置 Redis 分布式锁。
+- `REFLECTION_ENABLED` 与 `REFLECTION_MAX_REPLAN` 控制执行后反思；`npm run eval` 或 `/api/eval` 可查看 L1/L2/L3 回归评测。
 
-## 后续规划
+## 相关文档
 
-- 国际化支持
-- 多类型数据源支持
-- 支持本地文件和在线数据关联分析
+- [系统架构](docs/architecture.md)
+- [长期记忆架构](docs/memory-architecture.md)
+- [PostgreSQL 接入](docs/postgresql.md)
+- [MCP 连接器](mcp-connector/README.md)
+- [P0 加固报告](P0-HARDENING-REPORT.md)
 
 ## 参与贡献
 

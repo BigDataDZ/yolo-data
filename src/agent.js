@@ -4378,7 +4378,7 @@ export class MetricAgentService {
       }
       if (businessDatasets.length > 0 && sourceType !== 'BUSINESS_DATASET') {
         const sourceError = new Error(
-          '当前主题已配置业务数据集，指标平台只用于指标口径确认。',
+          'BUSINESS_DATASET_EXECUTION_REQUIRED：当前主题已配置业务数据集，指标平台只用于指标口径确认。',
         );
         sourceError.code = 'BUSINESS_DATASET_EXECUTION_REQUIRED';
         sourceError.recoverable = true;
