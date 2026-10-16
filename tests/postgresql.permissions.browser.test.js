@@ -167,11 +167,14 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         const logs = () => application.database.listDatasetQueryLogs(100).filter(log => log.datasetId === dataset.id);
         await login(analyst, 'east_manager', '/query');
         await expect(analyst.locator('#questionInput')).toBeVisible();
+        await analyst.locator('[data-onb-skip]').click();
+        await expect(analyst.locator('[data-onb-skip]')).toHaveCount(0);
         async function ask(question) {
-          const result = responseFor(analyst, '/api/chat/query/stream', 'POST');
           await analyst.locator('#questionInput').fill(question);
-          await analyst.locator('#runQueryBtn').click();
-          const streamed = await result;
+          const [streamed] = await Promise.all([
+            responseFor(analyst, '/api/chat/query/stream', 'POST'),
+            analyst.locator('#runQueryBtn').click(),
+          ]);
           const body = await streamed.text();
           await expect(analyst.locator('#runQueryBtn')).toBeVisible();
           return { response: streamed, body };
