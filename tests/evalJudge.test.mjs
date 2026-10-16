@@ -15,6 +15,9 @@ for (const { name, judge, attempted, legacyRan } of [
   { name: 'empty', judge: async () => '', attempted: 2, legacyRan: 2 },
   { name: 'null response', judge: async () => null, attempted: 2, legacyRan: 2 },
   { name: 'unrelated JSON', judge: async () => '{}', attempted: 2, legacyRan: 2 },
+  { name: 'partial verdict', judge: async () => '{"answersQuestion":true}', attempted: 2, legacyRan: 2 },
+  { name: 'string consistency', judge: async () => '{"answersQuestion":true,"consistentWithData":"false","needsReplan":false}', attempted: 2, legacyRan: 2 },
+  { name: 'string replan', judge: async () => '{"answersQuestion":true,"consistentWithData":true,"needsReplan":"false"}', attempted: 2, legacyRan: 2 },
 ]) {
   test(`L3 keeps ${name} judgments pending while retaining deterministic fixture checks`, async () => {
     const report = await runLevel('L3', { judge });

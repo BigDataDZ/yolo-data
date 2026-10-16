@@ -669,7 +669,9 @@ flowchart LR
 不是 Judge 判定通过率；例如正确识别出数字错误的负向夹具也算通过。
 L3 每例和 level `totals` 新增 `judgeAttempted`（实际发起调用，包括异常）和
 `judgeCompleted`（取得可解析且未降级的判定，包括负向判定）；每例为布尔值，汇总为数量。
-这里的“完成”沿用生产反思解析器的接受规则，不额外执行完整字段或类型校验。
+有效判定要求 `answersQuestion`、`consistentWithData`、`needsReplan` 三项均为 JSON 布尔值；
+缺项或使用字符串等其他类型均降级并保留待判定状态，不触发 Judge 策略重规划；独立的数字检查和有数据拒答检查仍生效。
+这里的“完成”沿用生产反思解析器的接受规则；`reason`、`hint` 仍为可选说明，额外属性不影响判定。
 无数据而跳过策略检查的用例不计为尝试、完成或待判定。`judgePending` 表示仍需有效判定的降级用例。
 兼容旧报告消费者，`judgeAvailable` 和 `totals.judgeRan` 保留原有 `reflection.judgeUsed` 语义：
 返回坏 JSON 仍计入，调用抛异常不计入，因此它们不能表示有效判定已完成。看板使用 `judgeCompleted`。
