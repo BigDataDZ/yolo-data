@@ -30,6 +30,7 @@ import { registerIndicatorRoutes } from './http/routes/indicators.js';
 import { registerChatRoutes } from './http/routes/chat.js';
 import { registerUploadRoutes } from './http/routes/uploads.js';
 import { registerMemoryRoutes } from './http/routes/memory.js';
+import { registerEvalRoutes } from './http/routes/eval.js';
 import { registerAuthRoutes } from './http/routes/auth.js';
 import { registerOpeningRoutes } from './http/routes/opening.js';
 import { createMcpModule } from './mcp/index.js';
@@ -44,6 +45,7 @@ export function buildRouteTable() {
     registerAuthRoutes, registerSystemRoutes, registerModelRoutes, registerUserRoutes,
     registerThemeRoutes, registerSkillRoutes, registerOpeningRoutes, registerDatasetRoutes,
     registerIndicatorRoutes, registerChatRoutes, registerUploadRoutes, registerMemoryRoutes,
+    registerEvalRoutes,
   ]) register(table);
   // MCP 传输端点：处理器在请求时从 ctx.application.mcp 取运行实例（由 startServer 注入），
   // 这样 buildRouteTable() 始终是包含 MCP 路由的唯一事实源，OpenAPI 文档自动同步。

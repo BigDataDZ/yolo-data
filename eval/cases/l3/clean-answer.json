@@ -1,0 +1,14 @@
+{
+  "id": "L3-CLEAN-ANSWER",
+  "description": "干净回答且数字与锁定结果一致，应判通过且无需换策略",
+  "question": "本月销售额前10客户",
+  "answer": "本月销售额最高的客户是客户A，金额约 5000 元，其次为客户B 3000 元。",
+  "result": {
+    "columns": [{ "name": "customer_name" }, { "name": "sale_amt" }],
+    "rows": [
+      { "customer_name": "客户A", "sale_amt": 5000 },
+      { "customer_name": "客户B", "sale_amt": 3000 }
+    ]
+  },
+  "expectReflect": { "shouldPass": true, "needsReplan": false }
+}

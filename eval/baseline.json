@@ -1,9 +1,25 @@
 {
-  "generatedAt": "2026-10-01T14:05:12.944Z",
-  "cases": {
-    "L1-DERIVED-METRIC-INVALID": true,
-    "L1-MISSING-LEDGER": true,
-    "L1-UNRESOLVED-DIMENSION": true,
-    "L1-VALID-WEEKLY-TOPN": true
+  "generatedAt": "2026-10-16T07:07:10.097Z",
+  "levels": {
+    "L1": {
+      "cases": {
+        "L1-DERIVED-METRIC-INVALID": true,
+        "L1-MISSING-LEDGER": true,
+        "L1-UNRESOLVED-DIMENSION": true,
+        "L1-VALID-WEEKLY-TOPN": true
+      }
+    },
+    "L2": {
+      "cases": {
+        "L2-FILTER-SEGMENT": true,
+        "L2-TOPN-CUSTOMER": true
+      }
+    },
+    "L3": {
+      "cases": {
+        "L3-CLEAN-ANSWER": true,
+        "L3-FABRICATED-NUMBER": true
+      }
+    }
   }
 }

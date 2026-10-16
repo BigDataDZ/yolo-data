@@ -1,0 +1,24 @@
+{
+  "id": "L2-FILTER-SEGMENT",
+  "description": "只保留企业客户时，结果应仅含企业客户行且总额为 5800",
+  "now": "2026-09-22T03:00:00Z",
+  "question": "本月企业客户的销售额",
+  "draft": {
+    "sourceType": "INDICATOR",
+    "indicatorId": "sales",
+    "metricFields": [{ "field": "sale_amt", "aggregator": "SUM" }],
+    "dimensionFields": [{ "field": "customer_name" }],
+    "filterFields": [{ "field": "business_type_name", "operator": "IN", "value": ["企业客户"] }],
+    "limit": 10
+  },
+  "fixtureRows": [
+    { "customer_name": "客户A", "business_type_name": "企业客户", "sale_amt": 5000 },
+    { "customer_name": "客户B", "business_type_name": "零售客户", "sale_amt": 3000 },
+    { "customer_name": "客户C", "business_type_name": "大客户", "sale_amt": 1200 },
+    { "customer_name": "客户D", "business_type_name": "企业客户", "sale_amt": 800 }
+  ],
+  "expectResult": {
+    "rowCount": 2,
+    "totals": { "sale_amt": 5800 }
+  }
+}

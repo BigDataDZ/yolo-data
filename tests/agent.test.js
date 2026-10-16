@@ -46,7 +46,7 @@ test('agent answer enforces user row policy during indicator execution', async (
   assert.ok(answer.processSteps.at(-1).title === '生成业务回答');
   assert.equal(answer.semanticParse.status, 'VALIDATED');
   assert.equal(answer.workflow.status, 'COMPLETED');
-  assert.equal(answer.workflow.progress.total, 13);
+  assert.equal(answer.workflow.progress.total, 14);
   for (const stage of answer.workflow.stages.filter((item) => item.status === 'SUCCESS')) {
     assert.ok(stage.startedAt);
     assert.ok(stage.finishedAt);
