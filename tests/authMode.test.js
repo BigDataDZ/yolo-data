@@ -1,0 +1,66 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { resolveAuthMode } from '../src/auth.js';
+import { loadConfig } from '../src/config.js';
+import { createApplication } from '../src/application.js';
+
+for (const mode of ['oidc', 'sessoin', ' OIDC ']) {
+  test(`loadConfig rejects unsupported AUTH_MODE ${JSON.stringify(mode)}`, () => {
+    for (const nodeEnv of ['', 'production']) {
+      assert.throws(
+        () => loadConfig({ AUTH_MODE: mode, NODE_ENV: nodeEnv }),
+        /AUTH_MODE.*dev.*session/,
+      );
+    }
+  });
+
+  test(`resolveAuthMode rejects unsupported override ${JSON.stringify(mode)}`, () => {
+    assert.throws(
+      () => resolveAuthMode({ authMode: mode, nodeEnv: '' }),
+      /AUTH_MODE.*dev.*session/,
+    );
+  });
+}
+
+for (const [mode, nodeEnv, expected] of [
+  ['dev', 'production', 'dev'],
+  [' DeV ', 'production', 'dev'],
+  ['session', '', 'session'],
+  [' SESSION ', '', 'session'],
+  ['', '', 'dev'],
+  ['  ', '', 'dev'],
+  ['', 'production', 'session'],
+  ['  ', ' Production ', 'session'],
+]) {
+  test(`auth mode ${JSON.stringify(mode)} in ${JSON.stringify(nodeEnv)} resolves to ${expected}`, () => {
+    assert.equal(loadConfig({ AUTH_MODE: mode, NODE_ENV: nodeEnv }).authMode, expected);
+    assert.equal(resolveAuthMode({ authMode: mode, nodeEnv }), expected);
+  });
+}
+
+test('loadConfig defaults absent AUTH_MODE according to NODE_ENV', () => {
+  assert.equal(loadConfig({}).authMode, 'dev');
+  assert.equal(loadConfig({ NODE_ENV: 'production' }).authMode, 'session');
+});
+
+test('application rejects unsupported auth overrides before creating persistent state', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-auth-mode-'));
+  const config = {
+    ...loadConfig({ USER_MEMORY_MAINTENANCE_INTERVAL_MS: '0' }),
+    authMode: 'oidc',
+    dbPath: path.join(directory, 'platform.db'),
+    datasourceSecretKeyPath: path.join(directory, '.datasource-key'),
+  };
+  try {
+    await assert.rejects(async () => {
+      const application = await createApplication(config);
+      application.database.close();
+    }, /AUTH_MODE.*dev.*session/);
+    assert.deepEqual(fs.readdirSync(directory), []);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -57,11 +57,11 @@ export function assertPasswordUsable(password) {
 // 生产环境默认强制登录；本地开发保留 x-user-id 直连，方便脚本与测试。
 export function resolveAuthMode(config) {
   const explicit = String(config?.authMode ?? process.env.AUTH_MODE ?? '').trim().toLowerCase();
-  if (explicit === 'dev' || explicit === 'session') {
-    return explicit;
+  if (explicit && explicit !== 'dev' && explicit !== 'session') {
+    throw new Error(`Unsupported AUTH_MODE ${JSON.stringify(explicit)}; supported modes: dev, session`);
   }
   const nodeEnv = String(config?.nodeEnv ?? process.env.NODE_ENV ?? '').trim().toLowerCase();
-  return nodeEnv === 'production' ? 'session' : 'dev';
+  return explicit || (nodeEnv === 'production' ? 'session' : 'dev');
 }
 
 export function ensureAuthSchema(database) {
