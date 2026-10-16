@@ -17,6 +17,8 @@ const PAGE_META = {
   models: ['模型管理', '统一管理模型连接、运行参数和平台默认模型'],
   themes: ['智能体', '按业务主题限定指标范围、维度和回答策略'],
   skills: ['公共 Skills', '管理平台级 Skill 资产池：查看来源与引用、启停公共 Skill、上传新 Skill'],
+  mcp: ['MCP 令牌', '开放 MCP 能力给外部客户端：服务开关、访问令牌与连接器下载'],
+  eval: ['评测看板', 'L1/L2/L3 语义评测的可量化准确率、门禁分布与回归 diff'],
   themeEditor: ['编辑智能体', '配置主题的数据范围、运行模型、Skills 和独立提示词'],
   datasets: ['数据集', '管理 MySQL、TiDB、Doris 数据源、业务数据集和字段语义'],
   permissions: ['数据权限', '配置用户可见主题、指标、行级过滤和列级脱敏'],
@@ -749,8 +751,14 @@ function renderRuntime(health) {
   const indicatorSource = source?.indicatorSource;
   const snapshot = !directLlm && indicatorSource === 'SNAPSHOT';
   const catalogUnavailable = !directLlm && indicatorSource === 'UNAVAILABLE';
-  const indicatorReady = !directLlm && !unconfigured && !connectionError && !catalogUnavailable;
-  const indicatorDetail = directLlm ? '已停用'
+  // 集成指标管理是平台默认形态：不接外部指标平台时，指标侧由平台内置指标库承担，
+  // 属于正常就绪状态，不再按"外部平台已停用"降级展示；仅库为空时提示待录入。
+  const localMgmt = directLlm || source?.localIndicatorManagement === true;
+  const localCount = Number(source?.localIndicatorCount ?? 0);
+  const indicatorLabel = localMgmt ? '指标库' : '指标平台';
+  const indicatorReady = localMgmt ? localCount > 0 : !unconfigured && !connectionError && !catalogUnavailable;
+  const indicatorDetail = localMgmt
+    ? (localCount > 0 ? `已录入 ${localCount} 个指标` : '暂无指标')
     : unconfigured ? '未配置'
       : connectionError ? '连接异常'
         : catalogUnavailable ? '目录不可用'
@@ -763,7 +771,7 @@ function renderRuntime(health) {
     : themeCredentials > 0
       ? `本地规则 · ${themeCredentials} 个主题已配置`
       : '未配置';
-  // 三色状态：绿=指标平台与大模型都就绪，黄=仅一侧可用，橙=两侧都未就绪。
+  // 三色状态：绿=指标侧与大模型都就绪，黄=仅一侧可用，橙=两侧都未就绪。
   // 指标平台已启用却连接异常或目录不可用时，直接标记为橙色异常。
   const indicatorBroken = !directLlm && !unconfigured && (connectionError || catalogUnavailable);
   const level = indicatorReady && llmReady
@@ -779,11 +787,11 @@ function renderRuntime(health) {
   }
   document.getElementById('runtimeTitle').textContent = level === 'ready'
     ? '运行就绪'
-    : level === 'warning' ? '降级运行' : indicatorBroken ? '运行异常' : '尚未就绪';
+    : level === 'warning' ? '部分就绪' : indicatorBroken ? '运行异常' : '尚未就绪';
   document.getElementById('runtimeDetail').textContent =
-    `指标平台 ${indicatorDetail} · 大模型 ${llmDetail}`;
-  const syncText = directLlm
-    ? '指标平台匹配已停用'
+    `${indicatorLabel} ${indicatorDetail} · 大模型 ${llmDetail}`;
+  const syncText = localMgmt
+    ? (localCount > 0 ? `本地指标管理 · ${localCount} 个指标，无需外部同步` : '本地指标管理 · 尚未录入指标')
     : unconfigured
       ? '尚未配置指标平台服务地址'
       : connectionError
@@ -795,7 +803,7 @@ function renderRuntime(health) {
     ? `快照时间 ${source?.indicatorSourceDetail?.freshAt ? formatDate(source.indicatorSourceDetail.freshAt) : '未知'}，可能已过期`
     : '';
   const tooltip = [
-    `指标平台：${indicatorDetail}`,
+    `${indicatorLabel}：${indicatorDetail}`,
     syncText,
     snapshotText,
     `大模型：${llmDetail}`,
@@ -909,6 +917,8 @@ const pageModuleSpecs = {
   models: () => import('../pages/models.js'),
   themes: () => import('../pages/themes.js'),
   skills: () => import('../pages/skills.js'),
+  mcp: () => import('../pages/mcp.js'),
+  eval: () => import('../pages/eval.js'),
   datasets: () => import('../pages/admin.js'),
   permissions: () => import('../pages/admin.js'),
   growth: () => import('../pages/growth.js'),
@@ -924,6 +934,8 @@ const pageRenderers = {
   themeEditor: 'renderThemeEditorPage',
   themes: 'renderThemesPage',
   skills: 'renderSkillsPage',
+  mcp: 'renderMcpPage',
+  eval: 'renderEvalPage',
   datasets: 'renderDatasetsPage',
   permissions: 'renderPermissionsPage',
   growth: 'renderGrowthPage',
@@ -940,6 +952,8 @@ const routeMatchers = [
   { pattern: /^\/themes\/(\d+)$/, page: 'themeEditor' },
   { pattern: /^\/themes$/, page: 'themes' },
   { pattern: /^\/skills$/, page: 'skills' },
+  { pattern: /^\/mcp$/, page: 'mcp' },
+  { pattern: /^\/eval$/, page: 'eval' },
   { pattern: /^\/datasets$/, page: 'datasets' },
   { pattern: /^\/permissions$/, page: 'permissions' },
   { pattern: /^\/growth$/, page: 'growth' },

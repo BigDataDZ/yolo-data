@@ -89,6 +89,20 @@ export function loadConfig(env = process.env) {
       maintenanceIntervalMs: Math.max(0, readInt(env.USER_MEMORY_MAINTENANCE_INTERVAL_MS, 900_000)),
       maintenanceStartupDelayMs: Math.max(0, readInt(env.USER_MEMORY_MAINTENANCE_STARTUP_DELAY_MS, 60_000)),
       maintenanceBatchSize: Math.max(1, readInt(env.USER_MEMORY_MAINTENANCE_BATCH_SIZE, 20)),
+      // 问数前置注入：用当前问题确定性检索用户长期记忆，把命中片段直接注入上下文，
+      // 替代「只注入摘要 + 依赖模型主动调 search_user_memory 工具」的弱召回，确保记忆对提问真正生效。
+      // 检索走 userMemory.search 的精确/关键词匹配，不引入向量近似，守住平台确定性命根。
+      retrieval: {
+        preInject: {
+          enabled: (env.USER_MEMORY_PREINJECT_ENABLED ?? 'true') !== 'false',
+          topN: Math.max(1, readInt(env.USER_MEMORY_PREINJECT_TOPN, 6)),
+          maxChars: Math.max(200, readInt(env.USER_MEMORY_PREINJECT_MAXCHARS, 1200)),
+        },
+      },
+    },
+    reflection: {
+      enabled: (env.REFLECTION_ENABLED ?? 'true') !== 'false',
+      maxReplan: Math.max(0, Math.min(3, readInt(env.REFLECTION_MAX_REPLAN, 2))),
     },
     codeExecutionRoot: path.resolve(
       projectRoot,

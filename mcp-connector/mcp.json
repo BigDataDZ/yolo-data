@@ -1,0 +1,54 @@
+{
+  "schema": "https://schema.local/mcp-connector/v1",
+  "server": {
+    "name": "yolo-data-agent",
+    "version": "1.0.0",
+    "transport": "streamable-http",
+    "endpoint": "/mcp",
+    "sessionMode": "stateless",
+    "headers": {
+      "Accept": "application/json, text/event-stream",
+      "Content-Type": "application/json"
+    }
+  },
+  "auth": {
+    "scheme": "bearer",
+    "credential": "apiKey",
+    "header": "Authorization",
+    "format": "Bearer {mcp_api_key}",
+    "notes": "API Key 形如 mcp_xxxx，由管理员通过后台创建。未携带或无效返回 401；未启用 MCP 返回 403。"
+  },
+  "tools": [
+    {
+      "name": "list_metrics",
+      "minMode": "read",
+      "summary": "列出指定用户/主题下可见指标",
+      "input": ["userId", "themeId", "keyword?", "typeId?", "limit?"]
+    },
+    {
+      "name": "get_policy",
+      "minMode": "read",
+      "summary": "查询用户在某主题下的访问策略",
+      "input": ["userId", "themeId"]
+    },
+    {
+      "name": "get_snapshot",
+      "minMode": "standard",
+      "summary": "读取工作区已落库的分析产物",
+      "input": ["artifactId", "userId"]
+    },
+    {
+      "name": "resolve_query",
+      "minMode": "standard",
+      "summary": "编译并冻结确定性查询契约，返回 contractId",
+      "input": ["userId", "themeId", "sourceType", "indicatorId?|datasetId?", "metrics", "dimensions?", "filters?", "dateInfo?", "timeGrain?", "limit?", "analysisMode?"]
+    },
+    {
+      "name": "execute_query",
+      "minMode": "standard",
+      "summary": "凭 contractId 执行冻结契约，返回结果行",
+      "input": ["contractId"]
+    }
+  ],
+  "notes": "契约默认 24 小时有效；同一 contractId 多次 execute_query 结果一致（确定性由契约保证，不触发 LLM）。"
+}

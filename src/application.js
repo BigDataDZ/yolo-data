@@ -19,6 +19,7 @@ import { QueryContractCompiler } from './queryContractCompiler.js';
 import { FeedbackService } from './feedback.js';
 import { GrowthService } from './growth.js';
 import { LlmAuditService } from './llmAudit.js';
+import { TokenBudgetService } from './tokenBudget.js';
 import { DatasourceCrypto } from './datasourceCrypto.js';
 import { BusinessDatasetService } from './businessDatasets.js';
 import { configureBusinessLexicon, getPlatformLexicon } from './businessLexicon.js';
@@ -53,6 +54,7 @@ export async function createApplication(
   }
   const harness = createHarness(config.deepseek);
   const llmAudit = new LlmAuditService(database);
+  const tokenBudget = new TokenBudgetService(database);
   const datasourceCrypto = new DatasourceCrypto({
     keyFilePath: config.datasourceSecretKeyPath
       ?? path.resolve(config.projectRoot ?? process.cwd(), 'data', '.datasource-key'),
@@ -103,6 +105,8 @@ export async function createApplication(
     semanticValues,
     userMemories,
     getSupersonicEnabled,
+    tokenBudget,
+    config,
   });
   // 长期记忆沉淀依赖主题可用模型：有 key 时用模型提炼并压缩，否则只沉淀用户显式要求记住的内容。
   const userMemoryConfig = config.userMemory ?? {};

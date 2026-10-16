@@ -1,0 +1,11 @@
+{
+  "id": "L3-FABRICATED-NUMBER",
+  "description": "回答给出与锁定结果严重不符的天文数字，确定性数字自洽检查应判不通过并触发换策略重规划",
+  "question": "本月销售额",
+  "answer": "本月总销售额高达 1.2 亿元，创下历史新高。",
+  "result": {
+    "columns": [{ "name": "sale_amt" }],
+    "rows": [{ "sale_amt": 12345 }]
+  },
+  "expectReflect": { "shouldPass": false, "needsReplan": false }
+}

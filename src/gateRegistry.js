@@ -14,6 +14,7 @@ export const GATE_PHASES = [
   'RESULT_VALIDATION',
   'ANALYZE',
   'RESPOND',
+  'REFLECT',
 ];
 
 const GATES = [
@@ -314,6 +315,16 @@ const GATES = [
     name: '请求取消传播',
     description: '前端取消必须终止正在进行的模型请求。',
     owner: 'harness.js / server.js',
+    blocking: false,
+    skillBypassAllowed: false,
+  },
+  {
+    id: 'REFLECT-001',
+    phase: 'REFLECT',
+    layer: 'QUALITY',
+    name: '执行后反思与有界重规划',
+    description: 'RESPOND 后执行三检（答其所问/数字自洽/是否需换策略）；失败走有界换策略重规划而非直接澄清；Judge 仅用于判否决策，绝不参与编造数字，结果仍走确定性取数路径。',
+    owner: 'reflection.js',
     blocking: false,
     skillBypassAllowed: false,
   },

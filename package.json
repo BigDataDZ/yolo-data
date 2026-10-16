@@ -17,6 +17,8 @@
     "eval": "node scripts/run-eval.mjs"
   },
   "dependencies": {
-    "mysql2": "^3.24.5"
+    "mysql2": "^3.24.5",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
   }
 }

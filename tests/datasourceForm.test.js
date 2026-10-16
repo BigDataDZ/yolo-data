@@ -6,6 +6,7 @@ function element(value = '', dataset = {}) {
   const listeners = {};
   return { value, dataset, hidden: true, classList: { toggle() {} }, setAttribute() {},
     addEventListener: (name, fn) => { listeners[name] = fn; }, trigger: (name) => listeners[name]?.(),
+    click: () => listeners.click?.(), dispatchEvent: () => {},
   };
 }
 
@@ -33,6 +34,25 @@ test('datasource picker changes PG defaults and saves TLS/CA without leaking opt
   assert.equal(nodes['#sourcePort'].value, '15432');
   assert.equal(nodes['#sourcePostgresOptions'].hidden, true);
   assert.deepEqual(read().options, {});
+});
+
+test('datasource editing prefills PG settings, keeps custom options and leaves the password empty', () => {
+  const tiles = DATASOURCE_TYPES.map(source => element('', { sourceType: source.type, sourcePort: String(source.port) }));
+  const nodes = Object.fromEntries(['sourceName', 'sourceHost', 'sourcePort', 'sourceDatabase', 'sourceUsername',
+    'sourcePassword', 'sourceSsl', 'sourceCa', 'sourcePostgresOptions'].map(id => [`#${id}`, element()]));
+  nodes['label[for="sourceDatabase"]'] = element();
+  const source = { name: '<PG>', host: 'localhost', port: 15432, dbType: 'POSTGRESQL',
+    databaseName: 'analytics', username: 'reader', options: { readonly: true, ssl: { ca: 'CA' } } };
+  const read = bindDatasourceForm({ querySelector: selector => nodes[selector], querySelectorAll: () => tiles }, source);
+  assert.equal(nodes['#sourceName'].value, '<PG>');
+  assert.equal(nodes['#sourcePort'].value, '15432');
+  assert.equal(nodes['#sourcePassword'].value, '');
+  assert.equal(nodes['#sourcePassword'].placeholder, '留空保留原密码');
+  assert.equal(tiles.every(tile => tile.disabled), true);
+  assert.equal(read().dbType, 'POSTGRESQL');
+  assert.deepEqual(read().options, { readonly: true, ssl: { ca: 'CA' } });
+  nodes['#sourceSsl'].value = 'off';
+  assert.deepEqual(read().options, { readonly: true, ssl: false });
 });
 
 test('dataset source picker distinguishes PG database/schema and retains custom schemas', () => {

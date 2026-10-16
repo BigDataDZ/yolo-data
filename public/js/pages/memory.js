@@ -506,6 +506,59 @@ function bindActions(root) {
   });
 }
 
+function bindPreview(root) {
+  const btn = root.querySelector('#memoryPreviewBtn');
+  const input = root.querySelector('#memoryPreviewQuestion');
+  const themeSel = root.querySelector('#memoryPreviewTheme');
+  const result = root.querySelector('#memoryPreviewResult');
+  if (!btn || !input || !result) {
+    return;
+  }
+  btn.addEventListener('click', async () => {
+    const q = input.value.trim();
+    if (!q) {
+      toast('请先输入一个模拟问题', 'error');
+      return;
+    }
+    setBusy(btn, true, '检索中');
+    try {
+      const params = new URLSearchParams();
+      const uid = scopeUserId();
+      if (uid) {
+        params.set('userId', String(uid));
+      }
+      if (themeSel && themeSel.value) {
+        params.set('themeId', themeSel.value);
+      }
+      params.set('q', q);
+      params.set('limit', '6');
+      const data = await api(`/api/memories/search?${params.toString()}`);
+      renderPreviewResult(result, data);
+    } catch (error) {
+      result.innerHTML = `<p class="memory-preview-empty">预览失败：${escapeHtml(error.message)}</p>`;
+    } finally {
+      setBusy(btn, false);
+    }
+  });
+}
+
+function renderPreviewResult(container, data) {
+  const hits = data?.hits ?? [];
+  if (hits.length === 0) {
+    container.innerHTML = '<p class="memory-preview-empty">没有命中任何长期记忆。该问题不会额外注入记忆片段（如有默认口径，仍由摘要常驻上下文提供）。</p>';
+    return;
+  }
+  container.innerHTML = `
+    <p class="memory-preview-note">将向前置注入以下 ${hits.length} 条命中（截取自记忆手册正文，确定性关键词检索）：</p>
+    <ul class="memory-preview-list">
+      ${hits.map((hit) => `<li>
+        <span class="memory-tag is-quiet">${escapeHtml(hit.scopeLabel ?? '-')}</span>
+        <span class="memory-tag is-quiet">v${hit.version ?? '-'}</span>
+        <span class="memory-preview-excerpt">${escapeHtml(hit.excerpt ?? '')}</span>
+      </li>`).join('')}
+    </ul>`;
+}
+
 async function renderMemoryPage(root) {
   root.innerHTML = '<div class="loading-state"><span class="spinner"></span>正在读取记忆</div>';
   try {
@@ -524,8 +577,8 @@ async function renderMemoryPage(root) {
           <div>
             <h2>${allUsersView ? '记忆管理' : '我的记忆'}</h2>
             <p>${allUsersView
-    ? '长期记忆按「用户 × 智能体」沉淀成一份手册：摘要常驻问数上下文，正文按需检索。'
-    : '这里只显示你自己的长期记忆：摘要会注入你自己的问数上下文，用于补全默认口径与表达习惯。'}</p>
+    ? '长期记忆按「用户 × 智能体」沉淀成一份手册：摘要常驻问数上下文，且与本轮问题相关的记忆会在问数前自动前置注入。'
+    : '这里只显示你自己的长期记忆：摘要常驻你的问数上下文，且与本轮问题相关的记忆会在问数前自动前置注入，用于补全默认口径与表达习惯。'}</p>
           </div>
           <div class="memory-actions">
             <button class="btn btn-primary" id="memoryNoteAddBtn" type="button">${icon('plus', '新增笔记')}新增笔记</button>
@@ -568,7 +621,31 @@ async function renderMemoryPage(root) {
       </section>
       <section class="section-band">
         <div class="section-head compact">
-          <div><h3>记忆文档</h3><p>每个作用域一份 Markdown 手册，摘要注入上下文、正文按需检索。</p></div>
+          <div><h3>记忆命中预览</h3><p>输入一个问数问题，预览哪些长期记忆会被自动前置注入到该轮上下文（与真实问数行为一致）。</p></div>
+        </div>
+        <div class="memory-preview">
+          <div class="form-grid">
+            <div class="form-field span-2">
+              <label for="memoryPreviewQuestion">模拟问题</label>
+              <input class="field" id="memoryPreviewQuestion" type="text" placeholder="例如：这个月各业态的含税销售额是多少？" />
+            </div>
+            <div class="form-field">
+              <label for="memoryPreviewTheme">作用域</label>
+              <select class="select" id="memoryPreviewTheme">
+                <option value="">全部智能体</option>
+                ${(state.themes ?? []).map((item) => `<option value="${item.id}"${Number(item.id) === Number(filters.themeId) ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="memory-preview-actions">
+            <button class="btn btn-primary" id="memoryPreviewBtn" type="button">${icon('search', '预览命中')}预览命中</button>
+          </div>
+          <div id="memoryPreviewResult" class="memory-preview-result"></div>
+        </div>
+      </section>
+      <section class="section-band">
+        <div class="section-head compact">
+          <div><h3>记忆文档</h3><p>每个作用域一份 Markdown 手册：摘要常驻上下文，与问题相关的正文片段会在问数前自动前置注入。</p></div>
         </div>
         ${memoryDocuments.length === 0
           ? emptyState('还没有记忆文档。先新增或从会话沉淀笔记，再点「合并笔记」即可生成手册', 'scroll-text')
@@ -605,6 +682,7 @@ async function renderMemoryPage(root) {
     renderPage();
   });
   bindActions(root);
+  bindPreview(root);
 }
 
 export { renderMemoryPage };

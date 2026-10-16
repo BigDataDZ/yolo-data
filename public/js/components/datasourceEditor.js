@@ -9,10 +9,10 @@ export function openDatasourceEditor({
   hydrateIcons,
   loadBootstrap,
   renderPage,
-  state,
+  state, source = null,
 }) {
   const modal = openModal({
-    title: '新增数据源',
+    title: source ? '编辑数据源' : '新增数据源',
     editor: true,
     body: datasourceFormHtml(),
     footer: `
@@ -20,17 +20,16 @@ export function openDatasourceEditor({
       <button class="btn btn-primary" type="button" id="saveDatasourceBtn">保存数据源</button>
     `,
   });
-
   hydrateIcons(modal);
-  const readSource = bindDatasourceForm(modal);
+  const readSource = bindDatasourceForm(modal, source);
   modal.querySelectorAll('[data-close-modal]').forEach((button) => {
     button.addEventListener('click', closeModal);
   });
   modal.querySelector('#saveDatasourceBtn').addEventListener('click', async (event) => {
     setBusy(event.currentTarget, true, '保存中');
     try {
-      await api('/api/data-sources', {
-        method: 'POST',
+      await api(source ? `/api/data-sources/${source.id}` : '/api/data-sources', {
+        method: source ? 'PUT' : 'POST',
         body: JSON.stringify(readSource()),
       });
       toast('数据源已保存，密码已加密');

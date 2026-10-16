@@ -14,6 +14,7 @@ const BASE_STAGE_DEFINITIONS = [
   { code: 'RESULT_VALIDATION', name: 'Skill 结果验证', description: '按Skill验证结果和回答证据' },
   { code: 'ANALYZE', name: '分析结果', description: '选择可视化并提炼关键发现' },
   { code: 'RESPOND', name: '生成回答', description: '输出业务回答、证据与执行过程' },
+  { code: 'REFLECT', name: '执行后反思', description: '答其所问、数字自洽与是否需换策略三检，失败触发换策略重规划' },
 ];
 
 const STAGE_DEFINITIONS = BASE_STAGE_DEFINITIONS.map((definition) => ({
@@ -41,10 +42,11 @@ function stageAttempt(stage, status, summary, detail, timestamp) {
 }
 
 export class DataAgentWorkflow {
-  constructor({ question, user, theme, onEvent = null }) {
+  constructor({ question, user, theme, onEvent = null, replanDepth = 0 }) {
     this.id = `workflow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.name = 'DataAgent Standard Workflow';
     this.version = '1.0';
+    this.replanDepth = Math.max(0, Number(replanDepth) || 0);
     this.onEvent = typeof onEvent === 'function' ? onEvent : null;
     this.question = question;
     this.user = {
@@ -202,6 +204,7 @@ export class DataAgentWorkflow {
       user: this.user,
       theme: this.theme,
       status: this.status,
+      replanDepth: this.replanDepth,
       summary: this.summary ?? '',
       startedAt: this.startedAt,
       finishedAt: this.finishedAt,

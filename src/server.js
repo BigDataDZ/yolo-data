@@ -30,8 +30,12 @@ import { registerIndicatorRoutes } from './http/routes/indicators.js';
 import { registerChatRoutes } from './http/routes/chat.js';
 import { registerUploadRoutes } from './http/routes/uploads.js';
 import { registerMemoryRoutes } from './http/routes/memory.js';
+import { registerEvalRoutes } from './http/routes/eval.js';
 import { registerAuthRoutes } from './http/routes/auth.js';
 import { registerOpeningRoutes } from './http/routes/opening.js';
+import { createMcpModule } from './mcp/index.js';
+import { registerMcpAdminRoutes } from './http/routes/mcpAdmin.js';
+import { registerMcpConnectorRoutes } from './http/routes/mcpConnector.js';
 
 // Declarative route table (P0-8). Dispatch and the generated OpenAPI document
 // both read from this single list, so they cannot drift apart.
@@ -41,7 +45,20 @@ export function buildRouteTable() {
     registerAuthRoutes, registerSystemRoutes, registerModelRoutes, registerUserRoutes,
     registerThemeRoutes, registerSkillRoutes, registerOpeningRoutes, registerDatasetRoutes,
     registerIndicatorRoutes, registerChatRoutes, registerUploadRoutes, registerMemoryRoutes,
+    registerEvalRoutes,
   ]) register(table);
+  // MCP 传输端点：处理器在请求时从 ctx.application.mcp 取运行实例（由 startServer 注入），
+  // 这样 buildRouteTable() 始终是包含 MCP 路由的唯一事实源，OpenAPI 文档自动同步。
+  for (const method of ['POST', 'GET', 'DELETE']) {
+    table.add({
+      id: `mcp-${method.toLowerCase()}`,
+      method,
+      path: '/mcp',
+      handler: (ctx) => ctx.application.mcp.handle(ctx),
+    });
+  }
+  registerMcpAdminRoutes(table);
+  registerMcpConnectorRoutes(table);
   return table;
 }
 
@@ -69,6 +86,8 @@ export async function startServer(configOverride, indicatorClientOverride = null
   } = application;
 
   const router = buildRouteTable();
+  // 注入 MCP 运行实例，供 /mcp 路由处理器在请求时取用。
+  application.mcp = createMcpModule(application);
   const middleware = createMiddlewareRegistry();
   const supersonicAvailable = () => (
     application.getSupersonicEnabled()

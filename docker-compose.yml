@@ -1,0 +1,38 @@
+# YOLO Data 一键部署。
+# 用法：docker compose up -d
+# 完成后访问 http://localhost:8088/ ，默认账号 admin / 口令 yolo123456。
+services:
+  yolo-data:
+    build:
+      context: .
+      args:
+        INSTALL_PG: ${INSTALL_PG:-false}
+    image: yolo-data:latest
+    container_name: yolo-data
+    ports:
+      - "8088:8088" # 左侧为宿主机端口，冲突时改左侧，如 "9090:8088"
+    environment:
+      # 鉴权模式：
+      #   dev     —— 内网/本机快速体验。x-user-id 直连且缺省落到管理员，仅限可信网络。
+      #   session —— 强制登录会话。对外暴露必须用它（或设 NODE_ENV=production）。
+      # ⚠️ NODE_ENV=production 会强制 Secure cookie：若直接以 http://IP:8088 访问
+      #    （无 HTTPS），浏览器会丢弃会话 cookie 导致登录死循环。对外场景请在前面挂
+      #    HTTPS 反向代理，或把端口只绑 127.0.0.1 由代理转发。详见 README「生产部署注意」。
+      AUTH_MODE: dev
+      # 初始化内置用户时写入的默认口令；生产必须修改（或登录后在账号菜单里改）。
+      DEFAULT_USER_PASSWORD: yolo123456
+      # 模型服务：留空走本地规则（local-rule），零外部依赖即可启动体验；
+      # 填入后切换为真实大模型调用（DeepSeek 或任意 OpenAI 兼容服务）。
+      # API_KEY: sk-xxxxxxxx
+      # API_BASE_URL: https://api.deepseek.com/v1
+      # MODEL: deepseek-chat
+      # 外部指标平台（可选）：留空即使用平台集成的本地指标管理，无需外部平台。
+      # SUPERSONIC_BASE_URL: https://your-supersonic.internal
+      # SUPERSONIC_TOKEN: your-token
+    volumes:
+      # SQLite 库 / 数据源密钥 / 分析脚本暂存都在这里；删卷 = 清空平台数据。
+      - yolo-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  yolo-data:

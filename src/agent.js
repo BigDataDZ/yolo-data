@@ -29,6 +29,7 @@ import {
   resolveArtifactReusePolicy,
 } from './queryIntent.js';
 import { DataAgentWorkflow } from './workflow.js';
+import { reflectOnAnswer, createHarnessJudge, REFLECTION_VERSION } from './reflection.js';
 import {
   createTraceId,
   currentTraceId,
@@ -51,6 +52,7 @@ import { buildSemanticTaxonomyPrompt } from './analysisSemantics.js';
 import { buildSemanticPolicyPrompt } from './semanticPolicy.js';
 import { createProcessArtifactRecorder } from './processArtifacts.js';
 import { appendUserQuestionWithAttachments } from './chatAttachments.js';
+import { tokenBudgetError } from './tokenBudget.js';
 import { buildMetricResolverPrompt } from './metricResolver.js';
 import { USER_MEMORY_TOOLS, createUserMemoryToolHandler } from './userMemoryTools.js';
 import { analyzeWithPlugins, resolveWithPlugins } from './analysisPluginRegistry.js';
@@ -1397,6 +1399,7 @@ function buildSystemPrompt({
   skillPlanInstructions = [],
   skillValidationInstructions = [],
   workspaceArtifacts = [],
+  userMemoryPreInject = null,
   contextMode = 'NEW_TOPIC',
   contextReason = '',
   history = [],
@@ -1406,6 +1409,7 @@ function buildSystemPrompt({
   reuseArtifactsOnly = false,
   controlledRequeryAllowed = false,
   question = '',
+  replanHint = '',
 }) {
   const indicatorLines = indicators.map((indicator) => (
     `- ${indicator.name} (${indicator.id}): ${indicator.description || indicator.businessCaliber || '无补充说明'}`
@@ -1575,6 +1579,11 @@ ${workspaceLines}
 近期人工反馈纠错：
 ${feedbackLines}
 
+${userMemoryPreInject
+  ? `本轮命中的用户长期记忆（问数前已按当前问题确定性检索并前置注入，优先作为默认口径参考）：
+${userMemoryPreInject}
+约束：以上内容是该用户历史沉淀的业务知识/口径偏好，仅作默认口径参考；与主题提示词、平台规则或本轮用户明确指令冲突时，一律以后者为准，不得据此编造数据或替代正式数据来源。当某口径取自记忆时，在口径说明中用一句话注明“沿用你的历史偏好”，不要展开记忆原文。`
+  : ''}
 系统强制行级权限：
 ${rowPolicyLines}
 
@@ -1629,6 +1638,9 @@ ${analysisMode?.mode === 'ATTRIBUTION'
       + `基于 input/ 中已物化的结果快照计算，并把结果按契约写入 output/${ANALYSIS_RESULT_FILE}。\n`
       + buildAnalysisContractPrompt()
     : ''}
+${replanHint
+    ? `\n【反思重规划提示】上一轮反思指出：${replanHint}\n请据此换一种查询或分析策略（例如换维度、拆分子板块、改时间粒度或归因口径），但必须仍走平台确定性取数路径，严禁编造数据或覆盖已锁定结果。`
+    : ''}
 ${LOCAL_FILE_GUIDANCE}`;
 }
 
@@ -1650,8 +1662,12 @@ export class MetricAgentService {
     semanticValues,
     userMemories,
     getSupersonicEnabled,
+    tokenBudget,
+    config,
   }) {
     this.database = database;
+    this.config = config;
+    this.tokenBudget = tokenBudget ?? null;
     this.indicatorClient = indicatorClient;
     this.harness = harness;
     this.harnessFactory = harnessFactory;
@@ -1669,6 +1685,40 @@ export class MetricAgentService {
     this.semanticValues = semanticValues;
     this.presentationPlanner = new PresentationPlanner();
     this.runtimeCache = new AgentRuntimeCache();
+  }
+
+  // 问数前置注入：用当前（已补全指代的）问题确定性检索用户长期记忆，
+  // 把命中片段前置注入 system prompt，替代「只注入摘要 + 依赖模型主动调工具」的弱召回。
+  // 检索走 userMemory.search 的精确/关键词匹配，不引入向量近似，守住平台确定性命根。
+  // 受 topN + maxChars 预算约束，超出截断，避免挤占上下文；未命中或开关关闭返回 null。
+  resolveMemoryPreInject({ userId, themeId, question } = {}) {
+    const cfg = this.config?.userMemory?.retrieval?.preInject;
+    if (!cfg || !cfg.enabled || !this.userMemories) {
+      return null;
+    }
+    const q = String(question ?? '').trim();
+    if (!q) {
+      return null;
+    }
+    const hits = this.userMemories.search(userId, themeId, q, cfg.topN);
+    if (!hits || hits.length === 0) {
+      return null;
+    }
+    const maxChars = Number(cfg.maxChars) || 1200;
+    const blocks = [];
+    let total = 0;
+    for (const hit of hits) {
+      const line = `[${hit.scopeLabel}] ${String(hit.excerpt ?? '').trim()}`;
+      if (!line.trim() || total + line.length > maxChars) {
+        break;
+      }
+      blocks.push(line);
+      total += line.length;
+    }
+    if (blocks.length === 0) {
+      return null;
+    }
+    return blocks.join('\n\n');
   }
 
   isSupersonicEnabled() {
@@ -2138,7 +2188,7 @@ export class MetricAgentService {
     );
   }
 
-  async answerWithTrace({
+  async _runOnce({
     userId,
     themeId,
     sessionId,
@@ -2150,6 +2200,9 @@ export class MetricAgentService {
     attachmentArtifactIds = [],
     signal = null,
     onEvent = null,
+    replanDepth = 0,
+    replanHint = '',
+    suppressUserMessage = false,
   }, runTraceId = currentTraceId()) {
     const normalizedQuestion = String(question ?? '').trim();
     if (normalizedQuestion.length < 2) {
@@ -2171,12 +2224,14 @@ export class MetricAgentService {
         // A disconnected stream must not interrupt the query.
       }
     };
-    emit({
-      type: 'run_started',
-      question: normalizedQuestion,
-      userId,
-      themeId: themeId ?? null,
-    });
+    if (replanDepth === 0) {
+      emit({
+        type: 'run_started',
+        question: normalizedQuestion,
+        userId,
+        themeId: themeId ?? null,
+      });
+    }
     let session = null;
     if (sessionId) {
       session = this.memory.getSession(sessionId, userId);
@@ -2257,6 +2312,17 @@ export class MetricAgentService {
       businessDatasets,
       primaryBusinessDatasetId,
     } = this.resolveContext(userId, session.themeId);
+    // P0-4：问数入口的 Token 成本预算闸门。未配置预算（limit=0）时自动放行。
+    if (this.tokenBudget) {
+      const budgetResult = this.tokenBudget.check({
+        userId: user.id,
+        themeId: theme.id,
+        themeLimit: Number(theme.budgetTokens ?? theme.llmConfig?.budgetTokens ?? 0) || 0,
+      });
+      if (budgetResult.enforced && !budgetResult.ok) {
+        throw tokenBudgetError(budgetResult.used, budgetResult.limit);
+      }
+    }
     this.requireEnabledTheme(theme);
     const supersonicEnabled = this.isSupersonicEnabled();
     const activeHarness = this.harnessFactory
@@ -2368,21 +2434,28 @@ export class MetricAgentService {
       snapshotCount: indicatorSourceState.snapshotCount,
     });
     const feedbackHints = this.feedback?.promptHints(theme.id, 8) ?? [];
+    const userMemoryPreInject = this.resolveMemoryPreInject({
+      userId: user.id,
+      themeId: theme.id,
+      question: resolvedQuestion,
+    });
     const workflow = new DataAgentWorkflow({
       question: normalizedQuestion,
       user,
       theme,
       onEvent: emit,
     });
-    appendUserQuestionWithAttachments({
-      memory: this.memory,
-      workspace: this.workspace,
-      session,
-      user,
-      question: normalizedQuestion,
-      displayQuestion: clarificationOptionLabel,
-      artifactIds: attachmentArtifactIds,
-    });
+    if (!suppressUserMessage) {
+      appendUserQuestionWithAttachments({
+        memory: this.memory,
+        workspace: this.workspace,
+        session,
+        user,
+        question: normalizedQuestion,
+        displayQuestion: clarificationOptionLabel,
+        artifactIds: attachmentArtifactIds,
+      });
+    }
     const answerStartedAt = Date.now();
     let lastQueryResult = null;
     let lastChart = null;
@@ -4305,7 +4378,7 @@ export class MetricAgentService {
       }
       if (businessDatasets.length > 0 && sourceType !== 'BUSINESS_DATASET') {
         const sourceError = new Error(
-          '当前主题已配置业务数据集，指标平台只用于指标口径确认。',
+          'BUSINESS_DATASET_EXECUTION_REQUIRED：当前主题已配置业务数据集，指标平台只用于指标口径确认。',
         );
         sourceError.code = 'BUSINESS_DATASET_EXECUTION_REQUIRED';
         sourceError.recoverable = true;
@@ -4958,6 +5031,7 @@ export class MetricAgentService {
       indicators: allowedIndicators,
       skills,
       feedbackHints,
+      userMemoryPreInject,
       skillAuditInstructions: skillAudit?.guidance ?? [],
       skillPlanInstructions: skillPlanGuidance,
       skillValidationInstructions: skillValidationGuidance,
@@ -4975,6 +5049,7 @@ export class MetricAgentService {
       reuseArtifactsOnly,
       controlledRequeryAllowed,
       question: resolvedQuestion,
+      replanHint,
     });
     let enabledTools = this.skillRegistry.filterTools(TOOL_DEFINITIONS, skills);
     if (!supersonicEnabled) {
@@ -5179,7 +5254,12 @@ export class MetricAgentService {
           messages: [
             { role: 'system', content: systemPrompt },
             ...history,
-            { role: 'user', content: normalizedQuestion },
+            {
+              role: 'user',
+              content: replanHint
+                ? `${normalizedQuestion}\n\n[反思重规划提示] ${replanHint}`
+                : normalizedQuestion,
+            },
           ],
           tools: enabledTools,
           executeTool,
@@ -5524,6 +5604,33 @@ export class MetricAgentService {
         rowCount: lastQueryResult?.rows?.length ?? 0,
       }],
     });
+    const maxReplanDepth = Math.max(0, Number(this.config?.reflection?.maxReplan ?? 2));
+    const reflection = await this._runReflection({
+      question: resolvedQuestion,
+      answer: finalMessage,
+      result: lastQueryResult,
+      contract: lastSemanticParse,
+      harness: activeHarness,
+      depth: replanDepth,
+    });
+    // Only a genuine strategy failure (with replan budget left) suppresses
+    // persistence and hands control back to the replan loop. A passing
+    // reflection — or one that has exhausted the budget — persists normally.
+    const shouldReplan = Boolean(reflection.needsReplan) && replanDepth < maxReplanDepth;
+    startWorkflowStage('REFLECT', '执行后反思');
+    if (shouldReplan) {
+      failWorkflowStage('REFLECT', new Error(reflection.hint || '需要换策略重规划'));
+    } else {
+      completeWorkflowStage('REFLECT', {
+        summary: reflection.passed ? '反思通过' : '反思存在偏差但已达重规划上限',
+        detail: reflection.checks.map((check) => `${check.name}:${check.pass ? 'pass' : 'fail'}`).join('；'),
+        evidence: [{
+          type: 'REFLECTION',
+          judgeUsed: reflection.judgeUsed,
+          needsReplan: reflection.needsReplan,
+        }],
+      });
+    }
     const workflowSnapshot = workflow.finish(finalMessage);
 
     const answer = {
@@ -5536,6 +5643,7 @@ export class MetricAgentService {
       analysisMode,
       clarificationPolicy,
       clarification: structuredClarification,
+      reflection,
       gateSummary: lastSemanticParse?.gateSummary ?? null,
       user: {
         id: user.id,
@@ -5637,6 +5745,12 @@ export class MetricAgentService {
       },
       sessionId: session.id,
     };
+    if (shouldReplan) {
+      // 反思判定需换策略：本尝试不落库、不追加助手消息、不绑定产物，
+      // 仅返回 answer（含 reflection/sessionId）供上层反思回路重跑。
+      answer.traceId = runTraceId;
+      return answer;
+    }
     const assistantMessage = this.memory.appendAssistantMessage(
       session.id,
       user.id,
@@ -5754,6 +5868,58 @@ export class MetricAgentService {
     savedAnswer.traceId = runTraceId;
     savedAnswer.indicatorSource = indicatorSourceState;
     return savedAnswer;
+  }
+
+  async _runReflection({ question, answer, result, contract, harness, depth }) {
+    if (this.config?.reflection?.enabled === false) {
+      return {
+        version: REFLECTION_VERSION,
+        depth,
+        passed: true,
+        needsReplan: false,
+        hint: null,
+        judgeUsed: false,
+        degraded: true,
+        skipped: true,
+        checks: [],
+      };
+    }
+    const judge = createHarnessJudge(harness);
+    return reflectOnAnswer({ question, answer, result, contract, judge, depth });
+  }
+
+  // Public entry: runs the pipeline, then reflects; on a strategy failure it
+  // replans with a changed strategy (full re-run from INTENT), bounded by
+  // reflection.maxReplan. The Judge only drives the replan decision — it never
+  // fabricates numbers; results stay on the deterministic query path.
+  async answerWithTrace(options = {}, runTraceId = currentTraceId()) {
+    const reflectionEnabled = this.config?.reflection?.enabled !== false;
+    const maxReplan = reflectionEnabled
+      ? Math.max(0, Number(this.config?.reflection?.maxReplan ?? 2))
+      : 0;
+    let opts = options;
+    let hint = '';
+    let last = null;
+    for (let depth = 0; depth <= maxReplan; depth += 1) {
+      last = await this._runOnce(
+        {
+          ...opts,
+          replanDepth: depth,
+          replanHint: hint,
+          suppressUserMessage: depth > 0,
+        },
+        runTraceId,
+      );
+      const reflection = last?.reflection;
+      if (!reflection || !reflection.needsReplan || depth === maxReplan) {
+        return last;
+      }
+      hint = reflection.hint || '请换一种查询或分析策略重试';
+      // Reuse the same session: replan re-runs the full pipeline from INTENT
+      // without creating a new session or appending the user question again.
+      opts = { ...opts, sessionId: last.sessionId ?? opts.sessionId };
+    }
+    return last;
   }
 }
 
