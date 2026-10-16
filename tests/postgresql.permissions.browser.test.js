@@ -195,9 +195,15 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         assert.equal(answer.runtime.executionAdapter, 'postgresql-dataset');
         const chart = analyst.locator('.chat-chart-canvas').last();
         await expect(chart.locator('canvas')).toBeVisible();
+        await chart.evaluate(element => new Promise(resolve => {
+          const instance = window.echarts.getInstanceByDom(element);
+          const finished = () => { instance.off('finished', finished); resolve(); };
+          instance.on('finished', finished);
+          instance.resize();
+        }));
         const plotted = await chart.evaluate(element => window.echarts.getInstanceByDom(element).getOption().series[0].data);
         assert.deepEqual(plotted.map(Number), [10, 30]);
-        await analyst.screenshot({ path: path.join(artifacts, 'authorized-chart.png'), fullPage: true });
+        await analyst.screenshot({ path: path.join(artifacts, 'authorized-chart.png'), fullPage: true, animations: 'disabled' });
         const audit = logs();
         assert.equal(audit.length, 1);
         assert.equal(audit[0].userId, user.id);
@@ -222,7 +228,7 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         assert.deepEqual(logs(), audit);
         assert.equal(statements.length, statementCount);
         assert.equal(attempts(), 2);
-        await analyst.screenshot({ path: path.join(artifacts, 'dataset-revoked.png'), fullPage: true });
+        await analyst.screenshot({ path: path.join(artifacts, 'dataset-revoked.png'), fullPage: true, animations: 'disabled' });
 
         await admin.locator(`[name="themeGrant"][value="${theme.id}"]`).uncheck();
         await savePermissions();
