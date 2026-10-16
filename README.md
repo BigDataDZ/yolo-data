@@ -1,12 +1,16 @@
-# YOLO Data
+# YOLO Data｜企业级智能问数平台
 
-面向企业的智能问数平台。YOLO Data 将大模型(LLM)、Agent、指标体系、业务数据集、数据权限、会话记忆和工作区产物整合为一条可审计、可复现、可治理的工作流。帮助企业简化繁杂的数据分析与处理流程，快速稳定进行数据分析与洞察。业务可以对同一个问题进行多轮追问，当需要用户澄清时主动反问。
+让数据分析像对话一样简单，让结果像流程一样可信。
+
+YOLO Data 面向企业，将多年沉淀的数据分析经验与大模型能力结合，帮助企业简化繁杂的数据处理流程，快速、稳定地完成业务洞察。业务人员可以围绕同一问题多轮追问；当问题需要澄清时，平台会主动反问，确保准确理解业务意图。
+
+不止是智能问答，YOLO Data 将大模型（LLM）、指标体系、业务数据集、数据权限、会话记忆、结果反思和工作区产物，整合为一条完整工作流，让每一次分析都可审计、可复现。
 
 ## 主要解决的问题
 
-1. 准确性：Text2SQL的架构每次回答不一致，答案随机性强，本产品核心工作流主要解决大模型幻觉问题，准确率提升至95%+。
+1. 准确性：传统Text2SQL的架构每次回答不一致，答案随机性强；本产品核心工作流主要解决大模型幻觉问题，准确率提升至95%+。
 2. 一致性：语义层不统一，业务各说各话，决策者不知道哪份数据真实。
-3. 效率：现有组织架构数据处理“出数>归因>决策>执行”流程过长；效率从小时级别提升到分钟级。
+3. 效率：数据处理“出数>归因>决策>执行”流程过长；效率从小时级别提升到分钟级。
 
 ## 项目定位
 
@@ -42,7 +46,7 @@
   - 平台根据字段语义生成只读查询，不向模型暴露原始 SQL。
   - 支持字段同步、抽样、默认枚举值域和数据集查询审计。
   - 支持「智能识别」：抽样数据自动推断时间字段、常用指标与默认时间窗口，管理员确认后写入字段口径。
-- **Contract-first 契约先行查询**
+- **契约先行查询**
   - 自然语言被编译为条件账本和查询契约。
   - 查询契约冻结后才允许执行。
   - 时间范围、权限、排序和结果行序由平台确定性处理。
@@ -54,7 +58,7 @@
   - 行级策略强制覆盖模型同字段条件。
   - 列级策略支持隐藏和脱敏。
 - **多轮会话与工作区**
-  - 会话记忆与长期记忆均按用户和主题隔离；长期记忆沉淀成按「用户 × 智能体」的 Markdown 手册，注入摘要、按需检索正文，并自动合并笔记、压缩超长正文。
+  - 多层记忆模式(临时、共享、滑动窗口)会话记忆与长期记忆均按用户和主题隔离；长期记忆沉淀成按「用户 × 智能体」的 Markdown 手册，注入摘要、按需检索正文，并自动合并笔记、压缩超长正文。
   - 查询结果、代码执行结果、CSV、JSON、XLSX 输出均保留为工作区产物。
   - 追问优先复用已有数据快照，避免重复取数造成结果漂移。
 - **Skills**
@@ -63,8 +67,14 @@
   - 支持规划前审计、规划约束、执行后结果验证。
   - 平台核心不写死具体行业口径。
 - **可观测性**
-  - 十三阶段 DataAgent Workflow（含代码驱动分析阶段）。
+  - 十四阶段 DataAgent Workflow，包含执行后反思（REFLECT）与有限次换策略重规划。
   - 流式执行事件、工具调用、查询计划、LLM Token、反馈和知识缺口。
+- **MCP接入**
+  - 通过 Streamable HTTP `/mcp` 暴露 `list_metrics`、`get_policy`、`get_snapshot`、`resolve_query`、`execute_query` 五个工具。
+  - 查询必须先解析契约再执行；详见 [MCP 连接器](mcp-connector/README.md)。
+- **生产化加固**
+  - 支持提示注入清洗、每日 Token 预算、OIDC/JWT 登录，以及 Docker/Podman + seccomp 代码执行隔离。
+  - 默认 `inprocess` 仅适合可信环境；多租户部署应配置 `SANDBOX_BACKEND=container` 或 `podman`。
 
 ## 业务规则与提示词设置
 
@@ -77,29 +87,35 @@
 
 ## 总体架构
 
+记忆上下文采用六层模型：L0 系统提示词、L1 共享组织记忆、L2 长期用户记忆（语义与程序）、L3 对话滑动窗口、L4 临时工作记忆、L5 元记忆与检索。L5 负责确定性检索、前置注入和按需工具调度，横切记忆捕获、整合、压缩和度量。
+
+图中的治理与安全域覆盖鉴权、限流、Token 成本预算、提示注入清洗、确定性门禁、审计和代码执行隔离；外部接入域覆盖 MCP 查询和 L1/L2/L3 回归评测。
+
 ```mermaid
 flowchart LR
-  USER["业务用户"] --> UI["YOLO Data 浏览器控制台"]
+  USER["业务用户"] --> UI["YOLO Data Web Page"]
   ADMIN["平台管理员"] --> UI
 
   UI --> API["Node.js HTTP API 与 NDJSON 流"]
   API --> AGENT["DataAgent 编排器"]
   API --> CONFIG["主题、模型、数据集和权限配置"]
 
-  AGENT --> MEMORY["会话与长期记忆"]
-  AGENT --> SKILL["Skill Registry"]
-  AGENT --> POLICY["权限引擎"]
-  AGENT --> CONTRACT["查询契约编译器"]
-  AGENT --> HARNESS["DeepSeek 或兼容模型 Harness"]
-  AGENT --> INDICATOR["指标平台适配器"]
-  AGENT --> DATASET["业务数据集服务"]
-  AGENT --> WORKSPACE["工作区产物"]
-  AGENT --> VISUAL["图表与展示规划"]
+  MEMORY["多层记忆上下文\nL0 提示词  L1 组织共享 \n L2 用户·L3 临时对话"]
+  AGENT --> MEMORY
+  AGENT --> CONTRACT["契约编译与确定性门禁"]
+  AGENT --> SKILL["Skills"]
+  AGENT --> HARNESS["OpenAI协议或兼容模型"]
+  CONTRACT --> SOURCES["指标管理/业务数据集"]
+  AGENT --> OUTPUT["工作区、图表与分析结果"]
+  AGENT --> REFLECT["结果反思"]
+  API --> GOVERNANCE["鉴权、限流、预算、审计与安全防护"]
+  API --> MCP["原生MCP Server开放"]
+  AGENT --> SANDBOX["代码分析沙箱"]
+  AGENT --> EVAL["评测与回归"]
 
   HARNESS --> LLM["DeepSeek 或兼容大模型"]
-  INDICATOR --> PLATFORM["指标平台"]
-  DATASET --> DORIS["Doris 或 MySQL 兼容数据源"]
-  API --> DB["SQLite 平台数据库"]
+  SOURCES --> PLATFORM["数据源Schema"]
+  API --> DB["平台数据库"]
   AGENT --> DB
   CONFIG --> DB
 ```
@@ -118,18 +134,12 @@ flowchart LR
 
 ## 快速开始
 
-### Docker 一键部署
-
-Docker 配置目前位于 `v1.0.1` 分支，克隆时需明确选择该分支：
-
 ```bash
 # 克隆仓库
-git clone --branch v1.0.1 https://github.com/xiaour/yolo-data.git yolo-data
+git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
 docker compose up -d --build
 ```
-使用 `docker run` 启动（不用 Compose）：
-
 ```bash
 docker build -t yolo-data .
 docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
@@ -155,10 +165,15 @@ docker build --build-arg INSTALL_PG=true -t yolo-data .
 本地手动初始化：
 
 ```bash
-npm install mysql2
-npm install            # 安装依赖（含 mysql2）
+npm install            # 安装依赖
 cp .env.example .env   # 生成配置；按需填写模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
+```
+
+PostgreSQL 仅在使用 PostgreSQL 数据源时额外安装可选驱动 `pg`：
+
+```bash
+npm install pg
 ```
 
 打开：
@@ -184,13 +199,7 @@ http://localhost:8088/
 - 智能体可以选择一个或多个模型，并指定默认模型。
 
 ### 业务数据集
-
-支持 MySQL、TiDB、Doris 与 PostgreSQL（需安装可选驱动，参见 [PostgreSQL 接入](docs/postgresql.md)）。
-
-管理员可在「数据集 → 数据源」中编辑已有连接。数据源标识和数据库类型保持固定，密码留空保留原密码；修改连接参数后，原连接测试结果会清除，需要重新测试。编辑不会改变数据源 ID 或已有数据集的关联，并会记录操作审计。
-
-所有数据源密码、主题模型密钥和模型独立密钥都会使用 AES-256-GCM 加密后保存。
-
+支持 MySQL、TiDB、Doris，以及 PostgreSQL 数据源（需安装可选驱动 `pg`，参见 [PostgreSQL 接入](docs/postgresql.md)）。查询由平台根据字段语义编译，模型不会直接提交原始 SQL。
 
 #### 数据集智能识别
 
@@ -204,8 +213,6 @@ http://localhost:8088/
 「同步结构」会保留禁用状态。
 
 ## API 示例
-
-```
 
 ### 流式问数
 
@@ -227,17 +234,24 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 - 行级权限在执行层强制生效，列级权限在浏览器返回前执行。
 - 数据源密码和模型密钥加密保存。
 - 关键操作写入审计日志。
+- 上传文件进入模型上下文前默认执行提示注入清洗。
+- 可设置每日 Token 上限。
+- 生产环境可使用 `AUTH_MODE=oidc` 接入 OIDC/JWT。
 
 ## 生产化注意事项
 
-- 已内置账号密码登录与会话，生产环境建议进一步接入 SSO 或 OIDC。
-- SQLite 为单节点存储，多实例部署前应迁移到外部数据库。
+- `docker compose up -d` 默认是开发体验配置（`AUTH_MODE=dev`）。对外部署必须改为 `AUTH_MODE=session` 或 `oidc`、修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
+- 代码执行默认 `SANDBOX_BACKEND=inprocess`，这不是安全边界。不可信用户场景应配置 Docker/Podman 容器、seccomp、无网络和只读根文件系统。
+- SQLite 为单节点存储，多实例部署前应迁移到外部数据库，并配置 Redis 分布式锁。
+- `REFLECTION_ENABLED` 与 `REFLECTION_MAX_REPLAN` 控制执行后反思；`npm run eval` 或 `/api/eval` 可查看 L1/L2/L3 回归评测。
 
-## 后续规划
+## 相关文档
 
-- 国际化支持
-- 多类型数据源支持
-- 支持本地文件和在线数据关联分析
+- [系统架构](docs/architecture.md)
+- [长期记忆架构](docs/memory-architecture.md)
+- [PostgreSQL 接入](docs/postgresql.md)
+- [MCP 连接器](mcp-connector/README.md)
+- [P0 加固报告](P0-HARDENING-REPORT.md)
 
 ## 参与贡献
 

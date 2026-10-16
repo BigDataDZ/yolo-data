@@ -104,6 +104,8 @@ Supersonic 只开放以下四类指标能力：
 
 ### 2.1 系统上下文
 
+总体图按三类能力组织：问数主链路（Agent、契约、数据源和结果）、治理与安全（鉴权、限流、Token 预算、提示注入清洗、门禁、审计和代码沙箱）、外部接入与质量（MCP 以及 L1/L2/L3 回归评测）。
+
 ```mermaid
 flowchart LR
   USER["业务用户"] --> UI["YOLO 浏览器控制台"]
@@ -113,19 +115,21 @@ flowchart LR
   API --> AGENT["DataAgent Orchestrator"]
   API --> CONFIG["平台配置与运维接口"]
 
-  AGENT --> MEMORY["会话与长期记忆"]
-  AGENT --> SKILL["Skill Registry"]
-  AGENT --> POLICY["权限引擎"]
-  AGENT --> CONTRACT["查询契约与门禁"]
+  MEMORY["六层记忆上下文\nL0 系统 · L1 组织 · L2 用户\nL3 对话 · L4 工作 · L5 检索"]
+  AGENT --> MEMORY
+  AGENT --> CONTRACT["契约编译与确定性门禁"]
+  AGENT --> SKILL["Skills 与权限"]
   AGENT --> HARNESS["Harness Runtime"]
-  AGENT --> INDICATOR["Supersonic Adapter"]
-  AGENT --> DATASET["Business Dataset Service"]
-  AGENT --> WORKSPACE["工作区产物"]
-  AGENT --> VISUAL["图表规划"]
+  CONTRACT --> SOURCES["指标平台 / 业务数据集"]
+  AGENT --> OUTPUT["工作区、图表与分析结果"]
+  AGENT --> REFLECT["REFLECT 反思与换策略"]
+  API --> GOVERNANCE["鉴权、限流、预算、审计与安全防护"]
+  API --> MCP["MCP 查询接入"]
+  AGENT --> SANDBOX["代码分析沙箱"]
+  AGENT --> EVAL["评测与回归"]
 
   HARNESS --> LLM["DeepSeek / OpenAI-compatible"]
-  INDICATOR --> SUPERSONIC["Supersonic 指标体系"]
-  DATASET --> DORIS["Doris / MySQL 兼容数据源"]
+  SOURCES --> EXTERNAL["Supersonic / Doris / MySQL / PostgreSQL"]
 
   API --> DB["SQLite 平台库"]
   AGENT --> DB
@@ -969,7 +973,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  H["会话历史"] --> INJECT["历史始终注入 Harness"]
+  L5["L5 元记忆与检索\n确定性检索/命中账本"] --> INJECT["编排记忆注入"]
+  L0["L0 系统提示词"] --> INJECT
+  L1["L1 共享组织记忆"] --> INJECT
+  L2["L2 长期用户记忆\n语义 + 程序"] --> INJECT
+  H["L3 对话滑动窗口"] --> INJECT
+  L4["L4 临时工作记忆\n槽位/子目标/半成契约"] --> INJECT
+  INJECT --> HARNESS["注入 Harness"]
   Q["当前问题"] --> MODE{"上下文模式"}
 
   MODE -->|首轮| NEW["NEW_TOPIC"]
