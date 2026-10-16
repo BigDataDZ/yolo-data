@@ -68,12 +68,12 @@ function renderSettings(settings) {
           <input class="field" id="mcpRpm" type="number" min="1" data-mcp-field="rpm" value="${escapeAttr(rl.rpm ?? 60)}" />
         </div>
         <div class="form-field">
+          <label for="mcpTenantScope">租户作用域（tenantScope）</label>
+          <input class="field" id="mcpTenantScope" type="text" data-mcp-field="tenantScope" value="${escapeAttr((settings.tenantScope ?? []).join(', '))}" placeholder="逗号分隔的主题 ID，如 1, 2, 3；留空 = 不限制" />
+        </div>
+        <div class="form-field">
           <label for="mcpBurst">突发配额（burst）</label>
           <input class="field" id="mcpBurst" type="number" min="1" data-mcp-field="burst" value="${escapeAttr(rl.burst ?? 10)}" />
-        </div>
-        <div class="form-field span-2">
-          <label for="mcpTenantScope">租户作用域（tenantScope，逗号分隔的主题 ID，留空 = 不限制）</label>
-          <input class="field" id="mcpTenantScope" type="text" data-mcp-field="tenantScope" value="${escapeAttr((settings.tenantScope ?? []).join(', '))}" placeholder="例如：1, 2, 3" />
         </div>
       </div>
       <div class="page-toolbar">
@@ -107,7 +107,7 @@ function renderKeys(keys) {
           <p>客户端以 <code>Authorization: Bearer &lt;mcp_key&gt;</code> 调用。明文仅在创建时显示一次，请妥善保存。</p>
         </div>
       </div>
-      <div class="form-grid">
+      <div class="form-grid mcp-create-grid">
         <div class="form-field">
           <label for="mcpNewName">名称</label>
           <input class="field" id="mcpNewName" type="text" data-mcp-new="name" placeholder="例如：claude-desktop" />
@@ -116,9 +116,9 @@ function renderKeys(keys) {
           <label for="mcpNewTenantId">租户</label>
           <input class="field" id="mcpNewTenantId" type="text" data-mcp-new="tenantId" placeholder="default" />
         </div>
-      </div>
-      <div class="page-toolbar">
-        <button class="btn btn-primary" id="mcpCreateKey" type="button">${icon('key', '创建')}创建令牌</button>
+        <div class="form-field mcp-create-action">
+          <button class="btn btn-primary" id="mcpCreateKey" type="button">${icon('key', '创建')}创建令牌</button>
+        </div>
       </div>
       <div class="data-table-wrap">
         <table class="data-table">
