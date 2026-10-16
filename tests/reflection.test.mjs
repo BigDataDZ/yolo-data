@@ -107,6 +107,90 @@ test('③ strategy sound uses judge verdict (needsReplan triggers hint)', async 
   assert.equal(r.hint, '应改按 customer_name 维度拆分而非整体求和');
 });
 
+for (const field of ['answersQuestion', 'consistentWithData', 'needsReplan']) {
+  for (const [name, value] of [
+    ['missing', undefined], ['null', null], ['string true', 'true'],
+    ['string false', 'false'], ['number', 1], ['object', {}], ['array', []],
+  ]) {
+    test(`③ strategy sound degrades without replanning when ${field} is ${name}`, async () => {
+      const verdict = { answersQuestion: true, consistentWithData: true, needsReplan: false };
+      verdict[field] = value;
+      const r = await checkStrategySound({
+        question: '本月销售额', answer: '本月销售额为123.45万元。', result: RESULT,
+        judge: async () => JSON.stringify(verdict),
+      });
+      assert.equal(r.degraded, true);
+      assert.equal(r.judgeUsed, true);
+      assert.equal(r.pass, true);
+      assert.equal(r.needsReplan, false);
+      assert.equal(r.hint, '');
+      assert.equal(r.reason, '');
+    });
+  }
+}
+
+for (const { name, text, pass, needsReplan, reason, hint } of [
+  {
+    name: 'positive without optional text',
+    text: '{"answersQuestion":true,"consistentWithData":true,"needsReplan":false}',
+    pass: true, needsReplan: false, reason: '', hint: '',
+  },
+  {
+    name: 'negative without optional text',
+    text: '{"answersQuestion":false,"consistentWithData":false,"needsReplan":true}',
+    pass: false, needsReplan: true, reason: '', hint: '',
+  },
+  {
+    name: 'fenced JSON with prose, optional text and extra properties',
+    text: 'Verdict follows:\n```json\n{"answersQuestion":true,"consistentWithData":false,"needsReplan":true,"reason":"数字不符","hint":"重查销售额","extra":"allowed"}\n```\nDone.',
+    pass: false, needsReplan: true, reason: '数字不符', hint: '重查销售额',
+  },
+  {
+    name: 'optional text coercion',
+    text: '{"answersQuestion":true,"consistentWithData":true,"needsReplan":false,"reason":123,"hint":null}',
+    pass: true, needsReplan: false, reason: '123', hint: '',
+  },
+]) {
+  test(`③ strategy sound accepts a complete boolean verdict: ${name}`, async () => {
+    const r = await checkStrategySound({
+      question: '本月销售额', answer: '本月销售额为123.45万元。', result: RESULT,
+      judge: async () => text,
+    });
+    assert.equal(r.degraded, false);
+    assert.equal(r.judgeUsed, true);
+    assert.equal(r.pass, pass);
+    assert.equal(r.needsReplan, needsReplan);
+    assert.equal(r.reason, reason);
+    assert.equal(r.hint, hint);
+  });
+}
+
+test('reflectOnAnswer: malformed judge retains numeric failure without triggering a strategy replan', async () => {
+  const r = await reflectOnAnswer({
+    question: '本月销售额', answer: '本月总销售额高达 1.23 亿元。', result: RESULT,
+    judge: async () => '{"answersQuestion":true,"consistentWithData":true,"needsReplan":"false"}',
+  });
+  assert.equal(r.degraded, true);
+  assert.equal(r.judgeUsed, true);
+  assert.equal(r.passed, false);
+  assert.equal(r.checks.find((c) => c.name === 'numeric_consistency').pass, false);
+  assert.equal(r.needsReplan, false);
+  assert.equal(r.hint, null);
+});
+
+test('reflectOnAnswer: malformed judge retains refusal-with-data replanning', async () => {
+  const r = await reflectOnAnswer({
+    question: '本月销售额', answer: '抱歉，我无法确定您要查询的口径。', result: RESULT,
+    judge: async () => '{"answersQuestion":true}',
+  });
+  assert.equal(r.degraded, true);
+  assert.equal(r.judgeUsed, true);
+  assert.equal(r.passed, false);
+  assert.equal(r.checks.find((c) => c.name === 'answerable').refusalWithData, true);
+  assert.equal(r.needsReplan, true);
+  assert.ok(r.hint.includes('不要反问或歉意式拒答'));
+});
+
 test('reflectOnAnswer: clean answer passes without replan (no judge)', async () => {
   const r = await reflectOnAnswer({
     question: '本月销售额前10客户',

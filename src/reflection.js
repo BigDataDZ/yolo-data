@@ -272,17 +272,17 @@ function parseJudgeVerdict(text) {
   }
   try {
     const obj = JSON.parse(match[0]);
-    // Require at least one genuine verdict field so an unrelated JSON payload
-    // (e.g. a presentation contract) is never mistaken for a verdict.
-    const hasVerdictField = ['answersQuestion', 'consistentWithData', 'needsReplan']
-      .some((key) => typeof obj[key] === 'boolean');
-    if (!hasVerdictField) {
+    // Require complete boolean decisions; partial or coerced verdicts cannot
+    // safely determine whether an answer passes or needs a strategy replan.
+    const hasValidDecisions = ['answersQuestion', 'consistentWithData', 'needsReplan']
+      .every((key) => typeof obj[key] === 'boolean');
+    if (!hasValidDecisions) {
       return null;
     }
     return {
-      answersQuestion: Boolean(obj.answersQuestion),
-      consistentWithData: Boolean(obj.consistentWithData),
-      needsReplan: Boolean(obj.needsReplan),
+      answersQuestion: obj.answersQuestion,
+      consistentWithData: obj.consistentWithData,
+      needsReplan: obj.needsReplan,
       reason: String(obj.reason ?? ''),
       hint: String(obj.hint ?? ''),
     };
