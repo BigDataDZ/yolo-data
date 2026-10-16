@@ -2198,7 +2198,7 @@ export class PlatformDatabase {
              ) END AS canQuery
       FROM business_datasets d
       JOIN data_sources s ON s.id = d.datasource_id
-      WHERE (? = 1 OR d.status = 1)
+      WHERE (? = 1 OR (d.status = 1 AND s.status = 1))
       ORDER BY d.id
     `).all(
       userId ? Number(userId) : null,

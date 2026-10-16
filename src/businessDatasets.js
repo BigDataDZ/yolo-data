@@ -1,4 +1,5 @@
 import { DatasourceCrypto } from './datasourceCrypto.js';
+import { fallbackUnlessDisabled, getActivePool } from './datasourcePool.js';
 import { getDialect, normalizeDataSource } from './dialects/index.js';
 import { classifyColumnType as normalizeDataType } from './dialects/common.js';
 import {
@@ -175,10 +176,7 @@ export class BusinessDatasetService {
   }
 
   getPool(source) {
-    if (!this.pools.has(source.code)) {
-      this.pools.set(source.code, this.createPool(source));
-    }
-    return this.pools.get(source.code);
+    return getActivePool(this, source);
   }
 
   closePool(code) {
@@ -357,11 +355,14 @@ export class BusinessDatasetService {
     try {
       sample = await this.sampleForProfiling(dataset, fields, sampleSize);
     } catch (error) {
-      degraded = `未能读取样本数据，已按字段名与类型降级识别：${error.message}`;
+      degraded = fallbackUnlessDisabled(
+        error,
+        `未能读取样本数据，已按字段名与类型降级识别：${error.message}`,
+      );
     }
     const ranges = degraded
       ? {}
-      : await this.listFieldRanges(dataset, fields).catch(() => ({}));
+      : await this.listFieldRanges(dataset, fields).catch(error => fallbackUnlessDisabled(error, {}));
     return {
       ...buildDatasetProfile({
         datasetId: dataset.id,
