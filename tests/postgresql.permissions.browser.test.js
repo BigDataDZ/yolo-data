@@ -224,6 +224,8 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         assert.equal(rejected.queryFingerprint, null);
         const lastAnswer = analyst.locator('.chat-message.is-assistant').last();
         await expect(lastAnswer).toContainText('权限不足');
+        await lastAnswer.scrollIntoViewIfNeeded();
+        await expect(lastAnswer).toBeVisible();
         await expect(lastAnswer.locator('.chat-chart-panel, .chat-data-details')).toHaveCount(0);
         assert.deepEqual(logs(), audit);
         assert.equal(statements.length, statementCount);
