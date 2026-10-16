@@ -83,6 +83,10 @@ jobs:
           YOLO_SKILL_BROWSER_TEST: '1'
           YOLO_SKILL_BROWSER_ARTIFACT_DIR: artifacts/skill-browser
         run: node --test tests/skillCatalog.browser.test.js
+      - name: Browser eval judgment status acceptance
+        env:
+          YOLO_EVAL_BROWSER_TEST: '1'
+        run: node --test tests/evalJudge.browser.test.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
