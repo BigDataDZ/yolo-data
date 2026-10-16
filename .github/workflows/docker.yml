@@ -1,0 +1,31 @@
+name: Docker acceptance
+
+on:
+  push:
+    branches: [main, v1.0.1]
+  pull_request:
+    branches: [main, v1.0.1]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        postgresql: ['false', 'true']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Build image
+        run: docker build --build-arg INSTALL_PG=${{ matrix.postgresql }} -t yolo-data:smoke .
+      - name: Verify startup, sessions and persistent state across container recreation
+        env:
+          YOLO_DOCKER_TEST: '1'
+          YOLO_DOCKER_IMAGE: yolo-data:smoke
+          YOLO_DOCKER_EXPECT_PG: ${{ matrix.postgresql }}
+        run: node --test tests/docker.smoke.test.js

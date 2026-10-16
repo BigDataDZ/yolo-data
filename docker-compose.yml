@@ -3,7 +3,10 @@
 # 完成后访问 http://localhost:8088/ ，默认账号 admin / 口令 yolo123456。
 services:
   yolo-data:
-    build: .
+    build:
+      context: .
+      args:
+        INSTALL_PG: ${INSTALL_PG:-false}
     image: yolo-data:latest
     container_name: yolo-data
     ports:
