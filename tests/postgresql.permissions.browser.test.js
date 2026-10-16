@@ -62,7 +62,8 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
     await setup.query(`CREATE SCHEMA "${schema}"`);
     await setup.query(`CREATE TABLE "${schema}".sales(day date, region text, amount numeric(12,2))`);
     await setup.query(`INSERT INTO "${schema}".sales VALUES
-      ('2026-01-01','east',10),('2026-02-01','east',30),('2026-02-01','west',1000)`);
+      ('2026-01-01','east',4),('2026-01-15','east',6),
+      ('2026-02-01','east',30),('2026-02-01','west',1000)`);
     await withSkillServer(async ({ application, baseUrl, directory }) => {
       const artifacts = process.env.YOLO_PERMISSION_BROWSER_ARTIFACT_DIR ?? path.join(directory, 'screenshots');
       fs.mkdirSync(artifacts, { recursive: true });
@@ -189,7 +190,8 @@ test('live PostgreSQL browser: admin setup, analyst chart and same-session permi
         const successful = await ask(QUESTION);
         assert.equal(successful.response.status(), 200);
         const answer = finalAnswer(successful.body);
-        assert.deepEqual(answer.data.rows.map(row => [row.day, Number(row.amount)]).sort(), [['2026-01', 10], ['2026-02', 30]]);
+        assert.deepEqual(answer.data.rows.map(row => [row.day, Number(row.amount)]).sort(), [['2026-01-01', 10], ['2026-02-01', 30]]);
+        assert.equal(answer.semanticParse.timeGrain, 'MONTH');
         assert.equal(answer.runtime.executionAdapter, 'postgresql-dataset');
         const chart = analyst.locator('.chat-chart-canvas').last();
         await expect(chart.locator('canvas')).toBeVisible();
