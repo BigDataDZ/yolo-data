@@ -73,6 +73,11 @@ jobs:
           YOLO_BROWSER_TEST: '1'
           YOLO_BROWSER_ARTIFACT_DIR: artifacts/postgresql-browser
         run: node --test tests/postgresql.browser.test.js
+      - name: Browser cross-role permission acceptance
+        env:
+          YOLO_PERMISSION_BROWSER_TEST: '1'
+          YOLO_PERMISSION_BROWSER_ARTIFACT_DIR: artifacts/permission-browser
+        run: node --test tests/postgresql.permissions.browser.test.js
       - name: Browser Skill catalog acceptance
         env:
           YOLO_SKILL_BROWSER_TEST: '1'
@@ -89,4 +94,10 @@ jobs:
         with:
           name: skill-browser
           path: artifacts/skill-browser
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: permission-browser
+          path: artifacts/permission-browser
           if-no-files-found: ignore
