@@ -27,14 +27,14 @@ function testConfig() {
   };
 }
 
-function createBusinessDataset(application, user, { attachToTheme = true } = {}) {
+function createBusinessDataset(application, user, { attachToTheme = true, dbType = 'DORIS' } = {}) {
   const crypto = new DatasourceCrypto({
     keyFilePath: path.join(path.dirname(application.config.dbPath), '.key'),
   });
   const source = application.database.saveDataSource({
     code: 'test_doris',
     name: '测试 Doris',
-    dbType: 'DORIS',
+    dbType,
     host: 'localhost',
     port: 9030,
     databaseName: 'dev',
@@ -365,11 +365,12 @@ test('agent rejects indicator execution when the theme has a business dataset', 
   ).businessDatasetIds[0]);
 });
 
-test('agent routes business questions to the authorized dataset executor', async () => {
+for (const dbType of ['DORIS', 'MYSQL', 'TIDB', 'POSTGRESQL']) {
+test(`agent routes and labels the authorized ${dbType} dataset executor`, async () => {
   const application = await createApplication(testConfig(), new FakeIndicatorClient());
   await application.init();
   const user = application.database.getUserByUsername('east_manager');
-  const dataset = createBusinessDataset(application, user);
+  const dataset = createBusinessDataset(application, user, { dbType });
   application.businessDatasets.executeQuery = async ({ request }) => ({
     columns: [
       { name: 'performance_region_name', bizName: 'performance_region_name', showType: 'CATEGORY' },
@@ -383,13 +384,25 @@ test('agent routes business questions to the authorized dataset executor', async
     filters: request.filters,
     latencyMs: 12,
   });
+  const events = [];
   const answer = await application.agent.answer({
     userId: user.id,
     themeId: application.database.listThemes().find((item) => item.name === '经营总览').id,
     question: '最近30天各大区销售额明细',
+    onEvent: (event) => events.push(event),
   });
   assert.equal(answer.dataset.code, 'sales_performance');
-  assert.equal(answer.semanticParse.execution.adapter, 'doris-dataset');
+  const adapter = `${dbType.toLowerCase()}-dataset`;
+  assert.equal(answer.semanticParse.execution.adapter, adapter);
+  assert.equal(answer.runtime.executionAdapter, adapter);
+  assert.equal(events.find((event) => event.type === 'execution_selected').source.mode, adapter);
+  const executionStage = answer.workflow.stages.find((stage) => stage.code === 'EXECUTE');
+  assert.ok(executionStage.evidence.some((item) => item.adapter === adapter));
+  const artifact = application.workspace.getArtifact({
+    artifactId: answer.executionResults[0].artifactId, userId: user.id,
+  });
+  assert.equal(artifact.metadata.source.adapter, adapter);
+  assert.equal(application.database.getQueryPlan(answer.semanticParse.planId, user.id).evidence.execution.adapter, adapter);
   assert.equal(answer.workflow.status, 'COMPLETED');
   assert.deepEqual(
     answer.workflow.stages
@@ -402,7 +415,36 @@ test('agent routes business questions to the authorized dataset executor', async
     answer.semanticParse.filters[0].value,
     ['华东大区'],
   );
+  application.database.saveBusinessDataset({ ...dataset, status: 0 }, dataset.id);
+  const restyled = await application.agent.answer({
+    userId: user.id, sessionId: answer.sessionId, question: '换成柱状图展示',
+  });
+  assert.equal(restyled.executionResults[0].kind, 'chart_restyle');
+  assert.equal(restyled.executionResults[0].artifactId, artifact.id);
+  assert.equal(restyled.semanticParse.execution.adapter, adapter);
+  assert.equal(restyled.runtime.executionAdapter, adapter);
+  application.database.saveBusinessDataset({ ...dataset, status: 1 }, dataset.id);
+  const source = application.database.getDataSource(dataset.datasourceId);
+  application.database.saveDataSource({ ...source, dbType: dbType === 'DORIS' ? 'MYSQL' : 'DORIS' }, source.id);
+  const afterSourceEdit = await application.agent.answer({
+    userId: user.id, sessionId: answer.sessionId, question: '换成折线图展示',
+  });
+  assert.equal(afterSourceEdit.executionResults[0].artifactId, artifact.id);
+  assert.equal(afterSourceEdit.runtime.executionAdapter, adapter);
+  assert.equal(afterSourceEdit.dataset.id, answer.dataset.id);
+  application.database.saveDataSource(source, source.id);
+  application.businessDatasets.executeQuery = async () => { throw new Error('execution label fixture failure'); };
+  const failures = [];
+  const recordGap = application.growth.record.bind(application.growth);
+  application.growth.record = (gap) => { failures.push(gap); return recordGap(gap); };
+  await application.agent.answer({
+    userId: user.id, themeId: answer.theme.id, question: '最近60天各大区销售额明细',
+  }).catch((error) => assert.match(error.message, /execution label fixture failure/));
+  assert.ok(failures.some((gap) => gap.kind === 'DATASET_EXECUTION' && gap.source === `${dbType}_DATASET`));
+  await application.businessDatasets.close();
+  application.database.close();
 });
+}
 
 test('agent does not execute a guessed aggregate when the model only clarifies', async () => {
   const application = await createApplication(testConfig(), new FakeIndicatorClient());

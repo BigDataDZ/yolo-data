@@ -10,33 +10,37 @@ export function skillDocument(name = 'acceptance-method', description = '验收�
   return `---\nname: ${name}\ndescription: ${description}\nphases: [PLAN]\n---\n\n## Workflow\n按受控查询结果进行分析。`;
 }
 
-export async function withSkillServer(run) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-skill-acceptance-'));
-  const { server, application } = await startServer({
-    ...loadConfig({}), port: 0, authMode: 'session',
-    dbPath: path.join(directory, 'test.db'), datasourceSecretKeyPath: path.join(directory, '.key'),
-    codeExecutionRoot: path.join(directory, 'code-runs'), userMemory: { maintenanceIntervalMs: 0 }, skillDirectories: [],
-  });
-  const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  for (const username of ['admin', 'east_manager']) {
-    setUserPassword(application.database, application.database.getUserByUsername(username).id, TEST_PASSWORD);
-  }
-  const request = async (route, { cookie, method = 'GET', body, headers = {} } = {}) => {
-    const response = await fetch(`${baseUrl}${route}`, { method,
-      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...headers },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    return { response, data: await response.json() };
-  };
-  const login = async (username) => {
-    const { response } = await request('/api/auth/login', { method: 'POST', body: { username, password: TEST_PASSWORD } });
-    if (response.status !== 200) throw new Error(`test login failed: ${response.status}`);
-    return response.headers.get('set-cookie').split(';')[0];
-  };
-  try { return await run({ application, baseUrl, directory, request, login }); }
-  finally {
-    application.memoryMaintenance.stop();
-    await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+export async function withSkillServer(run, { directory: suppliedDirectory, initialize } = {}) {
+  const directory = suppliedDirectory ?? fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-skill-acceptance-'));
+  let server, application;
+  try {
+    ({ server, application } = await startServer({
+      ...loadConfig({}), port: 0, authMode: 'session',
+      dbPath: path.join(directory, 'test.db'), datasourceSecretKeyPath: path.join(directory, '.key'),
+      codeExecutionRoot: path.join(directory, 'code-runs'), userMemory: { maintenanceIntervalMs: 0 }, skillDirectories: [],
+    }));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    await initialize?.({ server, application, baseUrl, directory });
+    for (const username of ['admin', 'east_manager']) {
+      setUserPassword(application.database, application.database.getUserByUsername(username).id, TEST_PASSWORD);
+    }
+    const request = async (route, { cookie, method = 'GET', body, headers = {} } = {}) => {
+      const response = await fetch(`${baseUrl}${route}`, { method,
+        headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}), ...headers },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      return { response, data: await response.json() };
+    };
+    const login = async (username) => {
+      const { response } = await request('/api/auth/login', { method: 'POST', body: { username, password: TEST_PASSWORD } });
+      if (response.status !== 200) throw new Error(`test login failed: ${response.status}`);
+      return response.headers.get('set-cookie').split(';')[0];
+    };
+    return await run({ application, baseUrl, directory, request, login });
+  } finally {
+    application?.memoryMaintenance.stop();
+    await application?.businessDatasets.close();
+    if (server) await new Promise((resolve) => server.close(resolve));
+    application?.database.close();
   }
 }

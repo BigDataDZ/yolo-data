@@ -65,7 +65,7 @@ jobs:
       - name: Configure disposable PostgreSQL TLS certificates
         run: bash scripts/setup-postgresql-test-tls.sh '${{ job.services.postgres.id }}'
       - name: Live PostgreSQL integration
-        run: node --test tests/postgresql.integration.test.js tests/postgresql.boundaries.test.js
+        run: node --test tests/postgresql.integration.test.js tests/postgresql.boundaries.test.js tests/postgresql.query.http.test.js
       - name: Install browser for end-to-end acceptance
         run: npx playwright install --with-deps chromium
       - name: Browser datasource acceptance

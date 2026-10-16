@@ -130,3 +130,4 @@ test('an in-flight test remains valid when only the datasource name changes', as
   assert.equal(result.name, 'New name');
   assert.equal(result.lastTestOk, true);
 });
+

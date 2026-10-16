@@ -695,9 +695,9 @@ function formatSourceMode(mode) {
   if (mode === 'unconfigured-indicator') {
     return '指标平台未配置';
   }
-  if (mode === 'doris-dataset') {
-    return 'Doris 业务数据集';
-  }
+  const datasetLabel = { __proto__: null, 'doris-dataset': 'Doris', 'mysql-dataset': 'MySQL', 'tidb-dataset': 'TiDB', 'postgresql-dataset': 'PostgreSQL' }[mode];
+  if (datasetLabel) return `${datasetLabel} 业务数据集`;
+
   return mode ? String(mode) : '指标源待确认';
 }
 
