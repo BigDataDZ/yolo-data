@@ -107,9 +107,10 @@ flowchart LR
 
 ## 环境要求
 
-- Node.js `>= 22.5`
+- Node.js `>= 22.5`（平台库使用 Node 内置 `node:sqlite`，无需安装数据库服务）
 - npm 或 pnpm
 - 可选：Python 3，用于高级数据处理和文件生成（`.xlsx` 生成需要该解释器装有 `pandas` + `openpyxl`）
+- 或：Docker + Docker Compose，一条命令启动完整平台，无需本机 Node/Python（见 [Docker 一键部署](#docker-一键部署)）
 - 可选外部服务：
   - 指标平台
   - Doris 或 MySQL 兼容业务数据库
@@ -123,17 +124,16 @@ flowchart LR
 # 克隆仓库
 git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
+docker compose up -d
+```
+docker run` 启动（不用 compose）：
 
-# 校验 Node 版本、安装依赖（含 MySQL 驱动 mysql2）、从 .env.example 生成 .env
-npm run setup
-
-# 按需编辑 .env（模型密钥、指标平台、Doris 连接）
-# 启动开发服务
-npm run dev
+```bash
+docker build -t yolo-data .
+docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
 ```
 
-
-手动初始化（等价于 `npm run setup`）：
+本地手动初始化：
 
 ```bash
 npm install mysql2
@@ -141,7 +141,6 @@ npm install            # 安装依赖（含 mysql2）
 cp .env.example .env   # 生成配置；按需填写模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
 ```
-
 
 打开：
 
@@ -154,7 +153,6 @@ http://localhost:8088/
 | `east_manager`    | 区域经理  | `ANALYST` | `yolo123456` |
 | `channel_analyst` | 渠道分析员 | `ANALYST` | `yolo123456` |
 
-首次登录后可在右上角账号菜单修改密码。生产环境请务必修改默认口令，或用 `DEFAULT_USER_PASSWORD` 覆盖。
 
 ### 登录与会话
 

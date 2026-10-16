@@ -1,0 +1,15 @@
+# 构建上下文里排除：版本历史、依赖、本地运行时状态与临时产物。
+# 注意 data/ 必须排除——本地 platform.db 含真实业务数据，不能打进镜像。
+.git
+.github
+node_modules
+data
+test-results
+coverage
+artifacts
+eval/report.json
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
