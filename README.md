@@ -75,7 +75,7 @@ YOLO Data 面向企业，将多年沉淀的数据分析经验与大模型能力�
   - 通过 Streamable HTTP `/mcp` 暴露 `list_metrics`、`get_policy`、`get_snapshot`、`resolve_query`、`execute_query` 五个工具。
   - 查询必须先解析契约再执行；详见 [MCP 连接器](mcp-connector/README.md)。
 - **生产化加固**
-  - 支持提示注入清洗、每日 Token 预算、OIDC/JWT 登录，以及 Docker/Podman + seccomp 代码执行隔离。
+  - 支持提示注入清洗、每日 Token 预算、会话登录，以及 Docker/Podman + seccomp 代码执行隔离。
   - 默认 `inprocess` 仅适合可信环境；多租户部署应配置 `SANDBOX_BACKEND=container` 或 `podman`。
 
 ## 业务规则与提示词设置
@@ -238,13 +238,13 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 - 关键操作写入审计日志。
 - 上传文件进入模型上下文前默认执行提示注入清洗。
 - 可设置每日 Token 上限。
-- 生产环境可使用 `AUTH_MODE=oidc` 接入 OIDC/JWT。
+- 当前应用支持 `AUTH_MODE=dev` / `session`；对外部署使用 `session`。OIDC/JWT 模块尚未接入应用鉴权流程，`AUTH_MODE=oidc` 会阻止启动。
 
 ## 生产化注意事项
 
-- `docker compose up -d` 默认是开发体验配置（`AUTH_MODE=dev`）。对外部署必须改为 `AUTH_MODE=session` 或 `oidc`、修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
+- `docker compose up -d` 默认是开发体验配置（`AUTH_MODE=dev`）。对外部署必须改为 `AUTH_MODE=session`、修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
 - 代码执行默认 `SANDBOX_BACKEND=inprocess`，这不是安全边界。不可信用户场景应配置 Docker/Podman 容器、seccomp、无网络和只读根文件系统。
-- SQLite 为单节点存储，多实例部署前应迁移到外部数据库，并配置 Redis 分布式锁。
+- 平台状态当前使用 SQLite，应按单实例部署。`DATABASE_BACKEND` 和 `REDIS_URL` 尚未接入应用启动流程，设置它们不会切换平台存储或启用分布式会话锁；多实例部署仍需完成外部平台库和锁的集成。PostgreSQL 业务数据源支持不代表平台状态可存入 PostgreSQL。
 - `REFLECTION_ENABLED` 与 `REFLECTION_MAX_REPLAN` 控制执行后反思；`npm run eval` 或 `/api/eval` 可查看 L1/L2/L3 回归评测。
 
 ## 相关文档

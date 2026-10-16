@@ -72,7 +72,7 @@ Enterprise analytics requires more than sending database schemas to an LLM. The 
   - Exposes `list_metrics`, `get_policy`, `get_snapshot`, `resolve_query`, and `execute_query` over Streamable HTTP at `/mcp`.
   - Queries must resolve a contract before execution. See the [MCP connector](mcp-connector/README.md).
 - **Production hardening**
-  - Prompt-injection sanitization, daily token budgets, OIDC/JWT authentication, and Docker/Podman plus seccomp execution isolation.
+  - Prompt-injection sanitization, daily token budgets, session authentication, and Docker/Podman plus seccomp execution isolation.
   - The default `inprocess` backend is suitable only for trusted environments. Multi-tenant deployments should use `SANDBOX_BACKEND=container` or `podman`.
 
 ## Business Rules and Prompts
@@ -203,13 +203,13 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 - Critical operations are written to the audit log.
 - Uploaded content is sanitized for prompt injection before entering model context.
 - Daily token limits can be configured.
-- Production deployments can use `AUTH_MODE=oidc` with OIDC/JWT.
+- The application supports `AUTH_MODE=dev` / `session`; use `session` for external deployments. The OIDC/JWT module is not integrated into application authentication, and `AUTH_MODE=oidc` prevents startup.
 
 ## Production Notes
 
-- `docker compose up -d` defaults to the development-oriented `AUTH_MODE=dev`. External deployments must use `AUTH_MODE=session` or `oidc`, change the default password, and run behind an HTTPS reverse proxy. Direct HTTP access with `NODE_ENV=production` will fail login because Secure cookies are required.
+- `docker compose up -d` defaults to the development-oriented `AUTH_MODE=dev`. External deployments must use `AUTH_MODE=session`, change the default password, and run behind an HTTPS reverse proxy. Direct HTTP access with `NODE_ENV=production` will fail login because Secure cookies are required.
 - `SANDBOX_BACKEND=inprocess` is not a security boundary. Untrusted environments should use Docker or Podman with seccomp, no network, and a read-only root filesystem.
-- SQLite is intended for a single node. Multi-instance deployments should migrate to an external database and configure a Redis distributed lock.
+- Platform state currently uses SQLite; deploy a single instance. `DATABASE_BACKEND` and `REDIS_URL` are not wired into application startup, so setting them does not switch platform storage or enable distributed session locks. Multiple instances still require integration of an external platform database and locking. PostgreSQL business-data sources do not provide PostgreSQL storage for platform state.
 - `REFLECTION_ENABLED` and `REFLECTION_MAX_REPLAN` control answer reflection. Run `npm run eval` or use `/api/eval` for L1/L2/L3 regression evaluation.
 
 ## Documentation
