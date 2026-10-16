@@ -1,4 +1,5 @@
 import { loadConfig } from './config.js';
+import { resolveAuthMode } from './auth.js';
 import path from 'node:path';
 import { PlatformDatabase } from './database.js';
 import { LocalIndicatorRepository } from './localIndicatorRepository.js';
@@ -31,10 +32,8 @@ import { describeIndicatorSource } from './indicatorSource.js';
 import { assertGateCoverage } from './gateRegistry.js';
 import { STAGE_DEFINITIONS } from './workflow.js';
 
-export async function createApplication(
-  config = loadConfig(),
-  indicatorClientOverride = null,
-) {
+export async function createApplication(config = loadConfig(), indicatorClientOverride = null) {
+  resolveAuthMode(config);
   const database = new PlatformDatabase(config.dbPath);
   database.localIndicators = new LocalIndicatorRepository(database.db);
   // 业务词表以平台设置为准，首次启动时用仓库配置初始化成可维护的设置项。

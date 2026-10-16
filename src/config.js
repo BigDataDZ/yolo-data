@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveAuthMode } from './auth.js';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -34,10 +35,7 @@ export function loadConfig(env = process.env) {
     Object.assign(process.env, existing);
   }
   const nodeEnv = String(env.NODE_ENV ?? '').trim().toLowerCase();
-  const explicitAuthMode = String(env.AUTH_MODE ?? '').trim().toLowerCase();
-  const authMode = explicitAuthMode === 'dev' || explicitAuthMode === 'session'
-    ? explicitAuthMode
-    : (nodeEnv === 'production' ? 'session' : 'dev');
+  const authMode = resolveAuthMode({ authMode: env.AUTH_MODE ?? '', nodeEnv });
   const dbPath = String(env.PLATFORM_DB_PATH ?? './data/platform.db').trim();
   const skillDirectories = parsePathList(
     env.AGENT_SKILL_DIRECTORIES,
