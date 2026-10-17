@@ -6,10 +6,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkBusinessVocabulary } from './businessVocabularyRules.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = path.join(projectRoot, 'config', 'size-baseline.json');
-
 const SCAN_ROOTS = ['src', 'public/js', 'scripts'];
 const SIZE_WARN = 800;
 const SIZE_NEW_LIMIT = 800;
@@ -129,7 +129,7 @@ export function runChecks() {
   const files = SCAN_ROOTS.flatMap(listFiles).sort();
   const baseline = readBaseline();
   const size = checkSize(files, baseline);
-  const patterns = checkPatterns(files);
+  const patterns = [...checkPatterns(files), ...checkBusinessVocabulary(projectRoot, files)];
   return {
     files,
     baseline,

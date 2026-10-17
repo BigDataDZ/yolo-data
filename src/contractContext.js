@@ -1,23 +1,22 @@
 import { isClarificationText } from './queryIntent.js';
+import { serializeTaskBindingText } from './turnContext.js';
 
 export function buildContractSourceContext({
-  inheritQueryContext = false,
-  history = [],
+  taskState = null,
+  inheritedSlots = null,
   resolvedQuestion = '',
   clarificationText = '',
 } = {}) {
-  if (!inheritQueryContext) {
-    return [
-      String(resolvedQuestion ?? '').trim(),
-      String(clarificationText ?? '').trim(),
-    ].filter(Boolean).join('\n');
-  }
+  const structuredTask = taskState ?? (
+    inheritedSlots && Object.keys(inheritedSlots).length > 0
+      ? { inheritedSlots }
+      : null
+  );
+  const taskContext = structuredTask
+    ? serializeTaskBindingText(structuredTask)
+    : String(resolvedQuestion ?? '').trim();
   return [
-    ...(history ?? [])
-      .filter((message) => message?.role === 'user')
-      .slice(-4)
-      .map((message) => String(message.content ?? '').trim()),
-    String(resolvedQuestion ?? '').trim(),
+    taskContext,
     String(clarificationText ?? '').trim(),
   ].filter(Boolean).join('\n');
 }

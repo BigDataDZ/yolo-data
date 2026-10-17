@@ -245,9 +245,8 @@ export function buildResultAnalysisText(facts, {
 } = {}) {
   const lines = [];
   if (facts.rowCount === 0) {
-    return '**结果分析**\n当前条件下没有查到符合条件的数据，暂时无法形成趋势或排名判断。';
+    return '按当前条件没有查到数据。';
   }
-  lines.push(`从返回结果看，本次共覆盖 ${facts.rowCount} 行数据，下面是最值得关注的变化。`);
   for (const total of facts.metricTotals ?? []) {
       lines.push(`${total.name}合计 ${formatValue(total.total, total.presentation)}`);
   }
@@ -268,7 +267,7 @@ export function buildResultAnalysisText(facts, {
       .map((row) => `${row.label} ${formatValue(row.value, item.presentation)}`)
       .join('、');
     if (topText) {
-      lines.push(`${item.name} TOP${Math.min(topLimit, item.top.length)}：${topText}（排名靠前的对象）`);
+      lines.push(`${item.name}里，${topText}排在前列`);
     }
   }
   for (const trend of facts.trends ?? []) {
@@ -280,9 +279,9 @@ export function buildResultAnalysisText(facts, {
     const rateText = trend.changeRate === null
       ? ''
       : `，变化率 ${(trend.changeRate * 100).toFixed(2)}%`;
-      lines.push(`${trend.metric}趋势：从 ${trend.firstLabel} 的 ${
+      lines.push(`${trend.metric}从 ${trend.firstLabel} 的 ${
       formatValue(trend.firstValue, trend.presentation)
-      } 变为 ${trend.lastLabel} 的 ${
+      } 变化到 ${trend.lastLabel} 的 ${
         formatValue(trend.lastValue, trend.presentation)
       }，整体呈${direction}${rateText}`);
   }
@@ -293,7 +292,7 @@ export function buildResultAnalysisText(facts, {
         .join('、')}`);
     }
   }
-  return `**结果分析**\n${lines.join('\n')}`;
+  return lines.join('\n');
 }
 
 export function buildResultAnalysisPrompt(facts) {

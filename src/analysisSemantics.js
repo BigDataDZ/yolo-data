@@ -24,7 +24,7 @@ export const ANALYSIS_CONDITION_CATEGORIES = [
     conditionKind: 'METRIC',
     owner: 'MODEL',
     autoComplete: false,
-    description: '业绩、销售额、毛利、数量等度量口径。',
+    description: '数值型度量；具体业务含义由主题语义包和指标绑定定义。',
   },
   {
     code: 'DIMENSION',
@@ -32,7 +32,7 @@ export const ANALYSIS_CONDITION_CATEGORIES = [
     conditionKind: 'DIMENSION',
     owner: 'MODEL',
     autoComplete: false,
-    description: '按业务类型、区域、行业、客户等字段分组或拆分。',
+    description: '按维度字段分组、拆分或对比；具体字段由主题和数据集定义。',
   },
   {
     code: 'FILTER',

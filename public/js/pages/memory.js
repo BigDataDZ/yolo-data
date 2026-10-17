@@ -168,7 +168,7 @@ function openNoteEditor() {
       <div class="form-grid">
         <div class="form-field span-2">
           <label for="memoryNoteContent">笔记内容</label>
-          <textarea class="field" id="memoryNoteContent" rows="4" maxlength="400" placeholder="例如：本部门默认按含税口径看销售额"></textarea>
+          <textarea class="field" id="memoryNoteContent" rows="4" maxlength="400" placeholder="例如：本部门默认按指定口径查看指标"></textarea>
           <small>4-400 字。只写可跨会话复用的业务知识、口径偏好或术语习惯，不写一次性问题。</small>
         </div>
         <div class="form-field">
@@ -627,7 +627,7 @@ async function renderMemoryPage(root) {
           <div class="form-grid">
             <div class="form-field span-2">
               <label for="memoryPreviewQuestion">模拟问题</label>
-              <input class="field" id="memoryPreviewQuestion" type="text" placeholder="例如：这个月各业态的含税销售额是多少？" />
+              <input class="field" id="memoryPreviewQuestion" type="text" placeholder="例如：这个月各分组的指标是多少？" />
             </div>
             <div class="form-field">
               <label for="memoryPreviewTheme">作用域</label>

@@ -35,7 +35,7 @@ const datasetFields = [
   },
 ];
 
-test('multi-turn slot answers are resolved with recent user context', () => {
+test('multi-turn slot answers are resolved through structured slots, not raw history', () => {
   const resolved = resolveConversationQuestion('本月', [
     { role: 'user', content: '各区域订单量对比' },
     { role: 'assistant', content: '请补充订单口径和时间范围' },
@@ -44,10 +44,11 @@ test('multi-turn slot answers are resolved with recent user context', () => {
     { role: 'user', content: '销售大区名称' },
   ]);
 
-  assert.match(resolved, /各区域订单量对比/);
-  assert.match(resolved, /按订单号进行数量统计/);
+  assert.match(resolved, /沿用任务条件/);
   assert.match(resolved, /销售大区名称/);
   assert.match(resolved, /本月/);
+  assert.doesNotMatch(resolved, /请补充订单口径/);
+  assert.doesNotMatch(resolved, /请确认区域字段/);
 });
 
 test('a self-contained short question does not inherit unrelated prior filters', () => {
@@ -198,6 +199,13 @@ test('artifact reuse policy blocks fresh queries for result follow-ups', () => {
   const context = { reason: 'result_operation' };
   const followUp = resolveArtifactReusePolicy('把上表按省区排序并导出 Excel', context, 2);
   assert.equal(followUp.reuseArtifactsOnly, true);
+
+  const resultReference = resolveArtifactReusePolicy(
+    '这个结果里各区域的占比是多少',
+    { reason: 'result_reference' },
+    2,
+  );
+  assert.equal(resultReference.reuseArtifactsOnly, true);
 
   const refresh = resolveArtifactReusePolicy('刷新一下最新数据并重新查询', context, 2);
   assert.equal(refresh.reuseArtifactsOnly, false);

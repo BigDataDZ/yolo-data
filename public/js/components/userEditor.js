@@ -21,11 +21,11 @@ function openUserEditor(user, options = {}) {
       <div class="form-grid">
         <div class="form-field">
           <label for="userUsername">用户名</label>
-          <input class="field mono" id="userUsername" value="${escapeAttr(user?.username ?? '')}"${editing ? ' disabled' : ''} placeholder="east_manager" />
+          <input class="field mono" id="userUsername" value="${escapeAttr(user?.username ?? '')}"${editing ? ' disabled' : ''} placeholder="analyst_user" />
         </div>
         <div class="form-field">
           <label for="userDisplayName">显示名称</label>
-          <input class="field" id="userDisplayName" value="${escapeAttr(user?.displayName ?? '')}" placeholder="华东区域经理" />
+          <input class="field" id="userDisplayName" value="${escapeAttr(user?.displayName ?? '')}" placeholder="示例用户" />
         </div>
         <div class="form-field">
           <label for="userRole">角色</label>

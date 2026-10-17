@@ -534,7 +534,7 @@ test('agent executes indicator queries only through a compiled query contract', 
   );
 });
 
-test('independent questions keep session history without inheriting query context', async () => {
+test('execution messages use the structured contract instead of raw session history', async () => {
   const application = await createApplication(testConfig(), new FakeIndicatorClient());
   await application.init();
   const user = application.database.getUserByUsername('east_manager');
@@ -575,10 +575,14 @@ test('independent questions keep session history without inheriting query contex
   assert.equal(independent.contextMode, 'INDEPENDENT');
   assert.equal(independent.inheritQueryContext, false);
   assert.equal(independent.resolvedQuestion, '查询销售数量');
+  assert.ok(independent.taskState?.taskId);
   const secondMessages = capturedMessages.at(-1);
   assert.ok(secondMessages.some(
-    (message) => message.role === 'user' && message.content === '查询本月含税销售金额',
+    (message) => message.role === 'system' && /本轮执行契约/.test(message.content),
   ));
+  assert.equal(secondMessages.some(
+    (message) => message.role === 'user' && message.content === '查询本月含税销售金额',
+  ), false);
   assert.equal(secondMessages.at(-1).content, '查询销售数量');
 });
 

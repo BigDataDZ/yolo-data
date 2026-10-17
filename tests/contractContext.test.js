@@ -14,18 +14,17 @@ test('independent questions do not leak previous time conditions into contract b
   const question = '今年重点客户组每个月的业绩趋势';
   const context = resolveConversationContext(question, history);
   const sourceContext = buildContractSourceContext({
-    inheritQueryContext: context.inheritQueryContext,
-    history,
+    taskState: context.taskState,
     resolvedQuestion: context.question,
   });
 
   assert.equal(context.mode, 'INDEPENDENT');
   assert.equal(context.inheritQueryContext, false);
-  assert.equal(sourceContext, question);
+  assert.ok(sourceContext.startsWith(question));
   assert.equal(sourceContext.includes('本月'), false);
 });
 
-test('follow-up questions keep the inherited binding context', () => {
+test('follow-up questions bind only structured inherited slots', () => {
   const history = [
     { role: 'user', content: '本月重点客户组的业绩是多少' },
     { role: 'assistant', content: '本月重点客户组含税销售额为 10,358.83 万元。' },
@@ -33,15 +32,16 @@ test('follow-up questions keep the inherited binding context', () => {
   const question = '那按周拆开呢';
   const context = resolveConversationContext(question, history);
   const sourceContext = buildContractSourceContext({
-    inheritQueryContext: context.inheritQueryContext,
-    history,
+    taskState: context.taskState,
     resolvedQuestion: context.question,
   });
 
   assert.equal(context.mode, 'FOLLOW_UP');
   assert.equal(context.inheritQueryContext, true);
-  assert.match(sourceContext, /本月重点客户组的业绩是多少/);
   assert.match(sourceContext, /那按周拆开呢/);
+  assert.match(sourceContext, /本月/);
+  assert.doesNotMatch(sourceContext, /本月重点客户组的业绩是多少/);
+  assert.equal(context.taskState.inheritedSlots.time[0].sourceText, '本月');
 });
 
 test('confirmed clarification values are included in contract traceability context', () => {

@@ -12,6 +12,13 @@ import {
   workspaceArtifactFileMeta,
 } from '../components/workspaceArtifacts.js';
 import { renderChatOpening } from '../components/chatOpening.js';
+import {
+  applyChatStreamEvent,
+  createChatStreamState,
+  liveElapsedMs,
+} from '../components/chatStreamState.js';
+import { renderLiveExecution as renderLiveExecutionView } from '../components/liveExecution.js';
+import { renderContextDecision } from '../components/contextDecision.js';
 
 const {
   ICONS,
@@ -170,7 +177,7 @@ async function renderQueryPage(root) {
     startWelcomePlaceholderRotation();
   } else {
     stopWelcomePlaceholderRotation();
-    input.placeholder = '继续追问，例如：那按渠道拆开呢';
+    input.placeholder = '继续追问，例如：那按另一个维度拆开呢';
   }
   renderSidebarSessions();
   bindExampleQuestions();
@@ -216,7 +223,7 @@ function openingCards() {
 
 function composerPlaceholder() {
   if (state.chatMessages.length > 0) {
-    return '继续追问，例如：那按渠道拆开呢';
+    return '继续追问，例如：那按另一个维度拆开呢';
   }
   return openingCards()[0]?.question ?? '输入你的问题，回车发送';
 }
@@ -658,29 +665,7 @@ function bindQuestionAxis() {
 }
 
 function renderLiveExecution() {
-  const stream = state.chatStream ?? {};
-  const workflow = stream.workflow;
-  const activeStage = workflow?.stages?.find((stage) => stage.status === 'RUNNING')
-    ?? [...(workflow?.stages ?? [])].reverse().find((stage) => stage.summary);
-  const warnings = stream.warnings ?? [];
-  const modelText = formatModelName(stream.runtime);
-  const sourceText = formatSourceMode(stream.source?.mode);
-  return `
-    <div class="live-execution-head">
-      <span class="spinner"></span>
-      <div>
-        <strong>${escapeHtml(activeStage?.summary || activeStage?.name || '正在启动DataAgent工作流')}</strong>
-        <small>${escapeHtml(modelText)} · Data Agent · ${escapeHtml(sourceText)} · ${workflow?.progress?.completed ?? 0}/${workflow?.progress?.total ?? 8} 步</small>
-      </div>
-    </div>
-    ${warnings.map((warning) => `
-      <div class="live-warning">${escapeHtml(warning.message)}</div>
-    `).join('')}
-    ${renderExecutionDetails({
-      workflow,
-      processSteps: stream.processSteps ?? [],
-    })}
-  `;
+  return renderLiveExecutionView(state.chatStream ?? {}, { renderExecutionDetails });
 }
 
 // 提问气泡里显式回显本轮引用的本地文件，避免"上传了但看不出有没有带上"。
@@ -777,6 +762,7 @@ function renderAssistantContent(message) {
       ${result.indicator?.name ? `<span class="meta-pill">${escapeHtml(result.indicator.name)}</span>` : ''}
       ${result.dataset?.name ? `<span class="meta-pill">${escapeHtml(result.dataset.name)}</span>` : ''}
     </div>
+    ${renderContextDecision(result.contextDecision, { messageId: message.id })}
     ${kpis ? `<div class="kpi-grid chat-kpis">${kpis}</div>` : ''}
     ${renderClarificationOptions(result).replaceAll('__MESSAGE_ID__', escapeAttr(message.id))}
     ${chart.type !== 'table' && chart.type !== 'kpi' ? `
@@ -1198,6 +1184,19 @@ function bindChatActions() {
       );
     });
   });
+  document.querySelectorAll('[data-force-new-question]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const message = state.chatMessages.find(
+        (item) => String(item.id) === String(button.dataset.forceNewQuestion),
+      );
+      const question = message?.result?.question
+        ?? message?.result?.contextDecision?.originalQuestion
+        ?? message?.content;
+      if (question) {
+        runQuestion({ questionOverride: question, forceNewTask: true });
+      }
+    });
+  });
 }
 
 async function submitClarificationOption(messageId, optionId) {
@@ -1409,9 +1408,11 @@ function stopQuestion() {
 async function runQuestion({
   clarificationOptionId = '',
   displayQuestion = '',
+  questionOverride = '',
+  forceNewTask = false,
 } = {}) {
   const input = document.getElementById('questionInput');
-  const question = input?.value.trim();
+  const question = String(questionOverride ?? '').trim() || input?.value.trim();
   if (!question || state.chatLoading) {
     if (!question) {
       toast('请输入业务问题', 'error');
@@ -1420,7 +1421,7 @@ async function runQuestion({
   }
   stopWelcomePlaceholderRotation();
   if (input) {
-    input.placeholder = '继续追问，例如：那按渠道拆开呢';
+    input.placeholder = '继续追问，例如：那按另一个维度拆开呢';
   }
   const button = document.getElementById('runQueryBtn');
   const stopButton = document.getElementById('stopQueryBtn');
@@ -1444,14 +1445,8 @@ async function runQuestion({
       createdAt: new Date().toISOString(),
     });
     state.chatLoading = true;
-    state.chatStream = {
-      workflow: null,
-      processSteps: [],
-      warnings: [],
-      runtime: null,
-      source: null,
-      lastEvent: null,
-    };
+    state.chatStream = createChatStreamState();
+    startLiveClock();
     input.value = '';
     input.style.height = 'auto';
     // 附件已随本轮提问提交，清空待提交区；气泡里仍会显示本轮引用的文件。
@@ -1466,6 +1461,7 @@ async function runQuestion({
         question,
         preferredChart: 'auto',
         modelId: state.selectedModelId ?? null,
+        ...(forceNewTask ? { forceNewTask: true } : {}),
         ...(clarificationOptionId ? {
           clarificationOptionLabel: String(displayQuestion ?? '').trim(),
         } : {}),
@@ -1506,6 +1502,7 @@ async function runQuestion({
     });
     toast(error.message, 'error');
   } finally {
+    stopLiveClock();
     state.chatAbortController = null;
     if (stopButton) {
       stopButton.hidden = true;
@@ -1521,6 +1518,30 @@ async function runQuestion({
 }
 
 let liveUpdateTimer = null;
+let liveClockTimer = null;
+
+function startLiveClock() {
+  stopLiveClock();
+  liveClockTimer = setInterval(refreshLiveElapsed, 500);
+}
+
+function stopLiveClock() {
+  if (liveClockTimer) {
+    clearInterval(liveClockTimer);
+    liveClockTimer = null;
+  }
+}
+
+function refreshLiveElapsed() {
+  if (!state.chatLoading || !state.chatStream) {
+    stopLiveClock();
+    return;
+  }
+  const element = document.querySelector('[data-live-elapsed]');
+  if (element) {
+    element.textContent = formatDurationSeconds(liveElapsedMs(state.chatStream));
+  }
+}
 
 function scheduleLiveExecutionUpdate() {
   if (liveUpdateTimer) {
@@ -1557,44 +1578,8 @@ function isChatNearBottom() {
 }
 
 function handleChatStreamEvent(event) {
-  if (!state.chatStream) {
-    state.chatStream = {
-      workflow: null,
-      processSteps: [],
-      warnings: [],
-      runtime: null,
-      source: null,
-      lastEvent: null,
-    };
-  }
-  const stream = state.chatStream;
-  stream.lastEvent = event;
-  if (event.type === 'workflow_stage' || event.type === 'workflow_finished') {
-    stream.workflow = event.workflow ?? stream.workflow;
-  } else if (event.type === 'process_step') {
-    const index = stream.processSteps.findIndex((step) => step.id === event.step?.id);
-    if (index >= 0) {
-      stream.processSteps.splice(index, 1, event.step);
-    } else if (event.step) {
-      stream.processSteps.push(event.step);
-    }
-  } else if (event.type === 'runtime_selected') {
-    stream.runtime = event.runtime;
-    stream.source = event.source;
-  } else if (event.type === 'execution_selected') {
-    stream.source = event.source;
-    stream.execution = event.source;
-  } else if (event.type === 'warning') {
-    if (!stream.warnings.some((warning) => warning.code === event.code)) {
-      stream.warnings.push(event);
-    }
-  } else if (event.type === 'result') {
-    stream.workflow = event.workflow ?? stream.workflow;
-    stream.processSteps = event.processSteps ?? stream.processSteps;
-    stream.runtime = event.runtime ?? stream.runtime;
-  } else if (event.type === 'sql') {
-    stream.sql = event.sql;
-  } else if (event.type === 'workspace_updated') {
+  state.chatStream = applyChatStreamEvent(state.chatStream, event);
+  if (event.type === 'workspace_updated') {
     loadWorkspaceForSession().catch(() => {});
   }
   scheduleLiveExecutionUpdate();

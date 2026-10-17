@@ -298,6 +298,19 @@ test('P0-8 HTTP contract is unchanged: errors, static fallback, NDJSON stream', 
     assert.equal(events.at(-2).type, 'final');
     assert.ok(events.at(-2).answer);
     assert.ok(events.at(-1).messageId);
+    assert.ok(events.some((event) => (
+      event.type === 'assistant_progress' && event.status === 'running'
+    )));
+    const answerStartIndex = events.findIndex((event) => event.type === 'assistant_answer_start');
+    const answerDoneIndex = events.findIndex((event) => event.type === 'assistant_answer_done');
+    assert.ok(answerStartIndex >= 0);
+    assert.ok(answerDoneIndex > answerStartIndex);
+    assert.equal(
+      events.filter((event) => event.type === 'assistant_delta')
+        .map((event) => event.text)
+        .join(''),
+      events.at(-2).answer.message,
+    );
   });
 });
 

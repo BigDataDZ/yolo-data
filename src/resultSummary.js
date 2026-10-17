@@ -4,13 +4,13 @@ import {
   getPlatformLexicon,
   lexiconPattern,
 } from './businessLexicon.js';
+import { composeNaturalAnswer } from './naturalAnswer.js';
 
 const PERIOD_KEY = '__period';
 const MOVEMENT_TOP_LIMIT = 5;
 
 const DATE_DIMENSION_PATTERN =
   /(^|_)(date|time|day|week|month|quarter|year)($|_)|sdt|日期|时间|账期/i;
-const RANKING_PATTERN = /排名|排行|榜单|对比|top\s*\d*|前\s*\d+|最高|最大|最多/i;
 
 function normalizeValue(value) {
   if (Array.isArray(value)) {
@@ -383,13 +383,13 @@ function periodComparisonFindings(
         .sort((left, right) => left.delta - right.delta)
         .slice(0, 3);
       if (topGrowth.length > 0) {
-        detail.push(`增长最多的${dimensionLabel}主要是：${
+        detail.push(`${dimensionLabel}里增长最多的是${
           topGrowth.map((item) => (
             `${item.name}（+${formatColumnValue(item.delta, metricColumn)}）`
           )).join('、')
         }`);
         if (topDeclines.length > 0) {
-          detail.push(`${dimensionLabel}中有所回落的有：${
+          detail.push(`${dimensionLabel}中回落较多的是${
             topDeclines.map((item) => (
               `${item.name}（${formatColumnValue(item.delta, metricColumn)}）`
             )).join('、')
@@ -398,7 +398,7 @@ function periodComparisonFindings(
       } else {
         const largest = changes.slice(0, 3);
         if (largest.length > 0) {
-          detail.push(`当前没有${dimensionLabel}实现增长，变化靠前的为：${
+          detail.push(`${dimensionLabel}整体没有增长，变化靠前的是${
             largest.map((item) => (
               `${item.name}（${formatColumnValue(item.delta, metricColumn)}）`
             )).join('、')
@@ -439,11 +439,10 @@ function trendFinding(columns, rows, contract) {
   }
   const metricColumn = findColumn(columns, metricKey);
   const metricLabel = columnLabel(metricColumn) || metricKey;
-  const base = `${formatTemporalDisplay(rows[0]?.[dateKey], contract?.timeGrain)}：${
-    formatColumnValue(firstValue, metricColumn)}，${formatTemporalDisplay(
-    rows.at(-1)?.[dateKey],
-    contract?.timeGrain,
-  )}：${formatColumnValue(lastValue, metricColumn)}`;
+  const firstPeriod = formatTemporalDisplay(rows[0]?.[dateKey], contract?.timeGrain);
+  const lastPeriodText = formatTemporalDisplay(rows.at(-1)?.[dateKey], contract?.timeGrain);
+  const base = `从 ${firstPeriod} 的 ${formatColumnValue(firstValue, metricColumn)} 变化到 ${
+    lastPeriodText} 的 ${formatColumnValue(lastValue, metricColumn)}`;
   const lastPeriod = String(rows.at(-1)?.[dateKey] ?? '');
   const rangeEnd = String(contract?.dateInfo?.endDate ?? '');
   const incompletePeriod = String(contract?.timeGrain ?? '').toUpperCase() === 'MONTH'
@@ -452,11 +451,11 @@ function trendFinding(columns, rows, contract) {
     ? `（最后一个月截至 ${rangeEnd}，为未完整月）`
     : '';
   if (firstValue === 0) {
-    return `${metricLabel}从 ${base}${incompletePeriod}`;
+    return `${metricLabel}${base}${incompletePeriod}`;
   }
   const change = ((lastValue - firstValue) / Math.abs(firstValue)) * 100;
-  return `${metricLabel}从 ${base}，区间变化 ${change >= 0 ? '+' : ''}${
-    change.toFixed(1)}%${incompletePeriod}`;
+  return `${metricLabel}${base}，整体${change >= 0 ? '增长' : '下降'} ${Math.abs(change).toFixed(1)}%${
+    incompletePeriod}`;
 }
 
 // 可用于"变动拆分"的维度：排除期间列、日期列与数值列。
@@ -521,7 +520,7 @@ function movementFindings(columns, rows, contract, lexicon = null) {
   const ratePattern = lexiconPattern((lexicon ?? getPlatformLexicon()).rateTerms);
   const metricColumn = findColumn(columns, metricKey);
   const metricLabel = columnLabel(metricColumn) || metricKey;
-  // 比率型指标不可加，只讲变动、不讲占比，避免把毛利率当成可加量。
+  // 比率型指标不可加，只讲变动、不讲占比，避免把比率当成可加量。
   const isRate = ratePattern?.test(metricLabel) ?? false;
 
   return movementDimensions(columns, contract).flatMap((dimensionColumn) => {
@@ -562,28 +561,6 @@ function analysisFindings(analysis) {
   return text ? [text] : [];
 }
 
-function rankingFinding(question, columns, rows, contract) {
-  if (!RANKING_PATTERN.test(String(question ?? '')) || rows.length === 0) {
-    return '';
-  }
-  const metricKey = (contract?.metrics ?? []).find((key) => findColumn(columns, key));
-  if (!metricKey) {
-    return '';
-  }
-  const dimensionKey = (contract?.dimensions ?? [])
-    .map((key) => findColumn(columns, key))
-    .find((column) => column && !isNumericColumn(column) && !isDateColumn(column))
-    ?.bizName;
-  const metricColumn = findColumn(columns, metricKey);
-  const metricLabel = columnLabel(metricColumn) || metricKey;
-  if (!dimensionKey) {
-    return `最高/最低值为 ${formatColumnValue(rows[0]?.[metricKey], metricColumn)}`;
-  }
-  const dimensionLabel = columnLabel(findColumn(columns, dimensionKey)) || dimensionKey;
-  return `${dimensionLabel}首位为 ${formatNumber(rows[0]?.[dimensionKey])}，${
-    metricLabel} ${formatColumnValue(rows[0]?.[metricKey], metricColumn)}`;
-}
-
 export function buildDeterministicSummary({
   subjectName,
   columns = [],
@@ -599,37 +576,22 @@ export function buildDeterministicSummary({
 }) {
   const totals = metricTotals(columns, rows, contract, metricDefinitions, lexicon);
   const comparisons = periodComparisonFindings(columns, rows, contract, metricDefinitions);
-  const comparisonStatements = comparisons.map((item) => item.statement);
-  const conclusion = rows.length === 0
-    ? `在当前查询条件下未返回数据；平台没有自动调整时间范围、指标或维度。`
-    : comparisonStatements.length > 0
-      ? `${comparisonStatements.join('；')}。`
-      : `${totals.length > 0 ? `${totals.join('，')}。` : `本次查询返回 ${rows.length} 行数据。`}`;
   // 沙箱分析产物优先：有它就转述代码算出来的结论，平台不再自己拆一遍。
   const analysisLines = analysisFindings(analysis);
   const fallback = analysisLines.length > 0
     ? []
     : movementFindings(columns, rows, contract, lexicon);
-  const findings = [
-    comparisons.length === 0 ? rankingFinding(question, columns, rows, contract) : '',
-    trendFinding(columns, rows, contract),
-    ...comparisons.flatMap((item) => item.details),
-    ...analysisLines,
-    ...fallback,
-  ].filter(Boolean);
-
-  if (comparisons.length > 0) {
-    return [
-      `整体来看，本期结果相较对比期${comparisons.every((item) => item.delta >= 0) ? '表现更好' : '存在分化'}，下面列出具体变化。`,
-      conclusion,
-      ...(findings.length > 0 ? ['', findings.join('；') + '。'] : []),
-    ].join('\n');
-  }
-  return [
-    rows.length > 0 ? '整体来看，以下是这次查询最值得关注的结果。' : '',
-    conclusion,
-    ...(findings.length > 0 ? ['', '**关键结果**', ...findings.map((item) => `- ${item}`)] : []),
-  ].filter(Boolean).join('\n');
+  return composeNaturalAnswer({
+    question,
+    columns,
+    rows,
+    contract,
+    totals,
+    comparisons,
+    analysisLines,
+    movementLines: fallback,
+    trend: trendFinding(columns, rows, contract),
+  });
 }
 
 export function buildQueryScopeSummary({

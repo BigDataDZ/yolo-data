@@ -1,20 +1,9 @@
 import { normalizeBusinessTerm } from './indicatorSearch.js';
 import { getPlatformLexicon, resolveBusinessLexicon } from './businessLexicon.js';
+import { CLARIFICATION_PATTERN } from './conversationResolver.js';
 
-const CONTEXTUAL_QUESTION_PATTERN =
-  /^(那|再|换|按|这个|上述|它|还有|呢|以及|和|同上|本月|这个月|上月|上个月|本周|这周|上周|今天|今日|昨天|今年|去年|本季度|上季度|近\s*\d+|最近\s*\d+)|在.{0,12}基础上|这个表|上述表|上表|以上|保留上文|现有基础/;
-const EXPLICIT_REFERENCE_PATTERN =
-  /上表|上述表|这个表|该表|上一轮|刚才|前面|上述结果|基于以上|在此基础上|保留上文|现有基础/;
-const RESULT_OPERATION_PATTERN =
-  /加入一行|新增一行|增加一行|加入一列|新增一列|增加一列|按单独列|修改列名|调整格式|保留.*数据|转换成\s*Excel|导出\s*Excel|改成.*图|坐标轴|排序/;
-const CLARIFICATION_PATTERN =
-  /请补充|请确认|需要确认|请指定|请提供|还差|无法唯一确定|请明确|需要先明确|需要您|请选择|是否确认|需确认/;
-const METRIC_INTENT_PATTERN =
-  /多少|数量|金额|额度|数值|[额量率数值]|比例|占比|合计|总计|平均|最大|最小|排名|对比|同比|环比|趋势|走势/;
-const TIME_INTENT_PATTERN =
-  /本月|这个月|上月|上个月|本周|这周|上周|今天|今日|昨天|今年|去年|本季度|上季度|近\s*\d+|最近\s*\d+|\d{4}年/;
-const FILTER_INTENT_PATTERN =
-  /按|各|分|维度|分组|筛选|过滤|展示/;
+export { resolveConversationContext, resolveConversationQuestion } from './conversationResolver.js';
+
 const ATTRIBUTION_PATTERN =
   /具体原因|原因|为何|为什么|归因|驱动因素|影响因素|主因|上升还是下滑|上升或下滑|增长原因|下滑原因|下降原因|拉动因素|影响来源/;
 const ARTIFACT_REFRESH_PATTERN =
@@ -144,99 +133,17 @@ export function isClarificationText(value) {
   return CLARIFICATION_PATTERN.test(String(value ?? ''));
 }
 
-export function resolveConversationContext(question, history = []) {
-  const current = String(question ?? '').trim();
-  if (!current) {
-    return {
-      question: current,
-      mode: 'NEW_TOPIC',
-      reason: 'empty_question',
-      inheritedUserMessages: [],
-      inheritQueryContext: false,
-      historyMessageCount: history.length,
-    };
-  }
-  const previousUserMessages = (history ?? [])
-    .filter((message) => message?.role === 'user')
-    .map((message) => String(message.content ?? '').trim())
-    .filter(Boolean)
-    .slice(-3);
-  const lastAssistant = [...(history ?? [])]
-    .reverse()
-    .find((message) => message?.role === 'assistant');
-  const hasMetricIntent = METRIC_INTENT_PATTERN.test(current);
-  const hasTimeIntent = TIME_INTENT_PATTERN.test(current);
-  const hasFilterIntent = FILTER_INTENT_PATTERN.test(current);
-  const explicitReference = EXPLICIT_REFERENCE_PATTERN.test(current);
-  const resultOperation = RESULT_OPERATION_PATTERN.test(current);
-  const anaphoric = CONTEXTUAL_QUESTION_PATTERN.test(current)
-    && !(hasMetricIntent && (hasTimeIntent || hasFilterIntent));
-  const awaitingClarification = CLARIFICATION_PATTERN.test(
-    String(lastAssistant?.content ?? ''),
-  );
-  const slotAnswer = awaitingClarification
-    && !hasMetricIntent
-    && current.length <= 30;
-
-  if (previousUserMessages.length === 0) {
-    return {
-      question: current,
-      mode: 'NEW_TOPIC',
-      reason: 'first_turn',
-      inheritedUserMessages: [],
-      inheritQueryContext: false,
-      historyMessageCount: history.length,
-    };
-  }
-  if (resultOperation || explicitReference) {
-    return {
-      question: current,
-      mode: 'FOLLOW_UP',
-      reason: resultOperation ? 'result_operation' : 'explicit_reference',
-      inheritedUserMessages: previousUserMessages.slice(-3),
-      inheritQueryContext: true,
-      historyMessageCount: history.length,
-    };
-  }
-  if (slotAnswer) {
-    return {
-      question: [...previousUserMessages.slice(-3), current].join('；'),
-      mode: 'FOLLOW_UP',
-      reason: 'clarification_slot',
-      inheritedUserMessages: previousUserMessages.slice(-3),
-      inheritQueryContext: true,
-      historyMessageCount: history.length,
-    };
-  }
-  if (anaphoric) {
-    return {
-      question: [...previousUserMessages.slice(-1), current].join('；'),
-      mode: 'FOLLOW_UP',
-      reason: 'anaphoric_follow_up',
-      inheritedUserMessages: previousUserMessages.slice(-1),
-      inheritQueryContext: true,
-      historyMessageCount: history.length,
-    };
-  }
-  return {
-    question: current,
-    mode: 'INDEPENDENT',
-    reason: hasMetricIntent ? 'standalone_question' : 'independent_question',
-    inheritedUserMessages: [],
-    inheritQueryContext: false,
-    historyMessageCount: history.length,
-  };
-}
-
 export function resolveArtifactReusePolicy(
   question,
   context = {},
   artifactCount = 0,
 ) {
   const explicitRefresh = ARTIFACT_REFRESH_PATTERN.test(String(question ?? ''));
+  const followUpReason = ['result_operation', 'explicit_reference', 'result_reference']
+    .includes(context?.reason);
   const reuseArtifactsOnly = Number(artifactCount) > 0
     && !explicitRefresh
-    && ['result_operation', 'explicit_reference'].includes(context?.reason);
+    && followUpReason;
   return {
     reuseArtifactsOnly,
     controlledRequeryAllowed: reuseArtifactsOnly,
@@ -247,10 +154,6 @@ export function resolveArtifactReusePolicy(
         ? context.reason
         : 'fresh_query_allowed',
   };
-}
-
-export function resolveConversationQuestion(question, history = []) {
-  return resolveConversationContext(question, history).question;
 }
 
 function inferDatasetMetrics(question, fields) {

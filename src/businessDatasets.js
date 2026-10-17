@@ -816,8 +816,8 @@ export class BusinessDatasetService {
     const datasetDefinitions = [
       {
         code: 'sales_performance',
-        name: '销售经营分析',
-        description: '基于 BI 销售明细宽表的销售、成本、毛利和客户商品分析',
+        name: '明细数据集',
+        description: '按配置接入的明细数据表',
         table: config.salesTable,
         requireDateRange: true,
         autoLatestDateRange: true,
@@ -825,8 +825,8 @@ export class BusinessDatasetService {
       },
       {
         code: 'product_master',
-        name: '商品主数据',
-        description: '商品、品牌、分类、供应商和存储条件主数据',
+        name: '参考数据集',
+        description: '按配置接入的参考数据表',
         table: config.goodsTable,
         requireDateRange: false,
         autoLatestDateRange: false,

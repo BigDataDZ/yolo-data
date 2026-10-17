@@ -2,6 +2,7 @@ import { buildArtifactFileName, buildArtifactTitle } from './fileName.js';
 import { createXlsxBuffer } from './xlsx.js';
 import { buildArtifactCapabilities } from './artifactCapabilities.js';
 import { formatPresentationCell } from './resultPresentation.js';
+import { getPlatformLexicon, profileHintPattern } from './businessLexicon.js';
 
 function asNumber(value) {
   const number = Number(value);
@@ -17,9 +18,7 @@ function isNumericColumn(column) {
     || String(column?.type ?? '').toUpperCase() === 'DECIMAL';
 }
 
-function clonePayload(payload) {
-  return JSON.parse(JSON.stringify(payload ?? {}));
-}
+function clonePayload(payload) { return JSON.parse(JSON.stringify(payload ?? {})); }
 
 function addSummaryRow(payload, params = {}) {
   const columns = payload.data?.columns ?? [];
@@ -54,7 +53,7 @@ function addSummaryRow(payload, params = {}) {
       continue;
     }
     const label = String(column.name ?? '');
-    const isAverage = /率|占比|比例|单价|均价|均值/.test(label)
+    const isAverage = ['rate', 'average'].some((hint) => profileHintPattern(getPlatformLexicon(), hint)?.test(label))
       || String(params.averageColumns ?? '').split(',').includes(key);
     summary[key] = isAverage
       ? values.reduce((sum, value) => sum + value, 0) / values.length

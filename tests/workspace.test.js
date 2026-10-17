@@ -56,10 +56,11 @@ test('workspace persists result artifacts and transformation versions', () => {
         columns: [
           { name: '大区', bizName: 'region', showType: 'CATEGORY' },
           { name: '销售额', bizName: 'sale_amt', showType: 'NUMBER' },
+          { name: 'average_value', bizName: 'avg_value', showType: 'NUMBER' },
         ],
         rows: [
-          { region: '华东', sale_amt: 10 },
-          { region: '华南', sale_amt: 20 },
+          { region: '华东', sale_amt: 10, avg_value: 10 },
+          { region: '华南', sale_amt: 20, avg_value: 20 },
         ],
       },
       chart: { type: 'bar' },
@@ -88,6 +89,7 @@ test('workspace persists result artifacts and transformation versions', () => {
   assert.equal(derived.currentVersion, 1);
   assert.equal(derived.payload.data.rows[0].region, '汇总');
   assert.equal(derived.payload.data.rows[0].sale_amt, 30);
+  assert.equal(derived.payload.data.rows[0].avg_value, 15);
   assert.deepEqual(derived.metadata.parentArtifactIds, [artifact.id]);
 
   const csv = context.workspace.exportArtifact({

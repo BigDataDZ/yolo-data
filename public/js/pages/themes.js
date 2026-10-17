@@ -294,7 +294,7 @@ async function renderThemeEditorPage(root, theme) {
             <span class="theme-config-index">05</span>
             <div class="theme-config-section-copy">
               <h3>业务枚举知识初始化</h3>
-              <p>基于上方选中的数据范围，初始化业务类型、行业等枚举值，用于用户提问时的精确或近似值匹配。</p>
+              <p>基于上方选中的数据范围，初始化枚举字段的候选值，用于用户提问时的精确或近似值匹配。</p>
             </div>
             <button class="btn btn-quiet theme-config-section-action" id="refreshSemanticValuesBtn" type="button"
               ${theme ? '' : 'disabled'}>

@@ -1815,10 +1815,10 @@ textarea::placeholder {
 }
 
 .chat-welcome.welcome-mini {
-  width: min(100%, 780px);
+  width: min(100%, var(--chat-content-width));
   min-height: 100%;
   margin: 0 auto;
-  padding: 64px 12px 0;
+  padding: 64px 0 0;
   justify-content: flex-start;
   background: transparent;
 }

@@ -1,3 +1,5 @@
+import { answerChatStream } from '../chatQueryStream.js';
+
 export function registerChatRoutes(table) {
   table.add({
     id: 'chat.queryStream',
@@ -20,18 +22,12 @@ export function registerChatRoutes(table) {
       request.on('aborted', abortOnClose);
       response.on('close', abortOnClose);
       try {
-        const answer = await agent.answer({
-          userId: user.id,
-          themeId: body.themeId ? Number(body.themeId) : undefined,
-          sessionId: body.sessionId ? Number(body.sessionId) : undefined,
-          question: body.question,
-          preferredChart: body.preferredChart,
-          clarificationOptionId: body.clarificationOptionId,
-          clarificationOptionLabel: body.clarificationOptionLabel,
-          modelId: body.modelId ? Number(body.modelId) : null,
-          attachmentArtifactIds: body.attachmentArtifactIds,
+        const answer = await answerChatStream({
+          agent,
+          user,
+          body,
           signal: abortController.signal,
-          onEvent: writeEvent,
+          writeEvent,
         });
         writeEvent({ type: 'final', answer });
         writeEvent({
@@ -75,6 +71,7 @@ export function registerChatRoutes(table) {
         clarificationOptionLabel: body.clarificationOptionLabel,
         modelId: body.modelId ? Number(body.modelId) : null,
         attachmentArtifactIds: body.attachmentArtifactIds,
+        forceNewTask: Boolean(body.forceNewTask),
       });
       sendJson(response, 200, result);
     },

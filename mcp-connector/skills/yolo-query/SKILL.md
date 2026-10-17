@@ -1,6 +1,6 @@
 ---
 name: yolo-query
-description: 通过 YOLO Data 的 MCP 服务查询业务指标与数据集。当用户想「查某主题的销售额/订单量」「问数平台有哪些指标」「按指标出数」「拉取问数结果」且已配置 mcp_ 开头的 API Key 与 /mcp 端点时使用。触发词：YOLO Data、问数平台、指标查询、MCP 查询。
+description: 通过 YOLO Data 的 MCP 服务查询主题指标与数据集。当用户想「查询某主题下的指标」「问数平台有哪些指标」「按指标出数」「拉取问数结果」且已配置 mcp_ 开头的 API Key 与 /mcp 端点时使用。触发词：YOLO Data、问数平台、指标查询、MCP 查询。
 ---
 
 # YOLO Data 问数技能（MCP 客户端侧）
@@ -10,7 +10,7 @@ description: 通过 YOLO Data 的 MCP 服务查询业务指标与数据集。当
 
 ## 前置条件
 - 已拿到 `mcp_` 开头的 API Key。
-- 已知目标 `userId` 与 `themeId`（主题/业态，如日配/BBC/商超）。
+- 已知目标 `userId` 与 `themeId`（主题名称与可用范围由平台配置提供）。
 - 端点通常为 `https://<host>/mcp`，客户端 transport 头带 `Authorization: Bearer <key>`。
 
 ## 标准工作流

@@ -271,14 +271,14 @@ function openDatasetCreator() {
     editor: true,
     body: `
       <div class="form-grid">
-        <div class="form-field"><label for="datasetCode">数据集编码</label><input class="field" id="datasetCode" placeholder="sales_performance" /></div>
-        <div class="form-field"><label for="datasetName">数据集名称</label><input class="field" id="datasetName" placeholder="销售经营分析" /></div>
+        <div class="form-field"><label for="datasetCode">数据集编码</label><input class="field" id="datasetCode" placeholder="detail_dataset" /></div>
+        <div class="form-field"><label for="datasetName">数据集名称</label><input class="field" id="datasetName" placeholder="明细分析数据集" /></div>
         <div class="form-field">
           <label for="datasetSource">数据源</label>
           <select class="select" id="datasetSource">${state.dataSources.map((source) => `<option value="${source.id}">${escapeHtml(source.name)}</option>`).join('')}</select>
         </div>
         <div class="form-field"><label for="datasetSchema">数据库</label><input class="field" id="datasetSchema" value="${escapeAttr(state.dataSources[0].databaseName)}" /></div>
-        <div class="form-field span-2"><label for="datasetTable">物理表</label><input class="field mono" id="datasetTable" placeholder="ads_bi_sale_detail_wide_df" /></div>
+        <div class="form-field span-2"><label for="datasetTable">物理表</label><input class="field mono" id="datasetTable" placeholder="your_detail_table" /></div>
         <div class="form-field span-2"><label for="datasetDescription">说明</label><textarea class="textarea" id="datasetDescription"></textarea></div>
       </div>
     `,
@@ -473,7 +473,7 @@ function renderRowPolicyRow(policy) {
       <td>${renderThemeScopeSelect(policy.themeId)}</td>
       <td><input class="field mono" data-policy-dimension value="${escapeAttr(policy.dimension ?? '')}" placeholder="region" /></td>
       <td><select class="select" data-policy-operator>${operators.map((operator) => `<option value="${operator}"${(policy.operator ?? 'IN') === operator ? ' selected' : ''}>${operator}</option>`).join('')}</select></td>
-      <td><input class="field" data-policy-values value="${escapeAttr((policy.values ?? []).join(', '))}" placeholder="华东, 华南" /></td>
+      <td><input class="field" data-policy-values value="${escapeAttr((policy.values ?? []).join(', '))}" placeholder="值1, 值2" /></td>
       <td><button class="btn btn-quiet btn-icon" type="button" data-remove-policy aria-label="删除">${icon('trash', '删除')}</button></td>
     </tr>
   `;

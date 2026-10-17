@@ -25,7 +25,6 @@ import {
   isClarificationText,
   mergeSemanticFilters,
   resolveClarificationPolicy,
-  resolveConversationContext,
   resolveArtifactReusePolicy,
 } from './queryIntent.js';
 import { DataAgentWorkflow } from './workflow.js';
@@ -55,6 +54,9 @@ import { appendUserQuestionWithAttachments } from './chatAttachments.js';
 import { tokenBudgetError } from './tokenBudget.js';
 import { buildMetricResolverPrompt } from './metricResolver.js';
 import { USER_MEMORY_TOOLS, createUserMemoryToolHandler } from './userMemoryTools.js';
+import { resolveConversationRuntime } from './conversationRuntime.js';
+import { resolveMemoryPreInject, resolveSupersonicEnabled } from './memoryRetrieval.js';
+import { completeTaskState, formatTaskForPrompt, publicContextDecision } from './turnContext.js';
 import { analyzeWithPlugins, resolveWithPlugins } from './analysisPluginRegistry.js';
 import {
   buildSemanticFastPathDraft,
@@ -1399,10 +1401,10 @@ function buildSystemPrompt({
   skillPlanInstructions = [],
   skillValidationInstructions = [],
   workspaceArtifacts = [],
-  userMemoryPreInject = null,
   contextMode = 'NEW_TOPIC',
   contextReason = '',
-  history = [],
+  taskState = null,
+  executionContext = '',
   analysisMode = null,
   clarificationPolicy = null,
   clarificationOptionId = '',
@@ -1458,12 +1460,7 @@ function buildSystemPrompt({
       `  样例：${sample}`,
     ].join('\n');
   }).join('\n') || '- 当前工作区暂无结果 artifact';
-  const lastHistoryQuestion = [...(history ?? [])]
-    .reverse()
-    .find((message) => message?.role === 'user')?.content ?? '';
-  const lastHistoryAnswer = [...(history ?? [])]
-    .reverse()
-    .find((message) => message?.role === 'assistant')?.content ?? '';
+  const taskContextLines = formatTaskForPrompt(taskState);
   const analysisModeText = analysisMode?.mode ?? 'METRIC_QUERY';
   const clarificationAllowed = clarificationPolicy?.allowed !== false;
 
@@ -1496,7 +1493,7 @@ ${buildSemanticTaxonomyPrompt()}
 - 比率、占比、增长率、差额、百分点变化、求和和均值必须通过 derivedMetrics 提交结构化公式。
 - RATIO 使用 left/right 或 numerator/denominator；GROWTH_RATE 使用本期 left 与上期 right；不得直接提交 SQL、代码或格式化后的字符串。
 - “A占整体B的比例”必须先在 metricFields 中分别建立 A 和整体 B 两个计算口径，二者使用唯一 outputField；分子绑定业务过滤条件，分母只绑定 SCOPE 条件，不绑定该业务过滤条件。RATIO 的 numerator/denominator 引用这两个 outputField。
-- 计数指标只选择一个 IDENTIFIER 字段，用 COUNT_DISTINCT 统计去重数量；不得把多个商品编码、名称或编号同时提交为同一个计数指标。
+- 计数指标只选择一个 IDENTIFIER 字段，用 COUNT_DISTINCT 统计去重数量；不得把多个标识字段、名称或编号同时提交为同一个计数指标。
 - 当前预设类型不足时使用 EXPRESSION，提交通用运算树：ADD、SUBTRACT、MULTIPLY、DIVIDE、ABS、NEGATE；字段节点必须引用已确认字段或前序 outputField。
 - 主题业务语义包中已经声明的指标公式、别名、排除条件和枚举优先于自由判断；命中时必须直接使用，不得替换成相似字段。
 - 派生指标引用的基础指标必须来自已确认口径。
@@ -1543,9 +1540,10 @@ ${describeClarificationOption(clarificationOptionId)}
       : 'ARTIFACT_ONLY'
     : 'NORMAL'
 }
-已注入会话历史：${history.length} 条
-最近一轮用户问题：${lastHistoryQuestion || '无'}
-最近一轮回答摘要：${String(lastHistoryAnswer).slice(0, 500) || '无'}
+本轮结构化任务状态：
+${taskContextLines}
+执行侧契约（只允许使用这里的条件和槽位）：
+${executionContext || '无'}
 
 业务规则来源约束：
 1. 指标定义、维度白名单和当前主题提示词是业务规则与业务映射的唯一来源。
@@ -1579,11 +1577,6 @@ ${workspaceLines}
 近期人工反馈纠错：
 ${feedbackLines}
 
-${userMemoryPreInject
-  ? `本轮命中的用户长期记忆（问数前已按当前问题确定性检索并前置注入，优先作为默认口径参考）：
-${userMemoryPreInject}
-约束：以上内容是该用户历史沉淀的业务知识/口径偏好，仅作默认口径参考；与主题提示词、平台规则或本轮用户明确指令冲突时，一律以后者为准，不得据此编造数据或替代正式数据来源。当某口径取自记忆时，在口径说明中用一句话注明“沿用你的历史偏好”，不要展开记忆原文。`
-  : ''}
 系统强制行级权限：
 ${rowPolicyLines}
 
@@ -1600,24 +1593,24 @@ ${supersonicEnabled
 6. 过滤条件只能使用实时语义字段，不得使用 SQL_PART。
 7. 如果用户问题缺少时间范围，默认使用近 7 天。
 8. “趋势/走势”是展示意图，必须使用 RESULT_ACTION 条件并绑定时间维度，不得归入 CALCULATION；涉及排名、对比或分布时选择合理业务维度。图表一律由平台在页面上原生渲染：不得用代码生成或引用图表图片（png/svg 等），不得使用 Markdown 图片语法表达图表；用户只要求更换图表类型（折线/柱状/饼图/表格）时属于展示层操作，平台会复用已锁定结果重新渲染，不要为此重新取数、执行代码或转换文件。
-9. 查询完成后用简洁中文说明结果，准确表达指标口径、时间范围和权限过滤。
+9. 回答只讲用户问到的结果：先给结论，再给必要依据；不要复述查询过程、契约、字段名或校验步骤。
 10. 已绑定业务数据集时，业务数据集是唯一取数来源；指标平台只负责指标口径、字段语义和计算公式确认。
 11. 业务数据集必须先调用 list_business_datasets，再调用 get_business_dataset_definition 确认字段口径。
 12. 业务数据集查询也必须先完成字段口径确认，再编译并执行查询契约。
 13. 业务数据集查询只能提交字段业务名、聚合方式和过滤条件，严禁生成或传递 SQL。
-14. 最终回答必须像业务分析师反馈：先用 1 句自然语言给出结论，再用 1 至 3 段说明关键依据、变化方向和业务含义，最后仅在确有帮助时给出建议。不要把结果写成“字段名 + 数字”的清单，不要把查询范围、契约、口径校验、执行步骤等内部过程写给用户。核心结论、同比/环比、增长金额、排名第一项和风险提示使用 Markdown **加粗**；不要为了装饰给整段文字加粗。
+14. 回答要像同事在对话里回复：简单问数用 1 至 2 句直接回答；分组、趋势、对比或归因用 2 至 4 句讲清结论、关键变化和原因。不要固定开场，不要使用“整体来看”“以下是”“本次查询”“最值得关注”等模板句，也不要给每个问题套同一结构；用户没问建议时不主动扩展建议。核心金额、同比/环比、排名第一项和风险提示使用 Markdown **加粗**，其余文字保持自然。
 15. 结果超过 10 行时不要在回答中重复完整表格，平台会单独展示明细和图表，只说明关键趋势、异常和代表性数据。
 16. 查询契约首次返回有效结果后，平台会立即锁定该结果并停止后续查询；不得尝试通过更换维度、时间、指标或关键词覆盖该结果。
 17. 时间和权限条件由平台确定性处理，不得自行改写；最终数字、行序、时间范围和明细数据以平台锁定结果为准。
-18. 业务类型映射、业务板块合并、枚举归并、专项标签等口径只能来自当前主题提示词；提示词未定义时必须请求补齐，不得静默忽略用户条件。
+18. 枚举值映射、分组归并、专项标签等口径只能来自当前主题提示词；提示词未定义时必须请求补齐，不得静默忽略用户条件。
 19. 用户要求基于上一轮结果继续加汇总行、排序、改名、加比例列、格式化或筛选时，必须使用工作区 artifact 工具，不得重新查询原始数据冒充结果编辑。
 20. 使用 transform_workspace_artifact 前先根据当前工作区 artifact 列表确定目标结果；用户未指定时默认使用最近更新的表格 artifact。
-21. 同一会话的历史消息始终作为智能体上下文，用于理解称呼、指代、用户偏好、前序澄清和已确认规则；不得因为当前轮是 INDEPENDENT 就忽略历史。
-22. 当前轮为 INDEPENDENT 时，当前问题独立成题，不自动继承上一轮指标、时间、过滤、维度、计算或结果 artifact 作为查询参数。
-23. 当前轮为 FOLLOW_UP 时，只继承与本次追问直接相关的条件；不得把上一条问题的全部条件机械拼接。
-24. 工作区 artifact 已注入当前会话上下文；仅当用户明确引用、修改、排序、汇总或继续加工已有结果时使用，INDEPENDENT 数据问题不得自动套用旧 artifact。
+21. 会话历史只用于理解阶段识别称呼、指代和任务关系；执行阶段以本轮“结构化任务状态”和“执行侧契约”为唯一会话上下文，不得自行引用原始聊天记录。
+22. 当前轮为 NEW_TASK/INDEPENDENT 时，不得继承上一任务的指标、时间、过滤、维度、计算或结果 artifact。
+23. 当前轮为 CONTINUATION/REVISION 时，只能使用任务状态中明确列出的 inheritedSlots；不得把上一任务的全部条件机械拼接。
+24. 工作区 artifact 仅当本轮任务状态引用它，或用户明确要求修改、排序、汇总、继续加工已有结果时使用。
 25. 归因回答必须至少包含“变化事实”和“原因拆解”两部分，原因拆解必须给出主题提示词规则内的维度贡献、影响方向或公式结果；不得只重复总量或把模型猜测当作已核验原因。
-26. 涉及枚举值归并、行业分组、同期派生指标、透视表、两级表头或 Excel 输出的复杂分析，必须走 BUSINESS_DATASET，并在 compile_query_contract 中提交 postProcessing；不得把派生同比伪装成第二个原始指标。
+26. 涉及枚举值归并、维度分组、同期派生指标、透视表、两级表头或 Excel 输出的复杂分析，必须走 BUSINESS_DATASET，并在 compile_query_contract 中提交 postProcessing；不得把派生同比伪装成第二个原始指标。
 27. postProcessing.groupValues 用于把原始枚举值归并成业务分组；periodComparison 只声明一个原始 metric，type=RATE 表示按 (本期-去年同期)/abs(去年同期) 动态计算；pivot 用于将分组值透视为列，并在 includeTotal=true 时生成合计列。
 28. postProcessing 的字段名必须来自 get_business_dataset_definition 返回的真实字段业务名；确认轮中用户给出的分组值映射和公式可作为 CALCULATION 条件的 ruleSource，历史确认文本可以作为 sourceText。
 29. 用户要求 Excel 时，最终结果仍先进入工作区 TABLE artifact；下载时应使用 XLSX 格式，保留两级表头、金额和百分比的数值格式。
@@ -1686,45 +1679,7 @@ export class MetricAgentService {
     this.presentationPlanner = new PresentationPlanner();
     this.runtimeCache = new AgentRuntimeCache();
   }
-
-  // 问数前置注入：用当前（已补全指代的）问题确定性检索用户长期记忆，
-  // 把命中片段前置注入 system prompt，替代「只注入摘要 + 依赖模型主动调工具」的弱召回。
-  // 检索走 userMemory.search 的精确/关键词匹配，不引入向量近似，守住平台确定性命根。
-  // 受 topN + maxChars 预算约束，超出截断，避免挤占上下文；未命中或开关关闭返回 null。
-  resolveMemoryPreInject({ userId, themeId, question } = {}) {
-    const cfg = this.config?.userMemory?.retrieval?.preInject;
-    if (!cfg || !cfg.enabled || !this.userMemories) {
-      return null;
-    }
-    const q = String(question ?? '').trim();
-    if (!q) {
-      return null;
-    }
-    const hits = this.userMemories.search(userId, themeId, q, cfg.topN);
-    if (!hits || hits.length === 0) {
-      return null;
-    }
-    const maxChars = Number(cfg.maxChars) || 1200;
-    const blocks = [];
-    let total = 0;
-    for (const hit of hits) {
-      const line = `[${hit.scopeLabel}] ${String(hit.excerpt ?? '').trim()}`;
-      if (!line.trim() || total + line.length > maxChars) {
-        break;
-      }
-      blocks.push(line);
-      total += line.length;
-    }
-    if (blocks.length === 0) {
-      return null;
-    }
-    return blocks.join('\n\n');
-  }
-
-  isSupersonicEnabled() {
-    const stored = this.database?.getPlatformSetting?.('supersonic.enabled', true);
-    return this.getSupersonicEnabled?.() ?? Boolean(stored?.value ?? stored);
-  }
+  isSupersonicEnabled() { return resolveSupersonicEnabled(this); }
 
   resolveThemeModel(theme, modelIdOverride = null) {
     const modelIds = (theme?.modelIds ?? []).map(Number).filter(Number.isFinite);
@@ -1812,11 +1767,11 @@ export class MetricAgentService {
     const keyword = filters.keyword ?? '';
     const typeId = filters.typeId ?? '';
     const limit = Math.max(1, Math.min(Number(filters.limit) || 500, 500));
-    const liveAvailable = this.isSupersonicEnabled()
+    const liveAvailable = resolveSupersonicEnabled(this)
       && this.indicatorClient.mode !== 'unconfigured';
     // Disabled: local catalog. Enabled but unconfigured: persisted snapshot (P0-1).
     if (!liveAvailable) {
-      const snapshot = this.isSupersonicEnabled()
+      const snapshot = resolveSupersonicEnabled(this)
         ? this.database.listIndicators({ keyword, typeId, limit })
         : {
           items: this.database.localIndicators?.list({ keyword, typeId, limit, enabledOnly: true }) ?? [],
@@ -2198,6 +2153,7 @@ export class MetricAgentService {
     clarificationOptionLabel = '',
     modelId = null,
     attachmentArtifactIds = [],
+    forceNewTask = false,
     signal = null,
     onEvent = null,
     replanDepth = 0,
@@ -2283,17 +2239,6 @@ export class MetricAgentService {
       session.id,
       normalizedQuestion,
     ) ?? session;
-    const history = this.memory.buildModelContext(session.id, userId);
-    const conversationContext = resolveConversationContext(
-      normalizedQuestion,
-      history,
-    );
-    const resolvedQuestion = conversationContext.question;
-    const analysisMode = inferAnalysisMode(resolvedQuestion);
-    const clarificationPolicy = resolveClarificationPolicy(
-      conversationContext.mode === 'FOLLOW_UP' ? history : [],
-      analysisMode.mode,
-    );
     const workspace = this.workspace?.ensureForSession({
       userId,
       themeId: session.themeId,
@@ -2324,7 +2269,7 @@ export class MetricAgentService {
       }
     }
     this.requireEnabledTheme(theme);
-    const supersonicEnabled = this.isSupersonicEnabled();
+    const supersonicEnabled = resolveSupersonicEnabled(this);
     const activeHarness = this.harnessFactory
       ? this.harnessFactory.forTheme(
         this.resolveThemeModel(
@@ -2333,6 +2278,36 @@ export class MetricAgentService {
         ),
       )
       : this.harness;
+    const memoryPreInject = resolveMemoryPreInject({
+      config: this.config,
+      userMemories: this.userMemories,
+      userId: user.id,
+      themeId: theme.id,
+      question: normalizedQuestion,
+    });
+    const {
+      history,
+      conversationContext,
+      executionContext,
+    } = await resolveConversationRuntime({
+      memory: this.memory,
+      sessionId: session.id,
+      userId,
+      question: normalizedQuestion,
+      forceNewTask,
+      harness: activeHarness,
+      theme,
+      user,
+      signal,
+      memoryTexts: [memoryPreInject],
+    });
+    const resolvedQuestion = conversationContext.question;
+    const analysisMode = inferAnalysisMode(resolvedQuestion);
+    const clarificationPolicy = resolveClarificationPolicy(
+      conversationContext.mode === 'FOLLOW_UP' ? history : [],
+      analysisMode.mode,
+    );
+    emit({ type: 'context_resolved', context: publicContextDecision(conversationContext) });
     emit({
       type: 'runtime_selected',
       runtime: {
@@ -2434,11 +2409,6 @@ export class MetricAgentService {
       snapshotCount: indicatorSourceState.snapshotCount,
     });
     const feedbackHints = this.feedback?.promptHints(theme.id, 8) ?? [];
-    const userMemoryPreInject = this.resolveMemoryPreInject({
-      userId: user.id,
-      themeId: theme.id,
-      question: resolvedQuestion,
-    });
     const workflow = new DataAgentWorkflow({
       question: normalizedQuestion,
       user,
@@ -4385,8 +4355,7 @@ export class MetricAgentService {
         throw sourceError;
       }
       const sourceContext = buildContextFromModule({
-        inheritQueryContext: conversationContext.inheritQueryContext,
-        history,
+        taskState: conversationContext.taskState,
         resolvedQuestion,
         clarificationText: clarificationOptionLabel,
       });
@@ -5031,7 +5000,6 @@ export class MetricAgentService {
       indicators: allowedIndicators,
       skills,
       feedbackHints,
-      userMemoryPreInject,
       skillAuditInstructions: skillAudit?.guidance ?? [],
       skillPlanInstructions: skillPlanGuidance,
       skillValidationInstructions: skillValidationGuidance,
@@ -5042,7 +5010,8 @@ export class MetricAgentService {
       contextReason: conversationContext.reason,
       inheritQueryContext: conversationContext.inheritQueryContext,
       historyMessageCount: conversationContext.historyMessageCount,
-      history,
+      taskState: conversationContext.taskState,
+      executionContext: executionContext.sourceContext,
       analysisMode,
       clarificationPolicy,
       clarificationOptionId,
@@ -5253,12 +5222,12 @@ export class MetricAgentService {
         harnessResult = await activeHarness.run({
           messages: [
             { role: 'system', content: systemPrompt },
-            ...history,
+            ...(executionContext.systemMessage ? [executionContext.systemMessage] : []),
             {
               role: 'user',
               content: replanHint
-                ? `${normalizedQuestion}\n\n[反思重规划提示] ${replanHint}`
-                : normalizedQuestion,
+                ? `${resolvedQuestion}\n\n[反思重规划提示] ${replanHint}`
+                : resolvedQuestion,
             },
           ],
           tools: enabledTools,
@@ -5307,6 +5276,13 @@ export class MetricAgentService {
       const failureMessage = `本次查询失败：${error.message}`;
       this.memory.appendAssistantMessage(session.id, user.id, failureMessage, {
         error: error.message,
+        question: normalizedQuestion,
+        resolvedQuestion,
+        turnType: conversationContext.turnType,
+        taskId: conversationContext.taskId,
+        turnId: conversationContext.turnId,
+        taskState: { ...conversationContext.taskState, status: 'FAILED' },
+        contextDecision: publicContextDecision(conversationContext),
         processSteps,
         skills: skills.map((skill) => ({
           code: skill.code,
@@ -5566,7 +5542,7 @@ export class MetricAgentService {
     const validationWarnings = resultValidation?.checks
       ?.filter((check) => check.level === 'ERROR' || check.level === 'WARN')
       .map((check) => `- ${check.message}`) ?? [];
-    const analysisText = resultAnalysis && !chartRestyleApplied
+    const analysisText = resultAnalysis && !chartRestyleApplied && !deterministicMessage
       ? buildResultAnalysisText(resultAnalysis.facts)
       : '';
     const activeClarification = valueClarification
@@ -5632,6 +5608,21 @@ export class MetricAgentService {
       });
     }
     const workflowSnapshot = workflow.finish(finalMessage);
+    const taskState = completeTaskState({
+      contextTask: conversationContext.taskState,
+      answer: {
+        semanticParse: lastSemanticParse,
+        indicator: lastIndicator,
+        analysisMode,
+        resolvedQuestion,
+        queryFingerprint: lastLockedExecution?.queryFingerprint ?? null,
+        dataHash: lastLockedExecution?.dataHash ?? null,
+      },
+      artifactId: lastLockedExecution?.queryArtifactId
+        ?? generatedCodeArtifacts[0]?.artifactId
+        ?? null,
+    });
+    const contextDecision = publicContextDecision(conversationContext);
 
     const answer = {
       question: normalizedQuestion,
@@ -5640,6 +5631,12 @@ export class MetricAgentService {
       contextReason: conversationContext.reason,
       inheritQueryContext: conversationContext.inheritQueryContext,
       historyMessageCount: conversationContext.historyMessageCount,
+      turnType: conversationContext.turnType,
+      taskId: conversationContext.taskId,
+      turnId: conversationContext.turnId,
+      rootTaskId: conversationContext.rootTaskId,
+      taskState,
+      contextDecision,
       analysisMode,
       clarificationPolicy,
       clarification: structuredClarification,

@@ -75,3 +75,20 @@ test('aggregation keeps metric columns when only column semantics are available'
     { order_date: '2026-09-07', sales_amt_total: 30 },
   ]);
 });
+
+test('average aggregation is driven by lexicon profile hints', () => {
+  const result = aggregateRowsByTimeGrain({
+    columns: [
+      { name: 'event_date', bizName: 'event_date', showType: 'DATE' },
+      { name: 'average_value', bizName: 'avg_value', showType: 'NUMBER' },
+    ],
+    rows: [
+      { event_date: '2026-09-01', avg_value: 10 },
+      { event_date: '2026-09-02', avg_value: 20 },
+    ],
+    dateKey: 'event_date',
+    grain: 'WEEK',
+  });
+
+  assert.equal(result.rows[0].avg_value, 15);
+});

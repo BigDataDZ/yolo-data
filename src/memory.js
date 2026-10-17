@@ -1,5 +1,7 @@
-// 会话记忆负责短期上下文（最近若干轮对话）；用户长期记忆通过 userMemories 注入，
-// 沉淀由 distiller 在回答结束后异步完成，二者都不感知任何业务口径。
+import { buildExecutionContext, buildLegacyModelContext, buildUnderstandingContext, updateInitialTitle } from './sessionMemoryContext.js';
+
+// 会话记忆只负责“理解上下文”；执行阶段通过结构化任务状态单独装配，
+// 避免原始聊天记录和长期记忆直接污染查询契约。
 export class SessionMemoryStore {
   constructor(database, { contextLimit = 20, userMemories = null } = {}) {
     this.database = database;
@@ -63,15 +65,17 @@ export class SessionMemoryStore {
     return message;
   }
 
+  buildUnderstandingContext(sessionId, userId) {
+    return buildUnderstandingContext(this, sessionId, userId);
+  }
+
+  buildExecutionContext({ taskState = null, question = '' } = {}) {
+    return buildExecutionContext({ taskState, question });
+  }
+
+  // 兼容旧调用：旧入口只返回理解上下文，不再承担执行契约装配。
   buildModelContext(sessionId, userId) {
-    const session = this.getSession(sessionId, userId);
-    const history = this.database.listChatMessages(sessionId, userId, this.contextLimit)
-      .map((message) => ({
-        role: message.role,
-        content: message.result?.question ?? message.content,
-      }));
-    const memoryMessage = this.userMemories?.buildContextMessage(userId, session.themeId);
-    return memoryMessage ? [memoryMessage, ...history] : history;
+    return buildLegacyModelContext(this, sessionId, userId);
   }
 
   // 长期记忆沉淀是旁路：失败、超时或未配置模型都不影响本轮回答。
@@ -98,11 +102,6 @@ export class SessionMemoryStore {
   }
 
   maybeSetInitialTitle(sessionId, content) {
-    const session = this.database.getChatSession(sessionId);
-    if (!session || session.title !== '新会话') {
-      return session;
-    }
-    const title = String(content ?? '').trim().replace(/\s+/g, ' ').slice(0, 24) || '新会话';
-    return this.database.updateChatSession(sessionId, { title });
+    return updateInitialTitle(this, sessionId, content);
   }
 }

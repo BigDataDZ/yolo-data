@@ -226,16 +226,16 @@ function suggestAggregator(field, stats, summary, role, lexicon = null) {
     return { aggregator: 'AVG', reason: '比率类指标默认取平均' };
   }
   if (hint('stock')) {
-    return { aggregator: 'MAX', reason: '存量/库存类指标默认取最大值' };
+    return { aggregator: 'MAX', reason: '存量类指标默认取最大值' };
   }
   if (hint('average')) {
-    return { aggregator: 'AVG', reason: '单价/均值类指标默认取平均' };
+    return { aggregator: 'AVG', reason: '均值类指标默认取平均' };
   }
   if (hint('extreme')) {
     return { aggregator: 'MAX', reason: '极值类字段默认取最大值' };
   }
   if (hint('count')) {
-    return { aggregator: 'SUM', reason: '计数/数量类指标默认求和' };
+    return { aggregator: 'SUM', reason: '计数类指标默认求和' };
   }
   if (summary.integerRatio === 1 && summary.numericMin >= 0 && summary.uniqueness < 0.98) {
     return { aggregator: 'SUM', reason: '非负整数度量默认求和' };

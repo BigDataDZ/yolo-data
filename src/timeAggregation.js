@@ -1,4 +1,5 @@
 import { isNumericColumn } from './columnSemantics.js';
+import { getPlatformLexicon, profileHintPattern } from './businessLexicon.js';
 
 const GRAIN_LABELS = {
   WEEK: '周起始日',
@@ -6,7 +7,6 @@ const GRAIN_LABELS = {
   QUARTER: '季度起始日',
   YEAR: '年份',
 };
-
 function columnKey(column) {
   return String(column?.bizName ?? column?.nameEn ?? column?.name ?? '').trim();
 }
@@ -71,7 +71,7 @@ function bucketValue(value, grain) {
 }
 
 function isAverageMetric(column) {
-  return /率|占比|比例|单价|均价|均值/.test(String(column?.name ?? ''));
+  return ['rate', 'average'].some((key) => profileHintPattern(getPlatformLexicon(), key)?.test(String(column?.name ?? '')));
 }
 
 export function aggregateRowsByTimeGrain({

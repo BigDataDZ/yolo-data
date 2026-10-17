@@ -23,8 +23,8 @@ test('result analyst produces totals, topN, trend and anomalies', () => {
   assert.equal(facts.topBottom[0].top[0].label, '2026-03');
   assert.equal(facts.trends[0].lastValue, 210);
   assert.equal(facts.trends[0].change, 110);
-  assert.match(buildResultAnalysisText(facts), /TOP2/);
-  assert.match(buildResultAnalysisText(facts), /趋势/);
+  assert.match(buildResultAnalysisText(facts), /销售额里，2026-03 210、2026-02 130排在前列/);
+  assert.match(buildResultAnalysisText(facts), /整体呈上升/);
 });
 
 test('result analyst does not sum percentage columns', () => {

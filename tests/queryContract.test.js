@@ -163,7 +163,7 @@ test('deterministic summary keeps the answer focused on the aggregate result', (
     question: '查询2026年9月1日到2026年9月2日含税销售金额',
   });
 
-  assert.match(summary, /含税销售金额合计 30/);
+  assert.match(summary, /含税销售金额合计 \*\*30\*\*/);
   assert.doesNotMatch(summary, /查询范围/);
   assert.doesNotMatch(summary, /2026-09-01 至 2026-09-02/);
   assert.equal(
@@ -179,6 +179,39 @@ test('deterministic summary keeps the answer focused on the aggregate result', (
       question: '查询2026年9月1日到2026年9月2日含税销售金额',
     }),
   );
+});
+
+test('grouped answers name the dimension values instead of only repeating a total', () => {
+  const contract = buildQueryContract({
+    indicatorId: '2',
+    metrics: ['sale_amt'],
+    dimensions: ['region'],
+    dateInfo: {
+      dateMode: 'BETWEEN',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      dateField: 'sdt',
+    },
+  });
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+    ],
+    rows: [
+      { region: '华东', sale_amt: 100 },
+      { region: '华南', sale_amt: 80 },
+      { region: '华北', sale_amt: 60 },
+    ],
+    contract,
+    question: '9月各大区含税销售金额',
+  });
+
+  assert.match(summary, /按大区看/);
+  assert.match(summary, /华东\*\* 100/);
+  assert.match(summary, /华南\*\* 80/);
+  assert.doesNotMatch(summary, /整体来看|以下是|关键结果/);
 });
 
 test('monthly trend summary marks an incomplete final month', () => {
@@ -207,8 +240,8 @@ test('monthly trend summary marks an incomplete final month', () => {
   });
 
   assert.match(summary, /2026-09-21，为未完整月/);
-  assert.match(summary, /2026-01：100/);
-  assert.match(summary, /2026-09：20/);
+  assert.match(summary, /2026-01 的 100/);
+  assert.match(summary, /2026-09 的 20/);
   assert.doesNotMatch(summary, /2026-01-01：100/);
 });
 
@@ -469,7 +502,7 @@ test('period comparison summary leads with growth rate and top increasing dimens
   assert.match(summary, /2026年9月含税销售金额为 600，较2025年9月增加 130/);
   assert.match(summary, /同比增长 \+27\.7%/);
   assert.match(summary, /上期 470/);
-  assert.match(summary, /增长最多的省区/);
+  assert.match(summary, /省区里增长最多的是/);
   assert.match(summary, /广东（\+200）/);
   assert.match(summary, /江苏（-50）/);
   assert.match(summary, /浙江（-20）/);

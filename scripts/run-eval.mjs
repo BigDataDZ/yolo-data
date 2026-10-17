@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { compileEvalCase } from '../eval/fixtures.mjs';
 import { simulateContractResult, checkL2Result } from '../eval/resultSim.mjs';
 import { runL3Case } from '../eval/answerCase.mjs';
+import { runMultiTurnSuite } from '../eval/multiTurnCases.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const evalRoot = path.join(projectRoot, 'eval');
@@ -25,7 +26,7 @@ const baselinePath = path.join(evalRoot, 'baseline.json');
 const reportPath = path.join(evalRoot, 'report.json');
 
 // Allowed levels (L2/L3 are no longer stubs).
-const SUPPORTED_LEVELS = ['L1', 'L2', 'L3'];
+const SUPPORTED_LEVELS = ['L1', 'L2', 'L3', 'L4'];
 
 function getPath(target, dotted) {
   return String(dotted).split('.').reduce((value, key) => {
@@ -185,6 +186,8 @@ export async function runLevel(level, { judge = null } = {}) {
       // eslint-disable-next-line no-await-in-loop
       results.push(await runL3Case(evalCase, judge));
     }
+  } else if (level === 'L4') {
+    results = runMultiTurnSuite();
   } else {
     throw new Error(`unsupported eval level: ${level}`);
   }

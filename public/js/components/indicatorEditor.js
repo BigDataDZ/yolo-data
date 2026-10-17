@@ -19,7 +19,7 @@ export function openLocalIndicatorEditor({
       <div class="form-grid">
         <div class="form-field"><label>指标名称</label><input class="field" id="localIndicatorName" value="${escapeAttr(indicator?.name ?? '')}" /></div>
         <div class="form-field"><label>指标标识</label><input class="field mono" id="localIndicatorBizName" value="${escapeAttr(indicator?.bizName ?? '')}" /></div>
-        <div class="form-field"><label>指标类型</label><input class="field" id="localIndicatorTypeName" value="${escapeAttr(indicator?.typeName ?? '')}" placeholder="例如：经营指标" /></div>
+        <div class="form-field"><label>指标类型</label><input class="field" id="localIndicatorTypeName" value="${escapeAttr(indicator?.typeName ?? '')}" placeholder="例如：指标类型" /></div>
         <div class="form-field">
           <label>指标层级</label>
           <select class="select" id="localIndicatorLevel">

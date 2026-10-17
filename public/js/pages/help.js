@@ -42,7 +42,7 @@ const HELP_ARTICLES = [
   { id: 'query-skills', cat: 'skill', title: '问数技巧与提问模板', file: '02-query-skills.md', kw: '对象 指标 时间 同比 环比 TOP 排名 占比 模板 反问' },
   { id: 'admin-guide', cat: 'admin', title: '管理员配置指南', file: '03-admin-guide.md', kw: '模型 数据集 智能识别 Doris MySQL 字段 主题 权限 审计 上线检查' },
   { id: 'core-concepts', cat: 'concept', title: '核心概念速查', file: '04-core-concepts.md', kw: '智能体 指标口径 查询契约 T-1 工作区产物 会话记忆' },
-  { id: 'faq', cat: 'faq', title: '常见问题与排错', file: '05-faq.md', kw: '数字对不上 含税 未税 未配置 导出 CSV XLSX 密码 会话失效' },
+  { id: 'faq', cat: 'faq', title: '常见问题与排错', file: '05-faq.md', kw: '数字对不上 口径 未配置 导出 CSV XLSX 密码 会话失效' },
   { id: 'local-file', cat: 'file', title: '结合本地文件算数', file: '06-local-file.md', kw: '上传 本地文件 附件 CSV XLS XLSX Excel 对账 合并 预算 编码 截断 行数 配额' },
   { id: 'mcp-connector', cat: 'integration', title: 'MCP 连接器与外部接入', file: '07-mcp-connector.md', kw: 'MCP 连接器 下载 API Key 令牌  Claude Cursor 接入 问数 list_metrics resolve_query execute_query' },
 ];

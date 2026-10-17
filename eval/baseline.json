@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T07:07:10.097Z",
+  "generatedAt": "2026-10-17T04:48:02.244Z",
   "levels": {
     "L1": {
       "cases": {
@@ -19,6 +19,16 @@
       "cases": {
         "L3-CLEAN-ANSWER": true,
         "L3-FABRICATED-NUMBER": true
+      }
+    },
+    "L4": {
+      "cases": {
+        "MULTI-FOLLOW-UP": true,
+        "MULTI-TOPIC-SWITCH": true,
+        "MULTI-TIME-REVISION": true,
+        "MULTI-RESULT-REFERENCE": true,
+        "MULTI-MEMORY-CONFLICT": true,
+        "MULTI-CLARIFICATION-ANSWER": true
       }
     }
   }
