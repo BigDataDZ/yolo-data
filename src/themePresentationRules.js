@@ -42,6 +42,13 @@ function normalizeScale(value) {
     : null;
 }
 
+function canonicalNumberFormat(type, decimals) {
+  if (type === 'percent') {
+    return decimals > 0 ? `0.${'0'.repeat(decimals)}%` : '0%';
+  }
+  return decimals > 0 ? `#,##0.${'0'.repeat(decimals)}` : '#,##0';
+}
+
 // 把“万元 / 亿元 / 千元”这类带数量级的单位，还原成一个原始单位对应的展示量级。
 function scaleFromUnit(unit) {
   const text = cleanUnit(unit);
@@ -135,6 +142,8 @@ function fieldText(field) {
     field?.field,
     field?.name,
     field?.bizName,
+    field?.sourceField,
+    field?.sourceLabel,
   ].map((value) => String(value ?? '')).join(' ').toLowerCase();
 }
 
@@ -186,6 +195,7 @@ export function buildThemeColumnRules(prompt, schema = []) {
       displayScale: kind.displayScale,
       xlsxScale: kind.xlsxScale,
       decimals: kind.decimals,
+      numberFormat: canonicalNumberFormat(kind.type, kind.decimals),
       basis: 'THEME_PROMPT',
       reason: `主题提示词展示声明：${kind.type} 按 ${kind.unit || '原始单位'}、${kind.decimals} 位小数展示`,
     };

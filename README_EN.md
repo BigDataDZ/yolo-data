@@ -120,7 +120,7 @@ flowchart LR
 
 - Node.js `>= 22.5` (`node:sqlite` is used, so no separate platform database is required for a single-node setup)
 - npm or pnpm
-- Optional: Python 3 for advanced analysis and file generation; XLSX generation requires `pandas` and `openpyxl`
+- Python 3 for advanced analysis and file generation. `npm run setup` creates `.venv` and installs `pandas` + `openpyxl`
 - Alternatively: Docker and Docker Compose for a complete environment without local Node.js or Python
 - Optional external services: a metric platform, Doris/MySQL-compatible business database, and DeepSeek or another OpenAI-compatible model service
 
@@ -138,14 +138,15 @@ Run directly with Docker:
 
 ```bash
 docker build -t yolo-data .
-docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
+docker run -d -p 127.0.0.1:8088:8088 -e AUTH_MODE=session \
+  -v yolo-data:/app/data --restart unless-stopped yolo-data
 ```
 
-Local development:
+Local development (creates the Python virtualenv and installs analysis dependencies):
 
 ```bash
-npm install
-cp .env.example .env
+npm run setup
+# edit .env for model keys, metric platform and database connections
 npm run dev
 ```
 
@@ -207,7 +208,7 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 
 ## Production Notes
 
-- `docker compose up -d` defaults to the development-oriented `AUTH_MODE=dev`. External deployments must use `AUTH_MODE=session`, change the default password, and run behind an HTTPS reverse proxy. Direct HTTP access with `NODE_ENV=production` will fail login because Secure cookies are required.
+- `docker compose up -d` defaults to `AUTH_MODE=session` and binds only to `127.0.0.1`. External deployments must still change the default password and run behind an HTTPS reverse proxy. Direct HTTP access with `NODE_ENV=production` will fail login because Secure cookies are required.
 - `SANDBOX_BACKEND=inprocess` is not a security boundary. Untrusted environments should use Docker or Podman with seccomp, no network, and a read-only root filesystem.
 - Platform state currently uses SQLite; deploy a single instance. `DATABASE_BACKEND` and `REDIS_URL` are not wired into application startup, so setting them does not switch platform storage or enable distributed session locks. Multiple instances still require integration of an external platform database and locking. PostgreSQL business-data sources do not provide PostgreSQL storage for platform state.
 - `REFLECTION_ENABLED` and `REFLECTION_MAX_REPLAN` control answer reflection. Run `npm run eval` or use `/api/eval` for L1/L2/L3 regression evaluation.

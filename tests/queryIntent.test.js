@@ -178,11 +178,24 @@ test('time grain recognizes each-month and each-week wording', () => {
   );
 });
 
+test('monthly trend wording is recognised before a concrete month range', () => {
+  assert.equal(inferTimeGrain('2026年9月销售额按品类和月份趋势'), 'MONTH');
+  assert.equal(inferTimeGrain('按月份看各品类销售额'), 'MONTH');
+  assert.equal(inferTimeGrain('分月查看客户数量'), 'MONTH');
+});
+
 test('attribution questions are classified separately and clarify at most once', () => {
   const mode = inferAnalysisMode('帮我分析9月份业绩上升还是下滑，然后输出具体原因');
   assert.equal(mode.mode, 'ATTRIBUTION');
   assert.equal(mode.requiresComparison, true);
   assert.equal(mode.requiresBreakdown, true);
+
+  const factorMode = inferAnalysisMode(
+    '2026年9月业绩环比变化，按客户结构和品类分析主要因素',
+  );
+  assert.equal(factorMode.mode, 'ATTRIBUTION');
+  assert.equal(factorMode.requiresComparison, true);
+  assert.equal(factorMode.requiresBreakdown, true);
 
   const policy = resolveClarificationPolicy([
     {

@@ -1,6 +1,14 @@
 import { normalizeLexicon } from './businessLexicon.js';
 
 const POLICY_VERSION = 1;
+const DIMENSION_RESOLUTION_GUIDANCE = [
+  '维度绑定通用裁决顺序（不针对任何行业词）：',
+  '1. 用户点名的字段、主题语义包命中和字段规范名精确匹配优先。',
+  '2. 其次匹配字段显示名、描述、别名；同一字段的编码列与名称列并存时优先名称列。',
+  '3. 维度词是上位词且存在多个同族字段时，选择与问题限定词重叠最多、语义层级最贴近的字段。',
+  '4. 问题只要求总体结构或分布、未指定层级时，选择该语义族中最粗一级的字段，并在口径说明中标注采用默认层级。',
+  '5. 只有多个候选在语义上完全不可区分时才澄清；归因题不得因存在同族候选而直接中止。',
+].join('\n');
 const EXPRESSION_OPERATORS = new Set([
   'FIELD',
   'ADD',
@@ -371,7 +379,10 @@ export function buildSemanticPolicyPrompt(policy) {
     normalized.enumGroups.length,
   ].reduce((sum, count) => sum + count, 0);
   if (configuredRules === 0) {
-    return '当前主题未配置业务语义包。遇到业务术语、别名、公式或枚举时必须澄清或报告能力缺口，禁止按相似字段猜测。';
+    return [
+      '当前主题未配置业务语义包。业务术语、别名、公式或枚举不得凭空猜测。',
+      DIMENSION_RESOLUTION_GUIDANCE,
+    ].join('\n');
   }
   return [
     '当前主题业务语义包（优先级高于模型的自由判断）：',
@@ -385,6 +396,7 @@ export function buildSemanticPolicyPrompt(policy) {
       plugins: normalized.plugins,
     }, null, 2),
     '业务语义包命中时，必须使用其中的目标字段、公式、过滤和枚举；不得替换为其他相似字段。',
+    DIMENSION_RESOLUTION_GUIDANCE,
   ].join('\n');
 }
 

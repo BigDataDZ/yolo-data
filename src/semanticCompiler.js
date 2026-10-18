@@ -242,7 +242,7 @@ export class SemanticCompiler {
       filters: normalizeFilters(filters),
       dateRange: dateRange ?? null,
       order: order ?? [],
-      limit: Math.max(1, Math.min(Number(limit) || 200, 1000)),
+      limit: Math.max(1, Math.min(Number(limit) || 200, 10000)),
       execution: {
         adapter: datasetExecution(dataset).adapter,
         operation: 'queryBusinessDataset',

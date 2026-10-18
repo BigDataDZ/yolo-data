@@ -16,6 +16,7 @@ const PRESENTATION_BASES = new Set([
   'THEME_PROMPT',
   'ONLINE_METADATA',
   'RESULT_EVIDENCE',
+  'SESSION_DIRECTIVE',
 ]);
 
 const PRESENTATION_SYSTEM_PROMPT = [
@@ -225,6 +226,8 @@ export function normalizePresentationContract(contract, {
       evidenceFieldCount: Number.isInteger(Number(evidenceFieldCount))
         ? Number(evidenceFieldCount)
         : Number(contractMeta.evidenceFieldCount) || 0,
+      conversationDirective: contractMeta.conversationDirective ?? null,
+      conversationDirectives: contractMeta.conversationDirectives ?? [],
       rejectedFields,
       warnings: [...contractWarnings, ...warnings],
     },
@@ -312,6 +315,8 @@ export class PresentationPlanner {
         return {
           field: key,
           label: columnLabel(column),
+          sourceField: column?.sourceField ?? null,
+          sourceLabel: column?.sourceLabel ?? null,
           dataType: column?.type ?? '',
           unit: column?.unit ?? '',
           dataFormatType: column?.dataFormatType ?? null,
@@ -439,11 +444,44 @@ export function applyResultPresentation({
   contract = null,
 } = {}) {
   const normalized = normalizePresentationContract(contract, {
-    allowedFields: columns.map(columnKey).filter(Boolean),
+    allowedFields: [
+      ...columns.map(columnKey).filter(Boolean),
+      ...columns.map((column) => String(column?.sourceField ?? '').trim()).filter(Boolean),
+    ],
   });
+  const sourceColumns = new Map();
+  for (const column of columns) {
+    const sourceField = String(column?.sourceField ?? '').trim();
+    if (!sourceField) {
+      continue;
+    }
+    const siblings = sourceColumns.get(sourceField) ?? [];
+    siblings.push(columnKey(column));
+    sourceColumns.set(sourceField, siblings);
+  }
+  const ruleForColumn = (column) => {
+    const key = columnKey(column);
+    if (normalized.fields[key]) {
+      return normalized.fields[key];
+    }
+    const sourceField = String(column?.sourceField ?? '').trim();
+    if (!sourceField) {
+      return null;
+    }
+    if (normalized.fields[sourceField]) {
+      return normalized.fields[sourceField];
+    }
+    // 聚合别名（例如原始字段加 _total 后缀）与原始字段共享同一展示口径。
+    // 只允许同源列之间继承，避免把无关指标的金额/百分比规则串用。
+    const siblingRule = (sourceColumns.get(sourceField) ?? [])
+      .filter((siblingKey) => siblingKey && siblingKey !== key)
+      .map((siblingKey) => normalized.fields[siblingKey])
+      .find(Boolean);
+    return siblingRule ?? null;
+  };
   const presentedColumns = columns.map((column) => {
     const key = columnKey(column);
-    const rule = normalized.fields[key];
+    const rule = ruleForColumn(column);
     if (!rule) {
       return column;
     }

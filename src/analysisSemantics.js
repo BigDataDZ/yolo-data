@@ -1,6 +1,6 @@
 import { extractTimeGrainExpression } from './queryIntent.js';
 import { extractTemporalMentions } from './timeSemantics.js';
-
+import { ATTRIBUTION_SIGNAL_PATTERN, TREND_SIGNAL_PATTERN } from './analysisIntent.js';
 export const ANALYSIS_CONDITION_CATEGORIES = [
   {
     code: 'TIME_WINDOW',
@@ -139,11 +139,11 @@ const TEXT_RULES = [
   },
   {
     code: 'TREND',
-    pattern: /趋势|走势|变化曲线|变化情况/,
+    pattern: TREND_SIGNAL_PATTERN,
   },
   {
     code: 'ATTRIBUTION',
-    pattern: /原因|归因|为什么|为何|导致|驱动|贡献分析|原因拆解/,
+    pattern: ATTRIBUTION_SIGNAL_PATTERN,
   },
   {
     code: 'RESULT_ACTION',

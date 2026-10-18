@@ -22,7 +22,7 @@ export async function resolveConversationRuntime({
   const understanding = memory.buildUnderstandingContext(sessionId, userId);
   const memorySlots = extractMemorySlots(
     ...(memoryTexts ?? []),
-    understanding.memoryMessage?.content ?? '',
+    understanding.memoryMessage?.retrievalText ?? '',
   );
   let conversationContext = resolveConversationContext(
     question,

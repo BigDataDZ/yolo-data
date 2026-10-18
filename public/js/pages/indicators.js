@@ -31,7 +31,6 @@ const {
   formatSessionTime,
   initials,
   api,
-  persistPreferences,
   streamApi,
   toast,
   openModal,
@@ -62,12 +61,12 @@ const {
 async function renderIndicatorsPage(root) {
   root.innerHTML = `<div class="page-stack"><div class="loading-state"><span class="spinner"></span>正在读取指标目录</div></div>`;
   const keyword = '';
-  const data = await api(`/api/indicators?themeId=${state.selectedThemeId ?? ''}&keyword=${encodeURIComponent(keyword)}&limit=1000`);
+  const data = await api(`/api/indicators?themeId=${state.indicatorThemeId ?? ''}&keyword=${encodeURIComponent(keyword)}&limit=1000`);
   state.indicators = data.items ?? [];
   state.localIndicatorMode = data.localMode === true;
-  const themeOptions = state.themes.map((theme) => (
-    `<option value="${theme.id}"${Number(theme.id) === Number(state.selectedThemeId) ? ' selected' : ''}>${escapeHtml(theme.name)}</option>`
-  )).join('');
+  const themeOptions = `<option value=""${state.indicatorThemeId ? '' : ' selected'}>全部主题</option>${state.themes.map((theme) => (
+    `<option value="${theme.id}"${String(theme.id) === String(state.indicatorThemeId) ? ' selected' : ''}>${escapeHtml(theme.name)}</option>`
+  )).join('')}`;
   const derivedCount = state.indicators.filter(
     (indicator) => String(indicator.indicatorLevel ?? '').toUpperCase() === 'DERIVED',
   ).length;
@@ -107,8 +106,7 @@ async function renderIndicatorsPage(root) {
   `;
 
   document.getElementById('indicatorThemeFilter').addEventListener('change', (event) => {
-    state.selectedThemeId = Number(event.target.value);
-    persistPreferences({ selectedThemeId: state.selectedThemeId });
+    state.indicatorThemeId = event.target.value;
     renderPage();
   });
   document.getElementById('indicatorSearchBtn').addEventListener('click', searchIndicators);
@@ -155,7 +153,7 @@ async function renderIndicatorsPage(root) {
 async function searchIndicators() {
   const keyword = document.getElementById('indicatorKeyword').value.trim();
   const typeId = document.getElementById('indicatorTypeFilter').value;
-  const data = await api(`/api/indicators?themeId=${state.selectedThemeId ?? ''}&keyword=${encodeURIComponent(keyword)}&typeId=${encodeURIComponent(typeId)}&limit=1000`);
+  const data = await api(`/api/indicators?themeId=${state.indicatorThemeId ?? ''}&keyword=${encodeURIComponent(keyword)}&typeId=${encodeURIComponent(typeId)}&limit=1000`);
   state.indicators = data.items ?? [];
   state.localIndicatorMode = data.localMode === true;
   document.querySelector('.page-stack > section:last-child').innerHTML = renderIndicatorTable(state.indicators);
@@ -204,7 +202,7 @@ function bindIndicatorRows() {
     button.addEventListener('click', async () => {
       setBusy(button, true);
       try {
-        const detail = await api(`/api/indicators/${encodeURIComponent(button.dataset.indicatorDetail)}/detail?themeId=${state.selectedThemeId ?? ''}`);
+        const detail = await api(`/api/indicators/${encodeURIComponent(button.dataset.indicatorDetail)}/detail?themeId=${state.indicatorThemeId ?? ''}`);
         const indicator = detail.indicator ?? detail.cached ?? {};
         openIndicatorDetail({
           indicator,

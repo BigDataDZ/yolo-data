@@ -305,12 +305,13 @@ test('P0-8 HTTP contract is unchanged: errors, static fallback, NDJSON stream', 
     const answerDoneIndex = events.findIndex((event) => event.type === 'assistant_answer_done');
     assert.ok(answerStartIndex >= 0);
     assert.ok(answerDoneIndex > answerStartIndex);
-    assert.equal(
-      events.filter((event) => event.type === 'assistant_delta')
-        .map((event) => event.text)
-        .join(''),
-      events.at(-2).answer.message,
-    );
+    const streamedText = events.filter((event) => event.type === 'assistant_delta')
+      .map((event) => event.text)
+      .join('');
+    const replacementText = events
+      .filter((event) => event.type === 'assistant_answer_replace')
+      .at(-1)?.text;
+    assert.equal(replacementText ?? streamedText, events.at(-2).answer.message);
   });
 });
 

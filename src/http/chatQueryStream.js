@@ -4,6 +4,7 @@ import {
   assistantTextChunks,
   createChatStreamPresenter,
 } from '../chatStreamPresenter.js';
+import { createStreamHeartbeat } from '../answerStream.js';
 
 async function streamAssistantAnswer(writeEvent, message, signal) {
   const chunks = assistantTextChunks(message);
@@ -33,26 +34,43 @@ export async function answerChatStream({
   writeEvent,
 }) {
   const present = createChatStreamPresenter();
+  let provisionalAnswerStarted = false;
   const emit = (event) => {
+    if (event?.type === 'assistant_answer_start' && event.preliminary) {
+      provisionalAnswerStarted = true;
+    }
+    heartbeat.observe(event);
     writeEvent(event);
     for (const derivedEvent of present(event)) {
       writeEvent(derivedEvent);
     }
   };
-  const answer = await agent.answer({
-    userId: user.id,
-    themeId: body.themeId ? Number(body.themeId) : undefined,
-    sessionId: body.sessionId ? Number(body.sessionId) : undefined,
-    question: body.question,
-    preferredChart: body.preferredChart,
-    clarificationOptionId: body.clarificationOptionId,
-    clarificationOptionLabel: body.clarificationOptionLabel,
-    modelId: body.modelId ? Number(body.modelId) : null,
-    attachmentArtifactIds: body.attachmentArtifactIds,
-    forceNewTask: Boolean(body.forceNewTask),
-    signal,
-    onEvent: emit,
-  });
-  await streamAssistantAnswer(writeEvent, answer.message, signal);
-  return answer;
+  const heartbeat = createStreamHeartbeat({ writeEvent });
+  try {
+    const answer = await agent.answer({
+      userId: user.id,
+      themeId: body.themeId ? Number(body.themeId) : undefined,
+      sessionId: body.sessionId ? Number(body.sessionId) : undefined,
+      question: body.question,
+      preferredChart: body.preferredChart,
+      clarificationOptionId: body.clarificationOptionId,
+      clarificationOptionLabel: body.clarificationOptionLabel,
+      modelId: body.modelId ? Number(body.modelId) : null,
+      attachmentArtifactIds: body.attachmentArtifactIds,
+      forceNewTask: Boolean(body.forceNewTask),
+      signal,
+      onEvent: emit,
+    });
+    if (provisionalAnswerStarted) {
+      if (!signal?.aborted) {
+        writeEvent({ type: 'assistant_answer_replace', text: answer.message });
+        writeEvent({ type: 'assistant_answer_done' });
+      }
+    } else {
+      await streamAssistantAnswer(writeEvent, answer.message, signal);
+    }
+    return answer;
+  } finally {
+    heartbeat.stop();
+  }
 }

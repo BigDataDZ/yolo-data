@@ -1,8 +1,12 @@
 import crypto from 'node:crypto';
 import { getPlatformLexicon } from './businessLexicon.js';
+import { isAttributionText, isTrendText } from './analysisIntent.js';
+import { cleanGenericQueryPhrase, isGenericQueryResidual } from './queryLanguage.js';
+import { parseConversationDirective } from './conversationDirectives.js';
 
 export const TURN_TYPES = {
   NEW_TASK: 'NEW_TASK',
+  INSTRUCTION: 'INSTRUCTION',
   CONTINUATION: 'CONTINUATION',
   REVISION: 'REVISION',
   RESULT_OPERATION: 'RESULT_OPERATION',
@@ -28,7 +32,7 @@ const TIME_GRAINS = new Set(['日', '天', '周', '月', '季度', '年']);
 const FILTER_VALUE_PATTERN = /^(?:只看|仅看|限定为|是|为|等于|=)\s*(.+)$/;
 const LEGACY_CLARIFICATION_PATTERN = /请补充|请确认|需要确认|请指定|请提供|请明确|请选择|是否确认/;
 const DIMENSION_STOP_TERMS = [
-  '拆', '分', '展示', '统计', '看', '维度', '排序', '对比', '趋势', '走势',
+  '拆分', '分组', '分析', '分别', '展示', '统计', '看', '维度', '排序', '对比', '趋势', '走势',
   '进行', '指标', '数据', '呢', '吗', '的',
 ];
 const FIELD_LABEL_TERMS = ['名称', '名字', '编号', '编码', '代码', '字段', '维度'];
@@ -44,6 +48,9 @@ function compileTurnPatterns(lexicon) {
   const dimensionStops = unique([...DIMENSION_STOP_TERMS, ...metricTerms])
     .map(escapePattern)
     .join('|');
+  const dimensionTail = dimensionStops
+    ? `(?=${dimensionStops}|，|,|。|；|;|！|!|？|\\?|$)`
+    : '(?=，|,|。|；|;|！|!|？|\\?|$)';
   const fieldTerms = unique([
     ...FIELD_LABEL_TERMS,
     ...(lexicon?.enumFieldTerms ?? []),
@@ -53,12 +60,24 @@ function compileTurnPatterns(lexicon) {
     metric: metricAlternation
       ? new RegExp(`[\\u4e00-\\u9fa5A-Za-z0-9]{1,16}(?:${metricAlternation})`, 'gi')
       : null,
-    dimension: dimensionStops
-      ? new RegExp(
-        `(?:按|分|各|每个|逐个)([\\u4e00-\\u9fa5A-Za-z0-9_]{1,12}?)(?=${dimensionStops}|$)`,
+    dimensions: [
+      new RegExp(
+        `(?:按照?|分(?!析|别)|各|每个|逐个)([\\u4e00-\\u9fa5A-Za-z0-9_、]{1,18}?)${dimensionTail}`,
         'g',
-      )
-      : null,
+      ),
+      new RegExp(
+        `(?:拆到|拆成|拆解到|细分到|落到|重点看|重点分析|主要看|主要分析|关注|聚焦)([^，,。；;！!？?\\n]{1,24}?)${dimensionTail}`,
+        'g',
+      ),
+      new RegExp(
+        `(?:主要)?(?:来自|来源于)(?:哪些|哪类|哪几个|什么)?([^，,。；;！!？?\\n]{1,20}?)${dimensionTail}`,
+        'g',
+      ),
+      new RegExp(
+        '([^，,。；;！!？?\\n]{1,30}?)分别(?:影响|贡献|拉动|拖累|变化|下降|上升|增长|减少|是多少|多少|如何|怎么)',
+        'g',
+      ),
+    ],
     fieldLabel: fieldTerms ? new RegExp(`(?:${fieldTerms})(?:字段)?$`) : null,
   };
 }
@@ -76,6 +95,12 @@ function turnPatterns() {
 
 function unique(values) {
   return [...new Set((values ?? []).map((value) => String(value ?? '').trim()).filter(Boolean))];
+}
+
+function compact(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[\s，,。；;：:！!？?、"'“”‘’（）()【】[\]{}]/g, '');
 }
 
 function slot(value, sourceText = value, source = 'explicit') {
@@ -135,6 +160,19 @@ function matches(pattern, question) {
   return unique(values);
 }
 
+function matchesAll(patterns, question) {
+  const values = [];
+  for (const pattern of patterns ?? []) {
+    if (!pattern) {
+      continue;
+    }
+    for (const match of String(question ?? '').matchAll(pattern)) {
+      values.push(match[1] ?? match[0]);
+    }
+  }
+  return unique(values);
+}
+
 function cleanExtractedValue(value) {
   return String(value ?? '')
     .replace(/^(?:那|再|还有|以及|另外|请|帮我|麻烦|查询|查一下|查看|统计|分析|计算|看一下|展示|列出|给我|改成|改为|换成|换为|调整为|的)+/, '')
@@ -143,17 +181,21 @@ function cleanExtractedValue(value) {
 }
 
 function cleanDimension(value) {
-  const cleaned = cleanExtractedValue(value)
+  const cleaned = cleanGenericQueryPhrase(cleanExtractedValue(value))
     .replace(/(?:拆开?|拆分|分组|展示|统计|看|维度|排序|对比|趋势|走势)+$/, '')
+    .replace(/(?:等)?相关(?:的)?(?:维度|字段)?$/, '')
+    .replace(/等$/, '')
     .trim();
-  return TIME_GRAINS.has(cleaned) ? '' : cleaned;
+  return TIME_GRAINS.has(cleaned) || isGenericQueryResidual(cleaned) ? '' : cleaned;
 }
 
 export function extractExplicitSlots(question) {
   const source = String(question ?? '');
   const patterns = turnPatterns();
-  const dimensions = matches(patterns.dimension, source)
-    .map(cleanDimension)
+  const dimensions = matchesAll(patterns.dimensions, source)
+    .flatMap((value) => cleanDimension(value).split(/(?:、|\/|以及|和|及)/))
+    .map((value) => value.trim())
+    .map((value) => cleanDimension(value))
     .filter(Boolean);
   const slots = {
     metric: slotList(matches(patterns.metric, source).map(cleanExtractedValue).filter(Boolean)),
@@ -161,9 +203,9 @@ export function extractExplicitSlots(question) {
     filters: slotList(matches(FILTER_PATTERN, source).map(cleanExtractedValue).filter(Boolean)),
     dimensions: slotList(dimensions),
   };
-  if (/趋势|走势/.test(source)) {
+  if (isTrendText(source)) {
     slots.analysisMode = slotList(['TREND']);
-  } else if (/原因|为何|为什么|归因|驱动因素|影响因素/.test(source)) {
+  } else if (isAttributionText(source)) {
     slots.analysisMode = slotList(['ATTRIBUTION']);
   }
   return slots;
@@ -233,11 +275,32 @@ function normalizeTaskState(task) {
   };
 }
 
+function filterMemorySlotsForQuestion(memorySlots, question) {
+  const questionText = compact(question);
+  const contextualKeys = new Set(['metric', 'dimensions', 'filters', 'analysisMode']);
+  return Object.fromEntries(
+    Object.entries(memorySlots ?? {}).filter(([key, values]) => {
+      if (!contextualKeys.has(key)) {
+        return true;
+      }
+      return (values ?? []).some((item) => (
+        [item?.value, item?.sourceText]
+          .map((value) => compact(value))
+          .filter(Boolean)
+          .some((value) => questionText.includes(value))
+      ));
+    }),
+  );
+}
+
 export function previousTaskFromHistory(history = []) {
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const message = history[index];
     const task = normalizeTaskState(message?.taskState ?? message?.result?.taskState);
     if (!task) {
+      continue;
+    }
+    if (task.turnType === TURN_TYPES.INSTRUCTION) {
       continue;
     }
     const turnsSince = history.slice(index + 1)
@@ -247,6 +310,9 @@ export function previousTaskFromHistory(history = []) {
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const message = history[index];
     if (message?.role !== 'user' || !String(message.content ?? '').trim()) {
+      continue;
+    }
+    if (parseConversationDirective(message.content)) {
       continue;
     }
     const questions = [String(message.content).trim()];
@@ -288,6 +354,9 @@ export function previousTaskFromHistory(history = []) {
 }
 
 export function legacyModeForTurnType(turnType, hasPreviousTask = false) {
+  if (turnType === TURN_TYPES.INSTRUCTION) {
+    return 'INSTRUCTION';
+  }
   if (turnType === TURN_TYPES.NEW_TASK) {
     return hasPreviousTask ? 'INDEPENDENT' : 'NEW_TOPIC';
   }
@@ -351,6 +420,7 @@ export function createTurnContext({
   referencesResult = false,
   maxInheritTurns = DEFAULT_MAX_INHERIT_TURNS,
   maxInheritedSlots = DEFAULT_MAX_INHERITED_SLOTS,
+  conversationDirective = null,
 } = {}) {
   const normalizedQuestion = String(question ?? '').trim();
   const extractedSlots = extractExplicitSlots(normalizedQuestion);
@@ -370,12 +440,15 @@ export function createTurnContext({
     : turnType;
   const canInherit = hasPreviousTask
     && !stale
-    && ![TURN_TYPES.NEW_TASK, TURN_TYPES.AMBIGUOUS].includes(effectiveTurnType);
+    && ![TURN_TYPES.NEW_TASK, TURN_TYPES.INSTRUCTION, TURN_TYPES.AMBIGUOUS].includes(effectiveTurnType);
   const { selected: inheritedSlots, cleared } = canInherit
     ? inheritedSlotSelection(previousTask?.slots, explicitSlots, maxInheritedSlots)
     : { selected: {}, cleared: [] };
+  const relevantMemorySlots = effectiveTurnType === TURN_TYPES.INSTRUCTION
+    ? {}
+    : filterMemorySlotsForQuestion(memorySlots, normalizedQuestion);
   const usableMemorySlots = Object.fromEntries(
-    Object.entries(memorySlots ?? {}).filter(([key]) => (
+    Object.entries(relevantMemorySlots).filter(([key]) => (
       !explicitSlots?.[key]?.length && !inheritedSlots?.[key]?.length
     )),
   );
@@ -412,7 +485,10 @@ export function createTurnContext({
     needsClassifier: Boolean(needsClassifier) && !forceNewTask && !stale,
     needsConfirmation: Boolean(needsClassifier) && !forceNewTask && !stale,
     inheritQueryContext: inherited,
-    inheritedUserMessages: inheritedUserMessages.slice(-4),
+    inheritedUserMessages: effectiveTurnType === TURN_TYPES.INSTRUCTION
+      ? []
+      : inheritedUserMessages.slice(-4),
+    conversationDirective,
     historyMessageCount: history.length,
     taskId,
     turnId,
@@ -512,6 +588,20 @@ export function completeTaskState({
     explicitSlots: {},
     inheritedSlots: {},
   };
+  if (base.turnType === TURN_TYPES.INSTRUCTION) {
+    return {
+      ...base,
+      slots: {},
+      explicitSlots: {},
+      inheritedSlots: {},
+      memorySlots: {},
+      result: null,
+      resolvedQuestion: answer.resolvedQuestion ?? base.resolvedQuestion,
+      status: 'COMPLETED',
+      updatedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+  }
   const resultSlots = extractSlotsFromAnswer(answer);
   const slots = mergeSlotSets(base.inheritedSlots, base.memorySlots, base.explicitSlots, resultSlots);
   return {
@@ -570,8 +660,12 @@ export function serializeTaskBindingText(taskState, question = '') {
   const currentQuestion = String(
     taskState?.question ?? question ?? taskState?.resolvedQuestion ?? '',
   ).trim();
+  const contextualSlots = mergeSlotSets(
+    taskState?.memorySlots,
+    taskState?.inheritedSlots,
+  );
   const slotTexts = SLOT_ORDER.flatMap((key) => (
-    (taskState?.slots?.[key] ?? []).map((item) => item.sourceText ?? item.value)
+    (contextualSlots[key] ?? []).map((item) => item.sourceText ?? item.value)
   ));
   return unique([currentQuestion, ...slotTexts]).join('；');
 }
@@ -625,6 +719,7 @@ export function publicContextDecision(context) {
     clearedSlots: context?.clearedSlots ?? [],
     needsConfirmation: Boolean(context?.needsConfirmation),
     referencedArtifactId: context?.referencedArtifactId ?? null,
+    conversationDirective: context?.conversationDirective ?? null,
   };
 }
 

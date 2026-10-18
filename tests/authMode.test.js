@@ -46,6 +46,12 @@ test('loadConfig defaults absent AUTH_MODE according to NODE_ENV', () => {
   assert.equal(loadConfig({ NODE_ENV: 'production' }).authMode, 'session');
 });
 
+test('dev mode binds to loopback unless HOST is explicitly overridden', () => {
+  assert.equal(loadConfig({}).host, '127.0.0.1');
+  assert.equal(loadConfig({ NODE_ENV: 'production' }).host, '0.0.0.0');
+  assert.equal(loadConfig({ HOST: '0.0.0.0' }).host, '0.0.0.0');
+});
+
 test('application rejects unsupported auth overrides before creating persistent state', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-auth-mode-'));
   const config = {

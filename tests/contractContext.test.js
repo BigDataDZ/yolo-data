@@ -44,6 +44,17 @@ test('follow-up questions bind only structured inherited slots', () => {
   assert.equal(context.taskState.inheritedSlots.time[0].sourceText, '本月');
 });
 
+test('first-turn binding context does not duplicate explicit slots into pseudo clauses', () => {
+  const question = '26年9月份的业绩对比上月有什么变化？按照客户结构、品类等相关维度帮我分析下降或上升的主要因素';
+  const context = resolveConversationContext(question, []);
+  const sourceContext = buildContractSourceContext({
+    taskState: context.taskState,
+    resolvedQuestion: context.question,
+  });
+
+  assert.equal(sourceContext, question);
+});
+
 test('confirmed clarification values are included in contract traceability context', () => {
   const sourceContext = buildContractSourceContext({
     inheritQueryContext: false,

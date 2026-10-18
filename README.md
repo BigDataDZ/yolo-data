@@ -127,7 +127,7 @@ flowchart LR
 
 - Node.js `>= 22.5`（平台库使用 Node 内置 `node:sqlite`，无需安装数据库服务）
 - npm 或 pnpm
-- 可选：Python 3，用于高级数据处理和文件生成（`.xlsx` 生成需要该解释器装有 `pandas` + `openpyxl`）
+- Python 3：用于高级数据处理和文件生成。`npm run setup` 会自动创建 `.venv` 并安装 `pandas`、`openpyxl`
 - 或：Docker + Docker Compose，一条命令启动完整平台，无需本机 Node/Python（见 [Docker 一键部署](#docker-一键部署)）
 - 可选外部服务：
   - 指标平台
@@ -147,7 +147,7 @@ docker build -t yolo-data .
 docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
 ```
 
-默认镜像包含 MySQL 兼容驱动与 Python 3。PostgreSQL 需要在构建时启用可选的 `pg` 驱动：
+默认镜像包含 MySQL 兼容驱动、Python 3、`pandas` 和 `openpyxl`。PostgreSQL 需要在构建时启用可选的 `pg` 驱动：
 
 ```bash
 # Compose（POSIX shell；PowerShell 先执行 $env:INSTALL_PG='true'）
@@ -156,19 +156,19 @@ INSTALL_PG=true docker compose up -d --build
 docker build --build-arg INSTALL_PG=true -t yolo-data .
 ```
 
-`INSTALL_PG` 是构建参数，修改后需要重新构建镜像。Python 的 `pandas`、`openpyxl` 仍是可选依赖，默认镜像不包含它们。
+`INSTALL_PG` 是构建参数，修改后需要重新构建镜像。Python 分析依赖会在镜像构建期校验，缺失时构建直接失败。
 
 数据卷 `/app/data` 保存 SQLite 数据库、数据源加密密钥和分析产物。`docker compose down` 后重新启动会保留数据；`docker compose down -v` 会删除数据卷。备份与迁移时应停止服务并保存整个数据卷，数据库和 `.datasource-key` 必须一起保留。
 
-`docker compose ps` 可查看容器健康状态，`docker compose logs yolo-data` 可查看启动日志。Compose 默认使用 `dev` 模式，仅供可信网络体验；需要登录鉴权时，在 `docker-compose.yml` 中设置 `AUTH_MODE: session` 并修改初始口令。生产环境通过 HTTPS 反向代理访问，参见下方生产部署说明。
+`docker compose ps` 可查看容器健康状态，`docker compose logs yolo-data` 可查看启动日志。Compose 默认启用 `session` 登录，并且只绑定 `127.0.0.1`；局域网调试可显式设置 `AUTH_MODE=dev` 和 `HOST_BIND=0.0.0.0`，但不要直接暴露到公网。生产环境通过 HTTPS 反向代理访问，参见下方生产部署说明。
 
 ### 本地启动
 
-本地手动初始化：
+本地初始化（会自动创建 Python `.venv` 并安装分析依赖）：
 
 ```bash
-npm install            # 安装依赖
-cp .env.example .env   # 生成配置；按需填写模型密钥、指标平台、Doris 连接
+npm run setup          # 安装 Node/Python 依赖并生成 .env
+# 按需编辑 .env 中的模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
 ```
 
@@ -242,7 +242,7 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 
 ## 生产化注意事项
 
-- `docker compose up -d` 默认是开发体验配置（`AUTH_MODE=dev`）。对外部署必须改为 `AUTH_MODE=session`、修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
+- `docker compose up -d` 默认使用 `AUTH_MODE=session` 且仅绑定 `127.0.0.1`。对外部署仍必须修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
 - 代码执行默认 `SANDBOX_BACKEND=inprocess`，这不是安全边界。不可信用户场景应配置 Docker/Podman 容器、seccomp、无网络和只读根文件系统。
 - 平台状态当前使用 SQLite，应按单实例部署。`DATABASE_BACKEND` 和 `REDIS_URL` 尚未接入应用启动流程，设置它们不会切换平台存储或启用分布式会话锁；多实例部署仍需完成外部平台库和锁的集成。PostgreSQL 业务数据源支持不代表平台状态可存入 PostgreSQL。
 - `REFLECTION_ENABLED` 与 `REFLECTION_MAX_REPLAN` 控制执行后反思；`npm run eval` 或 `/api/eval` 可查看 L1/L2/L3 回归评测。

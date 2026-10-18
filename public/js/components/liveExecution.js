@@ -16,7 +16,12 @@ function normalizeStatus(status) {
   if (value === 'error' || value === 'failed') {
     return 'error';
   }
-  if (value === 'done' || value === 'success' || value === 'completed') {
+  if (
+    value === 'done'
+    || value === 'success'
+    || value === 'completed'
+    || value === 'completed_with_warnings'
+  ) {
     return 'done';
   }
   return 'pending';

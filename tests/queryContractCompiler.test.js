@@ -179,6 +179,82 @@ test('contract compiler requires a complete condition ledger', () => {
   assert.equal(result.contract.provenance.label, '指标库口径');
 });
 
+test('the 分别 connector binds every requested breakdown dimension', () => {
+  const result = compile(
+    '9月含税销售金额，customer_name和business_type_name分别展示',
+    {
+      sourceType: 'INDICATOR',
+      indicatorId: 'sales',
+      conditions: [
+        {
+          id: 'metric',
+          sourceText: '含税销售金额',
+          kind: 'METRIC',
+          status: 'RESOLVED',
+        },
+        {
+          id: 'time',
+          sourceText: '9月',
+          kind: 'TIME',
+          status: 'RESOLVED',
+        },
+        {
+          id: 'customer',
+          sourceText: 'customer_name',
+          kind: 'DIMENSION',
+          status: 'RESOLVED',
+        },
+        {
+          id: 'segment',
+          sourceText: 'business_type_name',
+          kind: 'DIMENSION',
+          status: 'RESOLVED',
+        },
+        {
+          id: 'connector',
+          sourceText: '分别',
+          kind: 'DIMENSION',
+          status: 'RESOLVED',
+        },
+      ],
+      metricFields: [{
+        field: 'sale_amt',
+        sourceText: '含税销售金额',
+        aggregator: 'SUM',
+        conditionIds: ['metric'],
+      }],
+      dimensionFields: [
+        {
+          field: 'customer_name',
+          sourceText: 'customer_name',
+          conditionIds: ['customer'],
+        },
+        {
+          field: 'business_type_name',
+          sourceText: 'business_type_name',
+          conditionIds: ['segment'],
+        },
+      ],
+      filterFields: [],
+      timeWindows: [{
+        sourceText: '9月',
+        dateMode: 'BETWEEN',
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+        conditionIds: ['time'],
+      }],
+    },
+  );
+
+  assert.equal(result.valid, true, result.issues.map((issue) => issue.message).join('\n'));
+  assert.equal(
+    result.contract.dimensionFields.filter(
+      (dimension) => dimension.conditionIds.includes('connector'),
+    ).length,
+    2,
+  );
+});
+
 test('month-to-date wording binds into the compiled time window', () => {
   const result = compile(
     '月至今的标准配送的业绩是多少',
@@ -291,6 +367,8 @@ test('platform completes trend and ranking semantics from the question', () => {
 
   assert.equal(result.valid, true, result.issues.map((issue) => issue.message).join('\n'));
   assert.equal(result.contract.limit, 10);
+  assert.equal(result.contract.limitPolicy.reason, 'EXPLICIT_TOP_N');
+  assert.equal(result.contract.limitPolicy.intentionalTopN, 10);
   assert.ok(result.contract.conditions.some(
     (condition) => condition.kind === 'LIMIT' && condition.sourceText === '排名前10',
   ));
@@ -303,6 +381,56 @@ test('platform completes trend and ranking semantics from the question', () => {
   assert.ok(result.contract.semanticCoverage.some(
     (item) => item.code === 'TREND' && item.status === 'AUTO_COMPLETED',
   ));
+});
+
+test('cross trends keep the complete business-by-time result set', () => {
+  const result = compile(
+    '2026年9月分客户、月份查看销售额趋势',
+    {
+      sourceType: 'INDICATOR',
+      indicatorId: 'sales',
+      conditions: [
+        { id: 'metric', sourceText: '销售额', kind: 'METRIC', status: 'RESOLVED' },
+        { id: 'time', sourceText: '2026年9月', kind: 'TIME', status: 'RESOLVED' },
+        { id: 'customer', sourceText: '客户', kind: 'DIMENSION', status: 'RESOLVED' },
+        { id: 'grain', sourceText: '月份', kind: 'DIMENSION', status: 'RESOLVED' },
+        { id: 'trend', sourceText: '趋势', kind: 'RESULT_ACTION', status: 'RESOLVED' },
+      ],
+      metricFields: [{
+        field: 'sale_amt',
+        sourceText: '销售额',
+        aggregator: 'SUM',
+        conditionIds: ['metric'],
+      }],
+      dimensionFields: [
+        {
+          field: 'customer_name',
+          sourceText: '客户',
+          conditionIds: ['customer'],
+        },
+        {
+          field: 'sdt',
+          sourceText: '月份',
+          timeGrain: 'MONTH',
+          conditionIds: ['grain'],
+        },
+      ],
+      filterFields: [],
+      timeWindows: [{
+        sourceText: '2026年9月',
+        dateMode: 'BETWEEN',
+        startDate: '2026-09-01',
+        endDate: '2026-09-30',
+        conditionIds: ['time'],
+      }],
+      timeGrain: 'MONTH',
+    },
+  );
+
+  assert.equal(result.valid, true, result.issues.map((issue) => issue.message).join('\n'));
+  assert.equal(result.contract.limitPolicy.reason, 'COMPLETE_RESULT_SET');
+  assert.equal(result.contract.limitPolicy.expectedRowDensity, 'HIGH');
+  assert.ok(result.contract.limit >= 5000);
 });
 
 test('model-owned semantic categories cannot be silently omitted', () => {
