@@ -122,7 +122,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
         });
         assert.equal(streamed.status, 200);
         const events = (await streamed.text()).trim().split('\n').map((line) => JSON.parse(line));
-        assert.ok(!events.some((event) => event.type === 'stream_error'), JSON.stringify(events));
+        assert.deepEqual(events.filter((event) => event.type === 'stream_error'), []);
         const success = { response: streamed, data: events.find((event) => event.type === 'final')?.answer };
         assert.equal(success.response.status, 200, JSON.stringify(success.data));
         assert.ok(success.data);
