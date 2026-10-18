@@ -441,7 +441,7 @@ export function createTurnContext({
       inheritedSlots,
       memorySlots: usableMemorySlots,
       clearedSlots: cleared,
-      result: previousTask?.result ?? null,
+      result: canInherit ? previousTask?.result ?? null : null,
       status: 'PLANNING',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
