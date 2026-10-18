@@ -192,7 +192,7 @@ export function inferClarificationSlots(question) {
     return {};
   }
   const slots = {};
-  if (TIME_HINT_PATTERN.test(source)) {
+  if (TIME_HINT_PATTERN.test(source) || extractExplicitSlots(source).time?.length) {
     return slots;
   }
   if (turnPatterns().fieldLabel?.test(source)) {

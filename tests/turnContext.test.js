@@ -47,6 +47,16 @@ test('two distinct explicit date ranges remain separate time slots', () => {
   ]);
 });
 
+test('an ISO date clarification fills time without replacing the inherited region filter', () => {
+  const first = createTurnContext({ question: '销售额，只看华东' });
+  const clarified = createTurnContext({ question: '2026-01-01', history: completedHistory(first),
+    turnType: TURN_TYPES.CLARIFICATION_ANSWER });
+  assert.deepEqual(clarified.slots.time.map(item => item.sourceText), ['2026-01-01']);
+  assert.equal(clarified.explicitSlots.filters, undefined);
+  assert.deepEqual(clarified.inheritedSlots.filters.map(item => item.sourceText), ['华东']);
+  assert.deepEqual(clarified.slots.filters.map(item => item.sourceText), ['华东']);
+});
+
 test('followups inherit full date ranges and filters while a time revision replaces only time', () => {
   const first = createTurnContext({ question: '2026年1月1日至2026年3月31日销售额，只看华东' });
   const second = createTurnContext({ question: '按渠道拆开', history: completedHistory(first),
