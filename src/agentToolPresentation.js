@@ -252,4 +252,3 @@ export function describeToolStep(name, args, result) {
     detail: JSON.stringify(args),
   };
 }
-

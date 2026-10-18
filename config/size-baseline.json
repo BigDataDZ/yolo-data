@@ -38,7 +38,7 @@
   "scripts/run-eval.mjs": 401,
   "scripts/setup.mjs": 146,
   "src/agent.js": 5671,
-  "src/agentToolPresentation.js": 256,
+  "src/agentToolPresentation.js": 255,
   "src/analysisArtifact.js": 82,
   "src/analysisContract.js": 309,
   "src/analysisPipeline.js": 463,
