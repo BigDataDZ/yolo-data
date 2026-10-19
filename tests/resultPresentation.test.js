@@ -508,3 +508,17 @@ test('presentation planner leaves fields untouched when the theme declares nothi
   // 自然语言描述不再被代码当规则解析，规则只能来自声明块或在线元数据。
   assert.deepEqual(contract.fields, {});
 });
+
+
+test('xlsx projection respects column types and preserves missing values', () => {
+  const text = { showType: 'STRING', type: 'STRING' };
+  for (const value of ['00123', '9007199254740993', 'A-1']) {
+    assert.equal(presentationValueForColumn(value, text), value);
+  }
+  for (const value of ['', null, undefined]) {
+    assert.equal(presentationValueForColumn(value, { showType: 'NUMBER', xlsxScale: 0.01 }), value);
+  }
+  assert.equal(presentationValueForColumn('25', { showType: 'NUMBER' }), 25);
+  assert.equal(presentationValueForColumn('470000', { type: 'DECIMAL', xlsxScale: 0.0001 }), 47);
+  assert.equal(presentationValueForColumn('8.4', { presentationType: 'percent', xlsxScale: 0.01 }), 0.084);
+});
