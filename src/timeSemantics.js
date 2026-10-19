@@ -351,22 +351,53 @@ export function buildPreviousAlignedWindow(window) {
   if (!Number.isFinite(days) || days <= 0) {
     return null;
   }
-  const previousEnd = sameMonth
-    ? shiftMonthKeepingDay(window.endDate, -1)
-    : shiftDays(window.startDate, -1);
-  const previousStart = sameMonth
-    ? shiftMonthKeepingDay(window.startDate, -1)
-    : shiftDays(previousEnd, -(days - 1));
+  const fullCalendarMonth = sameMonth
+    && window.startDate === startOfMonth(window.startDate)
+    && window.endDate === endOfMonth(window.endDate);
+  const previousStart = fullCalendarMonth
+    ? startOfMonth(window.startDate, -1)
+    : sameMonth
+      ? shiftMonthKeepingDay(window.startDate, -1)
+      : shiftDays(shiftDays(window.startDate, -1), -(days - 1));
+  const previousEnd = fullCalendarMonth
+    ? endOfMonth(window.endDate, -1)
+    : sameMonth
+      ? shiftMonthKeepingDay(window.endDate, -1)
+      : shiftDays(window.startDate, -1);
+  const previousLabel = formatPreviousWindowLabel({
+    startDate: previousStart,
+    endDate: previousEnd,
+    fullCalendarMonth,
+  });
   return {
     ...window,
     id: `${window.id ?? 'window'}-previous`,
-    label: `${window.label || window.sourceText || '本期'}对比期`,
-    expression: `${window.expression || window.sourceText || '本期'}对比期`,
+    detectWord: previousLabel,
+    label: previousLabel,
+    expression: previousLabel,
     startDate: previousStart,
     endDate: previousEnd,
-    ruleSource: window.ruleSource || '平台按同期天数等长对齐',
+    ruleSource: window.ruleSource || (fullCalendarMonth
+      ? '平台按完整自然月对齐'
+      : '平台按同期天数等长对齐'),
     derived: true,
   };
+}
+
+function formatPreviousWindowLabel({ startDate, endDate, fullCalendarMonth }) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const startYear = start.getUTCFullYear();
+  const startMonth = start.getUTCMonth() + 1;
+  const endYear = end.getUTCFullYear();
+  const endMonth = end.getUTCMonth() + 1;
+  if (fullCalendarMonth) {
+    return `${startYear}年${startMonth}月`;
+  }
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${startYear}年${startMonth}月${start.getUTCDate()}日至${end.getUTCDate()}日`;
+  }
+  return `${startDate}至${endDate}`;
 }
 
 function parseExplicitDay(question) {

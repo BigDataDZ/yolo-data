@@ -27,6 +27,7 @@ const NUM_REL_TOLERANCE = 0.02;
 const SIGNIFICANT_MAGNITUDE = 100;
 // Log-order tolerance: a headline within 10x of *some* result magnitude passes.
 const LOG_ORDER_TOLERANCE = 1;
+const DEFAULT_JUDGE_TIMEOUT_MS = 20_000;
 
 // ---------------------------------------------------------------------------
 // deterministic helpers
@@ -50,19 +51,19 @@ const STOPWORDS = new Set([
 function extractNumbers(text) {
   const raw = String(text ?? '');
   const matches = raw.match(
-    /\d+(?:\.\d+)?\s*(?:万|亿|w|千|百|个|家|元|万元|亿元|百分比|倍|%|percent)?/gi,
+    /(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:万|亿|w|千|百|个|家|元|万元|亿元|百分比|倍|%|percent)?/gi,
   ) ?? [];
   const values = [];
   for (const m of matches) {
-    const numPart = m.match(/[\d.]+/);
+    const numPart = m.match(/(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?/);
     if (!numPart) {
       continue;
     }
-    let value = Number(numPart[0]);
+    let value = Number(numPart[0].replaceAll(',', ''));
     if (!Number.isFinite(value)) {
       continue;
     }
-    const unit = m.replace(/[\d.\s]/g, '').toLowerCase();
+    const unit = m.replace(/[\d.,\s]/g, '').toLowerCase();
     if (unit.includes('亿') || unit === 'yi') {
       value *= 1e8;
     } else if (unit.includes('万') || unit === 'w') {
@@ -83,6 +84,43 @@ function resultMagnitudes(result) {
   if (!Array.isArray(rows)) {
     return magnitudes;
   }
+  const columns = Array.isArray(result?.columns) ? result.columns : [];
+  // Answers are written in the display contract's unit (for example 万元),
+  // while rows still carry the raw value (for example 元). Compare against
+  // both representations so a correct converted headline is not treated as a
+  // fabricated number.
+  for (const column of columns) {
+    if (!column || typeof column !== 'object') {
+      continue;
+    }
+    const keys = [column.bizName, column.field, column.name].filter(Boolean);
+    const scale = Number(column.displayScale);
+    if (!Number.isFinite(scale) || scale <= 0 || scale === 1) {
+      continue;
+    }
+    const key = keys.find((candidate) => rows.some(
+      (row) => row && Number.isFinite(Number(row[candidate])),
+    ));
+    if (!key) {
+      continue;
+    }
+    let sum = 0;
+    let has = false;
+    for (const row of rows) {
+      const n = Number(row?.[key]);
+      if (Number.isFinite(n)) {
+        const scaled = Math.abs(n * scale);
+        if (scaled !== 0) {
+          magnitudes.push(scaled);
+        }
+        sum += scaled;
+        has = true;
+      }
+    }
+    if (has && sum !== 0) {
+      magnitudes.push(sum);
+    }
+  }
   for (const row of rows) {
     if (!row || typeof row !== 'object') {
       continue;
@@ -95,10 +133,11 @@ function resultMagnitudes(result) {
     }
   }
   // Include per-column sums as candidate magnitudes (headline totals).
-  const columns = result?.columns ?? [];
   if (Array.isArray(columns) && columns.length > 0) {
     for (const column of columns) {
-      const key = typeof column === 'string' ? column : column?.name ?? column?.field;
+      const key = typeof column === 'string'
+        ? column
+        : column?.bizName ?? column?.field ?? column?.name;
       if (!key) {
         continue;
       }
@@ -291,7 +330,13 @@ function parseJudgeVerdict(text) {
   }
 }
 
-export async function checkStrategySound({ question, answer, result, judge }) {
+export async function checkStrategySound({
+  question,
+  answer,
+  result,
+  judge,
+  timeoutMs = DEFAULT_JUDGE_TIMEOUT_MS,
+}) {
   if (!hasData(result)) {
     return {
       name: 'strategy_sound',
@@ -317,19 +362,39 @@ export async function checkStrategySound({ question, answer, result, judge }) {
     };
   }
   let verdictText;
+  let timedOut = false;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  let timer = null;
   try {
-    verdictText = await judge(JUDGE_SYSTEM, buildJudgeUserPrompt({ question, answer, result }));
+    verdictText = await Promise.race([
+      judge(JUDGE_SYSTEM, buildJudgeUserPrompt({ question, answer, result }), {
+        signal: controller?.signal,
+      }),
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          controller?.abort();
+          reject(new Error('REFLECTION_JUDGE_TIMEOUT'));
+        }, Math.max(1, Number(timeoutMs) || DEFAULT_JUDGE_TIMEOUT_MS));
+      }),
+    ]);
   } catch {
     return {
       name: 'strategy_sound',
       pass: true,
-      detail: 'Judge 调用失败，退化为规则检查，不触发换策略',
-      judgeUsed: false,
+      detail: timedOut
+        ? 'Judge 超时，退化为规则检查，不触发换策略'
+        : 'Judge 调用失败，退化为规则检查，不触发换策略',
+      judgeUsed: timedOut,
       degraded: true,
       needsReplan: false,
       hint: '',
       reason: '',
     };
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
   }
   const verdict = parseJudgeVerdict(verdictText);
   if (!verdict) {
@@ -385,10 +450,17 @@ export async function reflectOnAnswer({
   contract = null,
   judge = null,
   depth = 0,
+  judgeTimeoutMs = DEFAULT_JUDGE_TIMEOUT_MS,
 }) {
   const answerable = checkAnswerable({ question, answer, result });
   const numeric = checkNumericConsistency({ answer, result });
-  const strategy = await checkStrategySound({ question, answer, result, judge });
+  const strategy = await checkStrategySound({
+    question,
+    answer,
+    result,
+    judge,
+    timeoutMs: judgeTimeoutMs,
+  });
 
   // Whether to trigger a changed-strategy replan (not a clarification).
   // Replan is driven by the intelligent Judge (③) or a high-confidence
@@ -426,14 +498,14 @@ export function createHarnessJudge(harness) {
   if (!harness || typeof harness.chat !== 'function' || harness.mode === 'local-rule') {
     return null;
   }
-  return async function judge(systemText, userText) {
+  return async function judge(systemText, userText, options = {}) {
     const payload = await harness.chat(
       [
         { role: 'system', content: systemText },
         { role: 'user', content: userText },
       ],
       [],
-      { judge: true, callType: 'REFLECTION_JUDGE' },
+      { judge: true, callType: 'REFLECTION_JUDGE', signal: options.signal },
     );
     return payload?.choices?.[0]?.message?.content ?? '';
   };

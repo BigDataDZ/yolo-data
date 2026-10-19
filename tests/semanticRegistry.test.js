@@ -58,8 +58,35 @@ test('semantic coverage reports unresolved spans instead of raw residual strings
     isResultActionClause: () => false,
   });
   assert.equal(unknown.issues[0].code, 'UNRESOLVED_SEMANTIC_SPAN');
+  assert.equal(unknown.issues[0].classification, 'UNKNOWN_SEMANTIC_TERM');
+  assert.equal(unknown.issues[0].disposition, 'BLOCK');
   assert.equal(unknown.issues[0].spanText, 'xyz渠道');
   assert.equal(unknown.unresolvedSpans[0].status, 'UNRESOLVED');
+});
+
+test('generic analysis wrappers do not become unresolved semantic spans', () => {
+  const report = buildSemanticCoverageReport({
+    question: '按照客户结构、品类等相关维度帮我分析下降或上升的主要因素',
+    sources: ['客户结构', '品类'],
+    registry: null,
+  });
+
+  assert.deepEqual(report.issues, []);
+  assert.deepEqual(report.unresolvedSpans, []);
+});
+
+test('generic analysis prose is stripped before semantic coverage is evaluated', () => {
+  const report = buildSemanticCoverageReport({
+    question: [
+      '26年9月份的业绩对比上月有什么变化？',
+      '按照客户结构、品类等相关维度帮我分析下降或上升的主要因素',
+    ].join(''),
+    sources: ['业绩', '26年9月份', '上月', '客户结构', '品类', '变化', '主要因素'],
+    registry: null,
+  });
+
+  assert.deepEqual(report.issues, []);
+  assert.deepEqual(report.unresolvedSpans, []);
 });
 
 test('question text is not treated as its own semantic answer', () => {

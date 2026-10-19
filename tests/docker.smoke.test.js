@@ -79,7 +79,10 @@ test('Docker image supports sessions and preserves SQLite and encryption keys ac
 
   const firstBase = await start(PASSWORD);
   assert.notEqual(docker('exec', name, 'id', '-u'), '0', 'application must run as a non-root user');
-  assert.equal(docker('exec', name, 'python3', '-c', 'print("python-ready")'), 'python-ready');
+  assert.equal(
+    docker('exec', name, 'python3', '-c', 'import pandas, openpyxl; print("analysis-ready")'),
+    'analysis-ready',
+  );
   const pgPresent = docker('exec', name, 'node', '-e', `
     try { require.resolve('pg'); console.log('true'); }
     catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; console.log('false'); }

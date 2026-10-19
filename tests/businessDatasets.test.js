@@ -171,6 +171,27 @@ test('business dataset query groups time dimensions at the requested grain', asy
   assert.equal(compiled.timeGrain, 'MONTH');
 });
 
+test('business dataset query orders grouped metrics by their output alias', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const dataset = createBusinessDataset(application, user);
+  const compiled = application.businessDatasets.buildQuery(dataset.id, {
+    metrics: [{
+      field: 'sale_amt',
+      aggregator: 'SUM',
+      outputField: 'sale_amt_sum',
+    }],
+    dimensions: ['performance_region_name'],
+    order: [{ field: 'sale_amt', direction: 'DESC' }],
+    limit: 200,
+  });
+
+  assert.match(compiled.sql, /SUM\(`sale_amt`\) AS `sale_amt_sum`/);
+  assert.match(compiled.sql, /ORDER BY `sale_amt_sum` DESC/);
+  assert.doesNotMatch(compiled.sql, /ORDER BY `sale_amt` DESC/);
+});
+
 test('business dataset query separates row filters from aggregate filters', async () => {
   const application = await createApplication(testConfig(), new FakeIndicatorClient());
   await application.init();
@@ -565,4 +586,61 @@ test('aliased metric output columns keep metric semantics', async () => {
   assert.equal(metric.semanticType, 'NUMBER');
   const timeColumn = result.columns.find((column) => column.bizName === 'sales_date');
   assert.equal(timeColumn.role, 'TIME');
+});
+
+test('business dataset execution probes one extra row without false truncation', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const dataset = createBusinessDataset(application, user, { attachToTheme: false });
+  const requestedLimits = [];
+  let nextRowCount = 10;
+  application.businessDatasets.getPoolById = () => ({
+    query: async ({ values = [] }) => {
+      if (values.length === 0) {
+        return [[{ maxDate: '2026-10-07' }], []];
+      }
+      const probe = Number(values.at(-1));
+      requestedLimits.push(probe);
+      const rowCount = nextRowCount;
+      return [
+        Array.from({ length: rowCount }, (_, index) => ({
+          performance_region_name: `区域${index + 1}`,
+          sale_amt: String(100 + index),
+        })),
+        [
+          { name: 'performance_region_name', type: 'STRING' },
+          { name: 'sale_amt', type: 246 },
+        ],
+      ];
+    },
+  });
+
+  const exact = await application.businessDatasets.executeQuery({
+    datasetId: dataset.id,
+    request: {
+      metrics: [{ field: 'sale_amt', aggregator: 'SUM' }],
+      dimensions: ['performance_region_name'],
+      limit: 10,
+    },
+    userId: user.id,
+  });
+  assert.equal(exact.limit, 10);
+  assert.equal(exact.rows.length, 10);
+  assert.equal(exact.truncated, false);
+
+  nextRowCount = 11;
+  const truncated = await application.businessDatasets.executeQuery({
+    datasetId: dataset.id,
+    request: {
+      metrics: [{ field: 'sale_amt', aggregator: 'SUM' }],
+      dimensions: ['performance_region_name'],
+      limit: 10,
+    },
+    userId: user.id,
+  });
+  assert.equal(truncated.limit, 10);
+  assert.equal(truncated.rows.length, 10);
+  assert.equal(truncated.truncated, true);
+  assert.deepEqual(requestedLimits, [11, 11]);
 });

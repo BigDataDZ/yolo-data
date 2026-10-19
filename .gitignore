@@ -8,6 +8,7 @@ data/*
 !.env.example
 
 node_modules/
+.venv/
 coverage/
 *.log
 artifacts/
@@ -16,4 +17,3 @@ test-results/
 
 # Generated semantic-eval output (baseline.json is committed on purpose).
 eval/report.json
-

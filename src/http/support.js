@@ -153,7 +153,7 @@ function stripPromptSemanticRules(policy) {
 }
 
 export function prepareThemePayload(body, existingTheme, crypto) {
-  const { issues } = parseSemanticBlock(body?.systemPrompt);
+  const { issues } = parseSemanticBlock(body?.systemPrompt ?? existingTheme?.systemPrompt);
   if (issues.length > 0) {
     throw Object.assign(
       new Error(`提示词里的业务口径块无法解析：${issues.join('；')}`),
@@ -183,9 +183,9 @@ export function prepareThemePayload(body, existingTheme, crypto) {
     llmConfig.apiKeyEncrypted = existing.apiKeyEncrypted;
   }
   return {
-    ...body,
+    ...existingTheme, ...body,
     // 提示词里的规则每次读取时重新解析，不写回数据库，避免同一份规则存两处。
-    semanticPolicy: stripPromptSemanticRules(body?.semanticPolicy),
+    semanticPolicy: stripPromptSemanticRules(body?.semanticPolicy ?? existingTheme?.semanticPolicy),
     llmConfig,
   };
 }

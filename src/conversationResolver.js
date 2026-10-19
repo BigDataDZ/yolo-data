@@ -5,6 +5,7 @@ import {
   previousTaskFromHistory,
 } from './turnContext.js';
 import { getPlatformLexicon, lexiconPattern } from './businessLexicon.js';
+import { parseConversationDirective } from './conversationDirectives.js';
 
 const CONTEXTUAL_QUESTION_PATTERN =
   /^(那|再|换|按|这个|上述|它|还有|呢|以及|和|同上|本月|这个月|上月|上个月|本周|这周|上周|今天|今日|昨天|今年|去年|本季度|上季度|近\s*\d+|最近\s*\d+)|在.{0,12}基础上|这个表|上述表|上表|以上|保留上文|现有基础/;
@@ -67,6 +68,7 @@ export function resolveConversationContext(question, history = [], options = {})
   const newTaskMarker = NEW_TASK_PATTERN.test(current);
   const revision = REVISION_PATTERN.test(current);
   const queryPrefix = QUERY_PREFIX_PATTERN.test(current);
+  const conversationDirective = parseConversationDirective(current);
   const anaphoric = CONTEXTUAL_QUESTION_PATTERN.test(current)
     && !(hasMetricIntent && (hasTimeIntent || hasFilterIntent));
   const awaitingClarification = CLARIFICATION_PATTERN.test(
@@ -80,7 +82,12 @@ export function resolveConversationContext(question, history = [], options = {})
   let confidence = 0.5;
   let reason = 'ambiguous_relation';
   let needsClassifier = true;
-  if (options.forceNewTask) {
+  if (conversationDirective) {
+    turnType = TURN_TYPES.INSTRUCTION;
+    confidence = 0.96;
+    reason = 'conversation_directive';
+    needsClassifier = false;
+  } else if (options.forceNewTask) {
     turnType = TURN_TYPES.NEW_TASK;
     confidence = 1;
     reason = 'forced_new_task';
@@ -159,6 +166,7 @@ export function resolveConversationContext(question, history = [], options = {})
       : previousUserMessages.slice(-3),
     maxInheritTurns: options.maxInheritTurns,
     maxInheritedSlots: options.maxInheritedSlots,
+    conversationDirective,
   });
 }
 

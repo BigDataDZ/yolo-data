@@ -75,6 +75,25 @@ test('② numeric passes when answer has no significant numbers', () => {
   assert.equal(r.pass, true);
 });
 
+test('② numeric accepts a headline expressed in the display scale', () => {
+  const r = checkNumericConsistency({
+    answer: '含税销售额（万元）合计 2,116。',
+    result: {
+      columns: [{
+        name: '含税销售额（万元）',
+        bizName: 'sale_amt',
+        displayScale: 0.0001,
+        role: 'METRIC',
+      }],
+      rows: [
+        { sale_amt: 15000000 },
+        { sale_amt: 6157903 },
+      ],
+    },
+  });
+  assert.equal(r.pass, true);
+});
+
 test('③ strategy sound degrades (no replan) when no judge supplied', async () => {
   const r = await checkStrategySound({
     question: '本月销售额',
@@ -105,6 +124,22 @@ test('③ strategy sound uses judge verdict (needsReplan triggers hint)', async 
   assert.equal(r.judgeUsed, true);
   assert.equal(r.needsReplan, true);
   assert.equal(r.hint, '应改按 customer_name 维度拆分而非整体求和');
+});
+
+test('③ strategy sound degrades when the judge exceeds its latency budget', async () => {
+  const r = await checkStrategySound({
+    question: '本月销售额',
+    answer: '本月销售额为123.45万元。',
+    result: RESULT,
+    judge: () => new Promise(() => {}),
+    timeoutMs: 10,
+  });
+
+  assert.equal(r.pass, true);
+  assert.equal(r.judgeUsed, true);
+  assert.equal(r.degraded, true);
+  assert.equal(r.needsReplan, false);
+  assert.match(r.detail, /超时/);
 });
 
 for (const field of ['answersQuestion', 'consistentWithData', 'needsReplan']) {
