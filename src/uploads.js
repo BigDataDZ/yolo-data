@@ -95,7 +95,7 @@ function base64ByteLength(text) {
   return Math.floor((value.length * 3) / 4) - padding;
 }
 
-// 上传服务：校验 -> 落原始文件产物 -> 解析成表格产物 -> 落识别过程文件。
+// 上传服务：校验并解析 -> 落原始文件与表格产物 -> 落识别过程文件。
 export class UploadService {
   constructor({ database, workspace, config = {} }) {
     this.database = database;
@@ -324,31 +324,6 @@ export class UploadService {
       incomingBytes: buffer.length,
     });
 
-    const sha256 = createHash('sha256').update(buffer).digest('hex');
-    const source = {
-      type: 'UPLOAD',
-      name: safeName,
-      extension,
-      size: buffer.length,
-      mimeType: MIME_TYPES[extension] ?? 'text/plain; charset=utf-8',
-      sha256,
-      uploadedAt: new Date().toISOString(),
-    };
-    const fileArtifact = this.workspace.createFileArtifact({
-      workspaceId: workspaceRecord.id,
-      userId,
-      sessionId: session.id,
-      title: `${safeName}（原始文件）`,
-      content: buffer.toString('base64'),
-      encoding: 'base64',
-      format: extension,
-      mimeType: source.mimeType,
-      purpose: '用户上传的本地文件',
-      size: buffer.length,
-      source,
-    });
-
-    let tableArtifact = null;
     let parsed = null;
     const warnings = [];
     if (SPREADSHEET_EXTENSIONS.has(extension)) {
@@ -380,31 +355,56 @@ export class UploadService {
       if (!parseable && !parsed.unparsed) {
         throw uploadError('未能从文件中识别出列，请检查文件是否有表头行');
       }
-      if (parseable) {
-        tableArtifact = this.workspace.createTableArtifact({
-          workspaceId: workspaceRecord.id,
-          userId,
-          sessionId: session.id,
-          title: `${safeName}（解析表）`,
-          metadata: {
-            source: { type: 'UPLOAD_FILE', id: fileArtifact.id, name: safeName },
-            derivedFromArtifactId: fileArtifact.id,
-            parentArtifactIds: [fileArtifact.id],
-            inputArtifactIds: [fileArtifact.id],
-            lineageQuestion: `上传本地文件：${safeName}`,
-            format: extension,
-            encoding: parsed.encoding,
-            delimiter: parsed.delimiter,
-            sheetName: parsed.sheetName ?? null,
-            rowCount: parsed.rows.length,
-            totalRowCount: parsed.totalRows ?? parsed.rows.length,
-            columnCount: parsed.columns.length,
-            truncated: Boolean(parsed.truncated),
-            warnings,
-          },
-          payload: { data: { columns: parsed.columns, rows: parsed.rows } },
-        });
-      }
+    }
+
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
+    const source = {
+      type: 'UPLOAD',
+      name: safeName,
+      extension,
+      size: buffer.length,
+      mimeType: MIME_TYPES[extension] ?? 'text/plain; charset=utf-8',
+      sha256,
+      uploadedAt: new Date().toISOString(),
+    };
+    const fileArtifact = this.workspace.createFileArtifact({
+      workspaceId: workspaceRecord.id,
+      userId,
+      sessionId: session.id,
+      title: `${safeName}（原始文件）`,
+      content: buffer.toString('base64'),
+      encoding: 'base64',
+      format: extension,
+      mimeType: source.mimeType,
+      purpose: '用户上传的本地文件',
+      size: buffer.length,
+      source,
+    });
+    let tableArtifact = null;
+    if (parsed && !parsed.unparsed && parsed.columns.length > 0) {
+      tableArtifact = this.workspace.createTableArtifact({
+        workspaceId: workspaceRecord.id,
+        userId,
+        sessionId: session.id,
+        title: `${safeName}（解析表）`,
+        metadata: {
+          source: { type: 'UPLOAD_FILE', id: fileArtifact.id, name: safeName },
+          derivedFromArtifactId: fileArtifact.id,
+          parentArtifactIds: [fileArtifact.id],
+          inputArtifactIds: [fileArtifact.id],
+          lineageQuestion: `上传本地文件：${safeName}`,
+          format: extension,
+          encoding: parsed.encoding,
+          delimiter: parsed.delimiter,
+          sheetName: parsed.sheetName ?? null,
+          rowCount: parsed.rows.length,
+          totalRowCount: parsed.totalRows ?? parsed.rows.length,
+          columnCount: parsed.columns.length,
+          truncated: Boolean(parsed.truncated),
+          warnings,
+        },
+        payload: { data: { columns: parsed.columns, rows: parsed.rows } },
+      });
     }
 
     const profile = tableArtifact ? this.profileTable(parsed) : null;

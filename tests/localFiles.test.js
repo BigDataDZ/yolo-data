@@ -402,6 +402,38 @@ test('upload rejects unsupported, oversized, binary and session-less requests', 
   }
 });
 
+for (const rejected of [
+  { name: 'damaged.xlsx', content: Buffer.from([0x50, 0x4B, 0x03, 0x04]), message: /有效的 xlsx 工作簿/ },
+  { name: 'blank.csv', content: Buffer.from(' \n\t\n'), message: /识别出列/ },
+  { name: 'invalid.json', content: Buffer.from('{'), message: /JSON 文件解析失败/ },
+  { name: 'empty.json', content: Buffer.from('[{}]'), message: /识别出列/ },
+  { name: 'blank.xls', content: Buffer.from(' \n'), message: /识别出列/ },
+]) {
+  test(`rejected ${rejected.name} leaves no artifacts or versions and preserves upload quota`, () => {
+    const harness = createHarness({ maxFilesPerSession: 1, allowedExtensions: ['csv', 'xls', 'xlsx', 'json'] });
+    try {
+      const base = { userId: harness.user.id, sessionId: harness.session.id };
+      assert.throws(
+        () => harness.uploads.upload({
+          ...base, name: rejected.name, contentBase64: rejected.content.toString('base64'),
+        }),
+        (error) => error.statusCode === 400 && rejected.message.test(error.message),
+      );
+      assert.equal(harness.database.countRows('workspace_artifacts'), 0);
+      assert.equal(harness.database.countRows('artifact_versions'), 0);
+      assert.deepEqual(harness.database.listAuditLogs(50).map((entry) => entry.action), ['FILE_REJECTED']);
+
+      const valid = harness.uploads.upload({ ...base, name: 'valid.csv', contentBase64: toBase64('a\n1\n') });
+      assert.equal(valid.table.rowCount, 1);
+      assert.equal(harness.database.countRows('workspace_artifacts'), 3);
+      assert.equal(harness.database.countRows('artifact_versions'), 3);
+    } finally {
+      harness.database.close();
+      fs.rmSync(harness.directory, { recursive: true, force: true });
+    }
+  });
+}
+
 test('upload enforces the per-session quota', () => {
   const harness = createHarness({ maxFilesPerSession: 1 });
   try {
@@ -646,6 +678,10 @@ test('legacy binary xls is stored and flagged instead of being guessed', () => {
     assert.equal(binary.table, null);
     assert.ok(binary.file.artifactId);
     assert.ok(binary.warnings.length > 0);
+    assert.equal(harness.database.countRows('workspace_artifacts'), 2);
+    assert.equal(harness.database.countRows('artifact_versions'), 2);
+    const stored = harness.workspace.getArtifact({ artifactId: binary.file.artifactId, userId: harness.user.id });
+    assert.equal(stored.payload.content, ole.toString('base64'));
 
     // 文本伪装成 .xls（把 CSV 另存为 xls 是常见情况）按文本表格解析
     const textXls = harness.uploads.upload({
