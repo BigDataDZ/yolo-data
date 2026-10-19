@@ -20,7 +20,7 @@ const TOOL_REGISTRY = [
 export function createMcpServer({ config, deps }) {
   const server = new McpServer({ name: 'yolo-data-agent', version: '1.0.0' });
   const modeGate = createModeGate(config);
-  const toolCtx = { ...deps, modeGate };
+  const toolCtx = { ...deps, modeGate, get requestContext() { return deps.requestContext; } };
   for (const [name, register] of TOOL_REGISTRY) {
     if (!modeGate.canUse(name)) continue;
     register(server, toolCtx);
