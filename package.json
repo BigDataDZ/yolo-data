@@ -9,7 +9,7 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "dev": "node --watch src/server.js",
+    "dev": "node scripts/dev.mjs",
     "start": "node src/server.js",
     "test": "node --test",
     "lint": "node scripts/check-architecture.mjs",

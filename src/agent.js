@@ -37,7 +37,6 @@ import {
 } from './trace.js';
 import { describeIndicatorSource } from './indicatorSource.js';
 import { QueryContractCompiler } from './queryContractCompiler.js';
-import { parseTemporalExpression } from './timeSemantics.js';
 import { aggregateRowsByTimeGrain } from './timeAggregation.js';
 import {
   buildModelClarification,
@@ -49,6 +48,7 @@ import {
 } from './valueClarification.js';
 import { buildSemanticTaxonomyPrompt } from './analysisSemantics.js';
 import { buildSemanticPolicyPrompt } from './semanticPolicy.js';
+import { resolveQueryLimit } from './queryLimit.js';
 import { createProgressiveAnswerEmitter } from './answerStream.js';
 import { createProcessArtifactRecorder } from './processArtifacts.js';
 import { appendUserQuestionWithAttachments } from './chatAttachments.js';
@@ -1109,8 +1109,8 @@ function selectDatasetTimeField(fields) {
     ?? null;
 }
 
-function buildDatasetDateRange(question, fields, requested) {
-  const parsed = parseTemporalExpression(question);
+function buildDatasetDateRange(question, fields, requested, temporalResolver = null) {
+  const parsed = temporalResolver?.({ question }) ?? null;
   if (!parsed || parsed.dateMode === 'ALL') {
     return requested;
   }
@@ -1123,16 +1123,6 @@ function buildDatasetDateRange(question, fields, requested) {
     startDate: parsed.startDate ?? null,
     endDate: parsed.endDate ?? null,
   };
-}
-
-function resolveQueryLimit(question) {
-  const rankMatch = String(question ?? '').match(
-    /(?:top\s*(\d+)|前\s*(\d+)|返回\s*(\d+)\s*行)/i,
-  );
-  const requested = Number(rankMatch?.[1] ?? rankMatch?.[2] ?? rankMatch?.[3]);
-  return Number.isFinite(requested) && requested > 0
-    ? Math.max(1, Math.min(requested, 2000))
-    : 200;
 }
 
 function isDateDimensionName(value) {
@@ -2842,6 +2832,11 @@ export class MetricAgentService {
           fallbackDimensions: requestedDimensions,
           dateField: inferredDateField,
           lexicon: resolveBusinessLexicon(theme),
+          vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+            'business_vocabulary',
+            { question: source },
+            skills,
+          ),
         });
       const metricNames = inferred.metrics;
       let dimensions = assertAllowedDimensions(
@@ -2852,7 +2847,12 @@ export class MetricAgentService {
       if (metricNames.length === 0) {
         throw new Error('indicator has no queryable metric');
       }
-      const queryLimit = inferred.limit ?? resolveQueryLimit(resolvedQuestion);
+      const vocabulary = this.skillRegistry.resolveCoreSkill(
+        'business_vocabulary',
+        { question: resolvedQuestion },
+        skills,
+      );
+      const queryLimit = inferred.limit ?? vocabulary?.limit ?? resolveQueryLimit(resolvedQuestion);
 
       const timeWindows = boundContract?.timeWindows?.length
         ? boundContract.timeWindows.map((window) => normalizeDateInfo({
@@ -2860,7 +2860,11 @@ export class MetricAgentService {
           dateField: window.dateField ?? inferredDateField,
         }))
         : [
-          parseTemporalExpression(resolvedQuestion)
+          this.skillRegistry.resolveCoreSkill(
+            'temporal_expression',
+            { question: resolvedQuestion },
+            skills,
+          )
           ?? normalizeDateInfo(args.dateRange),
         ];
       const dateInfo = timeWindows[0];
@@ -3338,6 +3342,9 @@ export class MetricAgentService {
         metricDefinitions,
         filterLabels,
         lexicon: resolveBusinessLexicon(theme),
+        vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+          'business_vocabulary', { question: source }, skills,
+        ),
       });
       progressiveAnswer.emit(summary);
       const queryScope = buildQueryScopeSummary({
@@ -3633,6 +3640,11 @@ export class MetricAgentService {
           fields,
           fallbackMetrics: requestedMetrics,
           fallbackDimensions: requestedDimensions,
+          vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+            'business_vocabulary',
+            { question: source },
+            skills,
+          ),
         });
       const boundWindows = boundContract?.timeWindows ?? [];
       const datasetDateRange = boundWindows.length > 0
@@ -3645,6 +3657,11 @@ export class MetricAgentService {
           resolvedQuestion,
           fields,
           args.dateRange,
+          ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+            'temporal_expression',
+            { question: source },
+            skills,
+          ),
         );
       startWorkflowStage('PLAN', '生成业务数据集查询计划');
       const datasetPlanStartedAt = Date.now();
@@ -4252,6 +4269,9 @@ export class MetricAgentService {
         metricDefinitions,
         filterLabels: queryScopeFilterLabels,
         lexicon: resolveBusinessLexicon(theme),
+        vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+          'business_vocabulary', { question: source }, skills,
+        ),
         resultQuality: {
           truncated: resultTruncated,
           limit: result.limit ?? effectivePlan.limit,
@@ -4463,6 +4483,9 @@ export class MetricAgentService {
           scope,
           draft: args,
           sourceContext,
+          vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+            'business_vocabulary', { question: source }, skills,
+          ),
         });
       } else if (sourceType === 'BUSINESS_DATASET') {
         const datasetId = String(args.datasetId ?? '');
@@ -4489,6 +4512,9 @@ export class MetricAgentService {
           scope,
           draft: args,
           sourceContext,
+          vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+            'business_vocabulary', { question: source }, skills,
+          ),
         });
       } else {
         throw new Error(`unsupported query contract sourceType: ${sourceType || '-'}`);
@@ -5443,6 +5469,11 @@ export class MetricAgentService {
             fallbackDimensions: [],
             dateField: selectDateField(detail.dimensions ?? []),
             lexicon: resolveBusinessLexicon(theme),
+            vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+              'business_vocabulary',
+              { question: source },
+              skills,
+            ),
           });
           if (inferred.metrics.length === 0) {
             continue;
@@ -5476,8 +5507,22 @@ export class MetricAgentService {
             fields,
             fallbackMetrics: [],
             fallbackDimensions: [],
+            vocabularyResolver: ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+              'business_vocabulary',
+              { question: source },
+              skills,
+            ),
           });
-          const dateRange = buildDatasetDateRange(resolvedQuestion, fields, null);
+          const dateRange = buildDatasetDateRange(
+            resolvedQuestion,
+            fields,
+            null,
+            ({ question: source }) => this.skillRegistry.resolveCoreSkill(
+              'temporal_expression',
+              { question: source },
+              skills,
+            ),
+          );
           return { dataset, fields, inferred, dateRange };
         })
         .filter((candidate) => candidate.inferred.metrics.length > 0)

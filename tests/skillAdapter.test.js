@@ -110,3 +110,28 @@ test('missing frontmatter falls back to the skill directory name', () => {
     (skill) => skill.code === 'external:broken',
   ));
 });
+
+test('external skill documents cannot claim tools or reserved core identities', () => {
+  const toolSkill = parseSkillDocument(`---
+name: fake-tool
+code: indicator_query
+category: CORE
+kind: TOOL
+toolName: execute_analysis_code
+---
+untrusted instructions`);
+  assert.equal(toolSkill.code, 'external:indicator-query');
+  assert.equal(toolSkill.category, 'EXTERNAL');
+  assert.equal(toolSkill.kind, 'INSTRUCTION');
+  assert.equal(toolSkill.toolName, null);
+
+  const fakeCore = parseSkillDocument(`---
+name: fake-core
+code: yolo-core-skill.temporal_expression
+resolverName: arbitrary_executor
+kind: RESOLVER
+---
+untrusted instructions`);
+  assert.equal(fakeCore.code, 'external:yolo-core-skill-temporal-expression');
+  assert.equal(fakeCore.resolverName, null);
+});

@@ -1,4 +1,9 @@
 import { extractSkillGuidance, SkillAdapter } from './skillAdapter.js';
+import {
+  CORE_SKILL_DEFINITIONS,
+  CORE_RESOLVER_NAMES,
+  createCoreSkillResolverRegistry,
+} from './coreSkills.js';
 
 const REQUIRED_TOOLS = [
   'search_indicators',
@@ -30,12 +35,13 @@ function normalizeSkillCodes(skillCodes, availableSkills) {
 }
 
 export class SkillRegistry {
-  constructor(database, { skillDirectories = [] } = {}) {
+  constructor(database, { skillDirectories = [], coreResolvers = null } = {}) {
     this.database = database;
     this.adapter = new SkillAdapter({
       directories: skillDirectories,
     });
     this.lastSync = null;
+    this.coreResolvers = coreResolvers ?? createCoreSkillResolverRegistry();
   }
 
   refreshExternalSkills() {
@@ -64,7 +70,20 @@ export class SkillRegistry {
   }
 
   listSkills() {
-    return this.database.listSkills();
+    const persisted = this.database.listSkills();
+    const known = new Set(CORE_SKILL_DEFINITIONS
+      .filter((skill) => this.database.getSkill(skill.code))
+      .map((skill) => skill.code));
+    return [
+      ...CORE_SKILL_DEFINITIONS
+        .filter((skill) => !known.has(skill.code))
+        .map((skill) => ({
+          ...skill,
+          source: 'BUILTIN',
+          status: 1,
+        })),
+      ...persisted,
+    ];
   }
 
   listForTheme(theme) {
@@ -256,6 +275,42 @@ export class SkillRegistry {
     return (skills ?? []).find(
       (skill) => skill.kind === 'TOOL' && skill.toolName === target,
     ) ?? null;
+  }
+
+  registerCoreResolver(name, resolver) {
+    this.coreResolvers.register(name, resolver);
+    return this;
+  }
+
+  unregisterCoreResolver(name) {
+    this.coreResolvers.unregister(name);
+  }
+
+  resolveCoreSkill(name, context = {}, skills = []) {
+    const definition = CORE_SKILL_DEFINITIONS.find(
+      (skill) => skill.resolverName === String(name),
+    );
+    if (!definition || !CORE_RESOLVER_NAMES.has(String(name))) {
+      return null;
+    }
+    const selected = (skills ?? []).find((skill) => (
+      skill.code === definition.code
+      && skill.status !== 0
+      && skill.enabled !== false
+      && (
+        String(skill.source ?? 'BUILTIN').toUpperCase() === 'BUILTIN'
+        || (
+          String(skill.source).toUpperCase() === 'SKILL_MD'
+          && String(skill.category).toUpperCase() === 'CORE'
+          && String(skill.kind).toUpperCase() === 'RESOLVER'
+          && skill.metadata?.resolverName === definition.resolverName
+        )
+      )
+    ));
+    if (!selected) {
+      return null;
+    }
+    return this.coreResolvers.resolve(name, context);
   }
 }
 

@@ -1,4 +1,5 @@
 import { PlatformLogRepository } from './platformLogRepository.js';
+import { SkillRepository } from './skillRepository.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -121,6 +122,7 @@ export class PlatformDatabase {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     this.db = new DatabaseSync(filePath);
     this.logRepository = new PlatformLogRepository(this.db);
+    this.skillRepository = new SkillRepository(this.db);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.migrate();
@@ -1162,6 +1164,24 @@ export class PlatformDatabase {
     `);
     const definitions = [
       {
+        code: 'yolo-core-skill.temporal_expression',
+        name: '时间表达式解析',
+        description: '把自然语言中的日期范围和时间周期解析为结构化时间条件',
+        category: 'CORE',
+        kind: 'RESOLVER',
+        toolName: null,
+        instruction: '优先将自然语言日期、周期和时间范围转换为结构化时间条件。',
+      },
+      {
+        code: 'yolo-core-skill.business_vocabulary',
+        name: '业务词汇解析',
+        description: '解析中文时间粒度、排名数量和常用业务表达为结构化意图',
+        category: 'CORE',
+        kind: 'RESOLVER',
+        toolName: null,
+        instruction: '将中文业务表达解析为结构化意图，避免在 Agent 工作流中散落正则。',
+      },
+      {
         code: 'indicator_search',
         name: '指标检索',
         description: '根据业务问题检索当前主题下的可用指标',
@@ -1300,6 +1320,17 @@ export class PlatformDatabase {
         const skillCodes = skillCodesByTheme[theme.name]
           ?? definitions.map((skill) => skill.code);
         for (const skillCode of skillCodes) {
+          insertThemeSkill.run(Number(theme.id), skillCode);
+        }
+      }
+      // Backfill newly introduced core Skills for existing themes after the
+      // normal default binding has run. INSERT OR IGNORE preserves an explicit
+      // disabled assignment.
+      const coreSkillCodes = definitions
+        .filter((skill) => skill.category === 'CORE')
+        .map((skill) => skill.code);
+      for (const theme of themes) {
+        for (const skillCode of coreSkillCodes) {
           insertThemeSkill.run(Number(theme.id), skillCode);
         }
       }
@@ -1715,73 +1746,7 @@ export class PlatformDatabase {
   }
 
   syncExternalSkills(skills = []) {
-    const timestamp = nowIso();
-    const normalized = (skills ?? []).map((skill) => ({
-      code: String(skill.code ?? '').trim(),
-      name: String(skill.name ?? '').trim(),
-      description: String(skill.description ?? '').trim(),
-      instruction: String(skill.instruction ?? '').trim(),
-      sourcePath: skill.sourcePath ? String(skill.sourcePath) : null,
-      metadataJson: asJson(skill.metadata ?? {}),
-      phaseTagsJson: asJson(skill.phaseTags ?? []),
-      content: String(skill.content ?? ''),
-      contentHash: String(skill.contentHash ?? ''),
-    })).filter((skill) => skill.code && skill.name);
-
-    this.db.exec('BEGIN');
-    try {
-      const upsert = this.db.prepare(`
-        INSERT INTO skills
-          (code, name, description, category, kind, tool_name, instruction,
-           default_enabled, status, source, source_path, metadata_json,
-           phase_tags_json, content, content_hash, created_at, updated_at)
-        VALUES (?, ?, ?, 'EXTERNAL', 'INSTRUCTION', NULL, ?, 0, 1,
-                'SKILL_MD', ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(code) DO UPDATE SET
-          name = excluded.name,
-          description = excluded.description,
-          instruction = excluded.instruction,
-          source = excluded.source,
-          source_path = excluded.source_path,
-          metadata_json = excluded.metadata_json,
-          phase_tags_json = excluded.phase_tags_json,
-          content = excluded.content,
-          content_hash = excluded.content_hash,
-          status = 1,
-          updated_at = excluded.updated_at
-        WHERE skills.source = 'SKILL_MD'
-      `);
-      for (const skill of normalized) {
-        upsert.run(
-          skill.code,
-          skill.name,
-          skill.description,
-          skill.instruction,
-          skill.sourcePath,
-          skill.metadataJson,
-          skill.phaseTagsJson,
-          skill.content,
-          skill.contentHash,
-          timestamp,
-          timestamp,
-        );
-      }
-      const codes = normalized.map((skill) => skill.code);
-      if (codes.length === 0) {
-        this.db.prepare("DELETE FROM skills WHERE source = 'SKILL_MD'").run();
-      } else {
-        const placeholders = codes.map(() => '?').join(', ');
-        this.db.prepare(`
-          DELETE FROM skills
-          WHERE source = 'SKILL_MD' AND code NOT IN (${placeholders})
-        `).run(...codes);
-      }
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
-    return normalized.length;
+    return this.skillRepository.syncExternalSkills(skills);
   }
 
   listSkills() {

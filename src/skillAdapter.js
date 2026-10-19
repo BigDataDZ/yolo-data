@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { CORE_SKILL_DEFINITIONS } from './coreSkills.js';
 
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '__pycache__', '.git']);
 
@@ -234,7 +235,18 @@ export function parseSkillDocument(source, sourcePath = '') {
   const phaseTags = explicitPhases.length > 0
     ? [...new Set(explicitPhases)]
     : inferPhaseTags(skill);
-  const code = `external:${slugify(metadata.code ?? name)}`;
+  const requestedCode = metadata.code ? String(metadata.code).trim() : '';
+  const declaredCore = CORE_SKILL_DEFINITIONS.find((definition) => (
+    definition.code === requestedCode
+    && definition.resolverName === String(metadata.resolverName ?? '').trim()
+  ));
+  // A document may describe a known core resolver, but it cannot claim a
+  // different core identity. Unknown/reserved codes are namespaced as external.
+  const code = declaredCore
+    ? declaredCore.code
+    : requestedCode.startsWith('external:')
+      ? requestedCode
+      : `external:${slugify(requestedCode || name)}`;
   const phaseGuides = Object.fromEntries(
     ['PRE_PLAN', 'PLAN', 'POST_EXECUTE']
       .filter((phase) => phaseTags.includes(phase))
@@ -244,9 +256,10 @@ export function parseSkillDocument(source, sourcePath = '') {
     code,
     name,
     description: description || `External Skill: ${name}`,
-    category: 'EXTERNAL',
-    kind: 'INSTRUCTION',
+    category: declaredCore ? 'CORE' : 'EXTERNAL',
+    kind: declaredCore ? 'RESOLVER' : 'INSTRUCTION',
     toolName: null,
+    resolverName: declaredCore ? declaredCore.resolverName : null,
     instruction: description || `External Skill: ${name}`,
     defaultEnabled: false,
     source: 'SKILL_MD',

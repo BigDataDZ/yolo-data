@@ -51,7 +51,7 @@ function renderCatalog(catalog) {
           <br /><small class="mono muted">${escapeHtml(skill.code)}</small>
           ${skill.description ? `<br /><small class="muted">${escapeHtml(skill.description)}</small>` : ''}
         </td>
-        <td>${skill.kind === 'TOOL' ? '工具' : '指令'}</td>
+        <td>${skill.kind === 'TOOL' ? '工具' : skill.kind === 'RESOLVER' ? '解析器' : '指令'}</td>
         <td><span class="tag ${tagClass}" title="${escapeAttr(hint)}">${escapeHtml(label)}</span></td>
         <td>${phaseLabel(skill)}</td>
         <td>${usageLabel(skill)}</td>

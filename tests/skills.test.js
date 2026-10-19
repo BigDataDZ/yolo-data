@@ -92,3 +92,69 @@ test('agent model, dataset and example configuration persist on the theme', () =
   );
   assert.deepEqual(updated.examples, ['近7天销售额趋势']);
 });
+
+test('core resolver skills can be hot-plugged without changing the agent contract', () => {
+  const database = createDatabase();
+  const registry = new SkillRegistry(database);
+  const theme = database.listThemes()[0];
+  const skills = registry.listForTheme(theme);
+
+  const builtin = registry.resolveCoreSkill(
+    'temporal_expression',
+    { question: '昨天销售额' },
+    skills,
+  );
+  assert.equal(builtin.dateMode, 'BETWEEN');
+
+  registry.registerCoreResolver('temporal_expression', () => ({
+    dateMode: 'BETWEEN',
+    startDate: '2099-01-01',
+    endDate: '2099-01-02',
+  }));
+  assert.equal(
+    registry.resolveCoreSkill('temporal_expression', { question: '昨天销售额' }, skills).startDate,
+    '2099-01-01',
+  );
+
+  registry.unregisterCoreResolver('temporal_expression');
+  assert.equal(
+    registry.resolveCoreSkill('temporal_expression', { question: '昨天销售额' }, skills),
+    null,
+  );
+});
+
+test('removing a core skill from a theme disables its resolver', () => {
+  const database = createDatabase();
+  const registry = new SkillRegistry(database);
+  const theme = database.listThemes()[0];
+  const enabled = registry.listForTheme(theme);
+  assert.ok(registry.resolveCoreSkill('business_vocabulary', {
+    question: '按月销售额趋势',
+  }, enabled));
+
+  database.replaceThemeSkills(theme.id, enabled
+    .filter((skill) => skill.code !== 'yolo-core-skill.business_vocabulary')
+    .map((skill) => skill.code));
+  const disabled = registry.listForTheme(database.getTheme(theme.id));
+  assert.equal(registry.resolveCoreSkill('business_vocabulary', {
+    question: '按月销售额趋势',
+  }, disabled), null);
+});
+
+test('core resolver requires the declared skill to match the trusted executor', () => {
+  const database = createDatabase();
+  const registry = new SkillRegistry(database);
+  const skills = registry.listForTheme(database.listThemes()[0]);
+  const forged = skills.map((skill) => skill.code === 'yolo-core-skill.temporal_expression'
+    ? {
+      ...skill,
+      source: 'SKILL_MD',
+      category: 'CORE',
+      kind: 'RESOLVER',
+      metadata: { resolverName: 'arbitrary_executor' },
+    }
+    : skill);
+  assert.equal(registry.resolveCoreSkill(
+    'temporal_expression', { question: '昨天销售额' }, forged,
+  ), null);
+});
