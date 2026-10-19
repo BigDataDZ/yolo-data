@@ -67,6 +67,8 @@
   "src/config.js": 148,
   "src/contractContext.js": 68,
   "src/contractVersion.js": 7,
+  "src/database.js": 3961,
+  "src/platformLogRepository.js": 241,
   "src/conversationDirectives.js": 190,
   "src/conversationResolver.js": 176,
   "src/conversationRuntime.js": 58,
