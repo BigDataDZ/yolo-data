@@ -183,7 +183,7 @@
   "src/timeSemantics.js": 688,
   "src/tokenBudget.js": 72,
   "src/trace.js": 26,
-  "src/turnContext.js": 727,
+  "src/turnContext.js": 726,
   "src/turnRouter.js": 143,
   "src/uploads.js": 509,
   "src/userMemory.js": 718,
@@ -194,5 +194,6 @@
   "src/workflow.js": 230,
   "src/workspace.js": 566,
   "src/xlsx.js": 369,
-  "src/xlsxReader.js": 480
+  "src/xlsxReader.js": 480,
+  "src/conversationTimePatterns.js": 7
 }
