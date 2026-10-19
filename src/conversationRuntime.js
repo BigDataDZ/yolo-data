@@ -31,8 +31,8 @@ export async function resolveConversationRuntime({
       forceNewTask,
       memorySlots,
       classifier,
-      ...(maxInheritTurns ? { maxInheritTurns } : {}),
-      ...(maxInheritedSlots ? { maxInheritedSlots } : {}),
+      ...(maxInheritTurns != null ? { maxInheritTurns } : {}),
+      ...(maxInheritedSlots != null ? { maxInheritedSlots } : {}),
     },
   );
   conversationContext = await refineTurnContextWithHarness({

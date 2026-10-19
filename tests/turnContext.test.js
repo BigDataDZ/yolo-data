@@ -31,6 +31,46 @@ function completedHistory(context, content = '查询已完成') {
   ];
 }
 
+for (const time of [
+  '2026年1月1日至2026年3月31日',
+  '2026-01-01 至 2026-03-31',
+  '2026年1月1日至3月31日',
+  '2026年1月1日',
+]) {
+  test(`explicit time slots preserve the complete date expression: ${time}`, () => {
+    assert.deepEqual(extractExplicitSlots(`${time}销售额`).time.map(item => item.sourceText), [time]);
+  });
+}
+
+test('two distinct explicit date ranges remain separate time slots', () => {
+  const question = '对比2026年1月1日至2026年1月31日与2026年3月1日至2026年3月31日销售额';
+  assert.deepEqual(extractExplicitSlots(question).time.map(item => item.sourceText), [
+    '2026年1月1日至2026年1月31日', '2026年3月1日至2026年3月31日',
+  ]);
+});
+
+test('an ISO date clarification fills time without replacing the inherited region filter', () => {
+  const first = createTurnContext({ question: '销售额，只看华东' });
+  const clarified = createTurnContext({ question: '2026-01-01', history: completedHistory(first),
+    turnType: TURN_TYPES.CLARIFICATION_ANSWER });
+  assert.deepEqual(clarified.slots.time.map(item => item.sourceText), ['2026-01-01']);
+  assert.equal(clarified.explicitSlots.filters, undefined);
+  assert.deepEqual(clarified.inheritedSlots.filters.map(item => item.sourceText), ['华东']);
+  assert.deepEqual(clarified.slots.filters.map(item => item.sourceText), ['华东']);
+});
+
+test('followups inherit full date ranges and filters while a time revision replaces only time', () => {
+  const first = createTurnContext({ question: '2026年1月1日至2026年3月31日销售额，只看华东' });
+  const second = createTurnContext({ question: '按渠道拆开', history: completedHistory(first),
+    turnType: TURN_TYPES.CONTINUATION });
+  assert.deepEqual(second.inheritedSlots.time.map(item => item.sourceText), ['2026年1月1日至2026年3月31日']);
+  assert.deepEqual(second.inheritedSlots.filters.map(item => item.sourceText), ['华东']);
+  const revised = createTurnContext({ question: '改查2026年4月1日至2026年4月15日',
+    history: completedHistory(second), turnType: TURN_TYPES.REVISION });
+  assert.deepEqual(revised.slots.time.map(item => item.sourceText), ['2026年4月1日至2026年4月15日']);
+  assert.deepEqual(revised.inheritedSlots.filters.map(item => item.sourceText), ['华东']);
+});
+
 test('continuations keep the task id, advance the turn id and inherit field by field', () => {
   const first = createTurnContext({
     question: '查询本月含税销售金额',
