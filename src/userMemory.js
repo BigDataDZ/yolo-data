@@ -639,16 +639,21 @@ export class UserMemoryStore {
       const body = document.summary || clampText(document.content, document.summaryBudget);
       return `[${document.scopeLabel}]（v${document.version}）\n${body}`;
     });
+    const retrievalText = lines.join('\n\n');
     this.markDocumentUsed(documents.map((document) => document.id));
     return {
       role: 'system',
+      // Slot extraction must only see the memory body. Keeping the instruction
+      // block separate prevents platform guidance from being parsed as a user
+      // business condition.
+      retrievalText,
       content: [
       '用户长期记忆：以下是该用户在本平台历史协作中沉淀的业务知识与偏好，只注入摘要。',
       '用途：补全用户未明说的默认口径与术语映射，减少重复澄清。',
       '与本轮问题直接相关的记忆细节已在本轮问数前前置注入；仍可用 search_user_memory 工具按需检索完整记忆正文。',
         '当本轮默认口径、时间范围或术语取自记忆时，在口径说明里一句话注明“沿用你的历史偏好”，不要展开记忆原文。',
         '约束：与主题提示词、平台规则或本轮用户明确指令冲突时，一律以后者为准；不得据此编造数据或替代正式数据来源。',
-        lines.join('\n\n'),
+        retrievalText,
       ].join('\n'),
     };
   }

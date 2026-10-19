@@ -1,11 +1,10 @@
 import { normalizeBusinessTerm } from './indicatorSearch.js';
 import { getPlatformLexicon, resolveBusinessLexicon } from './businessLexicon.js';
 import { CLARIFICATION_PATTERN } from './conversationResolver.js';
+import { matchAttributionSignal, isTrendText } from './analysisIntent.js';
 
 export { resolveConversationContext, resolveConversationQuestion } from './conversationResolver.js';
 
-const ATTRIBUTION_PATTERN =
-  /具体原因|原因|为何|为什么|归因|驱动因素|影响因素|主因|上升还是下滑|上升或下滑|增长原因|下滑原因|下降原因|拉动因素|影响来源/;
 const ARTIFACT_REFRESH_PATTERN =
   /重新(?:查询|取数|拉取)|刷新|最新数据|重查|再查一次/;
 
@@ -47,7 +46,7 @@ const TIME_GRAIN_PATTERNS = [
   ],
   [
     'MONTH',
-    /(?:按(?:照)?)?每(?:一)?个?月|按月|月度|月维度|月分组|逐月|月趋势/,
+    /(?:按(?:照)?)?每(?:一)?个?月|按月|按月份|月度|月维度|月分组|月份维度|月份分组|逐月|分月|月(?:份)?趋势/,
   ],
   [
     'QUARTER',
@@ -80,16 +79,16 @@ export function inferTimeGrain(question) {
 
 export function inferAnalysisMode(question) {
   const source = text(question);
-  const attributionMatch = source.match(ATTRIBUTION_PATTERN);
-  if (attributionMatch) {
+  const attributionSignal = matchAttributionSignal(source);
+  if (attributionSignal) {
     return {
       mode: 'ATTRIBUTION',
-      sourceText: attributionMatch[0],
+      sourceText: attributionSignal,
       requiresComparison: true,
       requiresBreakdown: true,
     };
   }
-  if (/趋势|走势/.test(source)) {
+  if (isTrendText(source)) {
     return {
       mode: 'TREND',
       sourceText: source.match(/趋势|走势/)?.[0] ?? '',

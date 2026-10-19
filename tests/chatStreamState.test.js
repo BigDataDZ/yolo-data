@@ -36,6 +36,16 @@ test('chat stream state accumulates answer deltas and marks completion', () => {
   assert.equal(stream.answerDone, true);
 });
 
+test('provisional streamed text is replaced by the final authoritative answer', () => {
+  let stream = createChatStreamState();
+  stream = applyChatStreamEvent(stream, { type: 'assistant_answer_start', preliminary: true });
+  stream = applyChatStreamEvent(stream, { type: 'assistant_delta', text: '初步结论', preliminary: true });
+  stream = applyChatStreamEvent(stream, { type: 'assistant_answer_replace', text: '最终结论' });
+  stream = applyChatStreamEvent(stream, { type: 'assistant_answer_done' });
+  assert.equal(stream.answerText, '最终结论');
+  assert.equal(stream.answerDone, true);
+});
+
 test('chat stream state keeps the structured context decision for live UI', () => {
   let stream = createChatStreamState();
   stream = applyChatStreamEvent(stream, {

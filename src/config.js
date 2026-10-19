@@ -36,6 +36,7 @@ export function loadConfig(env = process.env) {
   }
   const nodeEnv = String(env.NODE_ENV ?? '').trim().toLowerCase();
   const authMode = resolveAuthMode({ authMode: env.AUTH_MODE ?? '', nodeEnv });
+  const host = String(env.HOST ?? '').trim() || (authMode === 'dev' ? '127.0.0.1' : '0.0.0.0');
   const dbPath = String(env.PLATFORM_DB_PATH ?? './data/platform.db').trim();
   const skillDirectories = parsePathList(
     env.AGENT_SKILL_DIRECTORIES,
@@ -55,6 +56,7 @@ export function loadConfig(env = process.env) {
   return {
     projectRoot,
     port: readInt(env.PORT, 8088),
+    host,
     dbPath: path.isAbsolute(dbPath) ? dbPath : path.resolve(projectRoot, dbPath),
     supersonic: {
       baseUrl: normalizeBaseUrl(env.SUPERSONIC_BASE_URL),
@@ -101,6 +103,7 @@ export function loadConfig(env = process.env) {
     reflection: {
       enabled: (env.REFLECTION_ENABLED ?? 'true') !== 'false',
       maxReplan: Math.max(0, Math.min(3, readInt(env.REFLECTION_MAX_REPLAN, 2))),
+      judgeTimeoutMs: Math.max(1_000, readInt(env.REFLECTION_JUDGE_TIMEOUT_MS, 20_000)),
     },
     codeExecutionRoot: path.resolve(
       projectRoot,

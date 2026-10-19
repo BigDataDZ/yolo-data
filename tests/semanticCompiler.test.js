@@ -25,6 +25,18 @@ for (const [dbType, adapter, label] of [
   });
 }
 
+test('dataset plan preserves attribution-scale row limits', () => {
+  const compiler = new SemanticCompiler();
+  const plan = compiler.compileDatasetQuery({
+    question: '按客户和品类归因',
+    dataset: { id: 1, name: 'sales', dbType: 'DORIS' },
+    metrics: ['amount'],
+    dimensions: ['customer', 'category'],
+    limit: 5000,
+  });
+  assert.equal(plan.limit, 5000);
+});
+
 const indicator = {
   id: 'sales_amount',
   name: '销售额',

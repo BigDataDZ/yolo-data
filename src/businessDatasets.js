@@ -467,7 +467,7 @@ export class BusinessDatasetService {
     return this.getPool(source);
   }
 
-  buildQuery(datasetId, request) {
+  buildQuery(datasetId, request, { probeLimit = false } = {}) {
     const dataset = this.database.getBusinessDataset(datasetId);
     if (!dataset) {
       throw new Error('dataset not found');
@@ -630,10 +630,10 @@ export class BusinessDatasetService {
       const dimensionSelection = dimensionSelections.find(
         (dimension) => dimension.field.fieldName === field.fieldName,
       );
+      const metricSelection = metricSelectionByField.get(field.fieldName);
       const orderExpression = dimensionSelection?.expression
         ?? (field.role === 'TIME' ? groupedTimeDimension?.expression : null)
-        ?? (dialect.code === 'POSTGRESQL' && metricSelectionByField.has(field.fieldName)
-          ? quoteIdentifier(metricSelectionByField.get(field.fieldName).outputField) : null)
+        ?? (metricSelection ? quoteIdentifier(metricSelection.outputField) : null)
         ?? quoteIdentifier(field.fieldName);
       orderParts.push(
         `${orderExpression} ${String(order.direction).toUpperCase() === 'ASC' ? 'ASC' : 'DESC'}`,
@@ -643,11 +643,13 @@ export class BusinessDatasetService {
     const having = havingParts.length > 0
       ? ` HAVING ${havingParts.join(' AND ')}`
       : '';
+    const maximumLimit = request.analysisPipeline ? 50000 : 10000;
+    const probeOffset = probeLimit ? 1 : 0;
     const limit = Math.max(
       1,
       Math.min(
-        Number(request.limit) || 200,
-        request.analysisPipeline ? 50000 : 1000,
+        (Number(request.limit) || 200) + probeOffset,
+        maximumLimit + probeOffset,
       ),
     );
     const sql = `SELECT ${selectParts.join(', ')} FROM ${
@@ -712,14 +714,23 @@ export class BusinessDatasetService {
         }
       }
     }
-    const compiled = this.buildQuery(datasetId, effectiveRequest);
+    const maximumLimit = effectiveRequest.analysisPipeline ? 50000 : 10000;
+    const publicLimit = Math.max(
+      1,
+      Math.min(Number(effectiveRequest.limit) || 200, maximumLimit),
+    );
+    // 多取一行只用于判断「是否真的还有下一行」。恰好返回 limit 行时结果
+    // 已经完整，不能把它误报成截断并阻断合计/归因。
+    const compiled = this.buildQuery(datasetId, effectiveRequest, { probeLimit: true });
     const startedAt = Date.now();
     try {
-      const [rows, fieldPackets] = await this.getPoolById(compiled.dataset.datasourceId).query({
+      const [probeRows, fieldPackets] = await this.getPoolById(compiled.dataset.datasourceId).query({
         sql: compiled.sql,
         values: compiled.values,
         timeout: 20_000,
       });
+      const truncated = probeRows.length > publicLimit;
+      const rows = truncated ? probeRows.slice(0, publicLimit) : probeRows;
       const latencyMs = Date.now() - startedAt;
       this.database.logDatasetQuery({
         userId,
@@ -756,6 +767,8 @@ export class BusinessDatasetService {
           return {
             name: definition?.displayName ?? field.name,
             bizName: field.name,
+            sourceField: definition?.fieldName ?? field.name,
+            sourceLabel: definition?.displayName ?? field.name,
             showType: numeric && !groupedTimeDimension ? 'NUMBER' : 'CATEGORY',
             type: groupedTimeDimension
               ? 'STRING'
@@ -771,8 +784,8 @@ export class BusinessDatasetService {
         dimensions: compiled.dimensions,
         metrics: compiled.metrics,
         filters: compiled.filters,
-        limit: compiled.limit,
-        truncated: rows.length >= compiled.limit,
+        limit: publicLimit,
+        truncated,
         latencyMs,
       };
     } catch (error) {

@@ -104,6 +104,14 @@ test('semantic policy prompt is generated from configuration only', () => {
   assert.match(prompt, /业务语义包/);
 });
 
+test('semantic policy prompt gives an explicit dimension resolution ladder without hardcoded terms', () => {
+  const prompt = buildSemanticPolicyPrompt({});
+  assert.match(prompt, /维度绑定通用裁决顺序/);
+  assert.match(prompt, /字段规范名精确匹配优先/);
+  assert.match(prompt, /同族字段/);
+  assert.match(prompt, /只有多个候选在语义上完全不可区分时才澄清/);
+});
+
 test('semantic policy does not duplicate equivalent model filters', () => {
   const application = applySemanticPolicy({
     question: '标准配送采购组8月各省区毛利率',

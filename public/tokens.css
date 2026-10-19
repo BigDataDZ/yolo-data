@@ -2612,6 +2612,7 @@ textarea::placeholder {
 }
 
 .toast.is-error {
+  color: #ffffff;
   background: #8f4c45;
 }
 

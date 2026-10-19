@@ -26,12 +26,10 @@
 
 ## 3. 必须先确认的冲突与前置阻塞（重要）
 
-1. **沙箱在本机当前完全不可用（已实测）**
-   - 默认 `pythonBin = 'python'`（`src/config.js`），本机只有 `python3` → `spawn python ENOENT`。
-     （已修：`src/config.js` 改为按平台兜底 `python3`/`python`，`npm run setup` 会探测可用解释器并写回 `.env`。）
-   - 设 `PYTHON_BIN=python3` 后沙箱可用，但 `pandas`、`openpyxl` **均未安装**（实测输出 `pandas MISSING openpyxl MISSING`）。
-   - 影响：依赖 `pandas` 的图形化与旧版二进制 `.xls` 解析无法在当前环境验证；纯标准库（`csv`/`json`/`decimal`/`statistics`）仍可完成精确算数。
-   - 最终结论（用户确认后）：上传入口只暴露 `csv/xls/xlsx`，**xlsx 由 YOLO 侧自研读取器解析（`src/xlsxReader.js`，只依赖 node:zlib），不依赖 `pandas`/`openpyxl`**；旧版二进制 `.xls` 仅保存原始文件并提示转换。
+1. **沙箱 Python 运行时已完成工程化初始化**
+   - `src/config.js` 按平台兜底 `python3`/`python`；`npm run setup` 会创建项目级 `.venv`、安装 `requirements.txt` 并写回绝对 `PYTHON_BIN`。
+   - `pandas`、`openpyxl` 已作为完整安装必选项；Docker 镜像构建期同样安装并导入校验，缺失时构建失败。
+   - 上传入口只暴露 `csv/xls/xlsx`；**xlsx 读取仍由 YOLO 自研读取器解析（`src/xlsxReader.js`，只依赖 node:zlib）**，不把 Python 作为上传解析前置条件；旧版二进制 `.xls` 仅保存原始文件并提示转换。
 2. **与"正式业务数值只来自在线指标"的冲突**（`docs/theme-prompts` 最高原则 1/3 + 展示规范 5.2 节）
    - 上传文件的数值没有在线指标的 formatted 值，也没有指标来源 ID。
    - 处理原则：文件来源必须**显式标注来源**（如"来源：上传文件 `回款.xlsx`"），展示格式走 5.2 节"动态加工值"的继承/角色默认规则，**禁止**把文件口径表述为指标平台口径。
@@ -120,7 +118,7 @@
 3. `agent.js` 上下文与提示词薄接入
 4. 前端上传入口 + 产物抽屉分组
 5. 端到端验证：上传 CSV × 上一轮指标结果 → 联合计算 → 结果标注来源 → 过程产物齐全
-   - 仅支持 `csv/tsv/json`（不依赖 pandas）；沙箱需 `PYTHON_BIN=python3`
+   - 仅支持 `csv/tsv/json`（不依赖 pandas）；`npm run setup` 会把项目级 `.venv` 的绝对解释器路径写入 `PYTHON_BIN`
 
 **P1**
 多工作表选择与多文件合并（当前只解析第一个工作表）、`inspect_local_file` 预览工具、磁盘存储 + sha256 去重、会话内文件复用与删除、界面上的配额提示
@@ -138,7 +136,7 @@
 
 | 风险 | 说明 | 缓解 |
 | --- | --- | --- |
-| 沙箱 Python 依赖缺失 | 本机实测无 `pandas`/`openpyxl`，且默认 `pythonBin='python'` 不存在 | 配置 `PYTHON_BIN=python3`；表格解析已改为不依赖 Python；缺库时给出明确错误而非静默失败（当前 prelude 是静默 `except: pass`） |
+| 沙箱 Python 依赖缺失 | 手工跳过 `npm run setup` 或运行非标准镜像时仍可能缺 `pandas`/`openpyxl` | 初始化脚本自动创建 `.venv` 并安装依赖；Docker 构建期强制导入校验；未执行初始化直接启动时仍会明确告警 |
 | SQLite 膨胀 | base64 内联 + 版本表双写 | P0 限 ≤8MB、配额；P1 转磁盘存储 |
 | 上下文过长 | 大文件行数多 | 只注入 profile + ≤20 行样本 |
 | 治理边界模糊 | 文件数值与指标口径混算 | §4.4 条款 + 展示规范 5.2 节约束 |

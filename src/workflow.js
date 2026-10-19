@@ -170,8 +170,14 @@ export class DataAgentWorkflow {
       && this.isCompleted('SEMANTIC_CONFIRM');
   }
 
-  finish(summary = '') {
-    this.status = this.status === 'FAILED' ? 'FAILED' : 'COMPLETED';
+  finish(summary = '', { warnings = [] } = {}) {
+    const hasFailedStage = this.stages.some((stage) => stage.status === 'FAILED');
+    this.warnings = Array.isArray(warnings) ? warnings : [];
+    this.status = hasFailedStage
+      ? 'FAILED'
+      : this.warnings.length > 0
+        ? 'COMPLETED_WITH_WARNINGS'
+        : 'COMPLETED';
     this.finishedAt = nowIso();
     this.durationMs = Math.max(
       0,
@@ -204,6 +210,7 @@ export class DataAgentWorkflow {
       user: this.user,
       theme: this.theme,
       status: this.status,
+      warnings: this.warnings ?? [],
       replanDepth: this.replanDepth,
       summary: this.summary ?? '',
       startedAt: this.startedAt,

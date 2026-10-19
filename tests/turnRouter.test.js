@@ -126,3 +126,30 @@ test('the model router preserves the configured inheritance budget', async () =>
   assert.equal(context.inheritBudget.maxSlots, 1);
   assert.equal(Object.keys(context.inheritedSlots).length, 1);
 });
+
+test('model-classified output instructions never fall back to result processing', async () => {
+  const initial = resolveConversationContext('只保留标题', history);
+  const context = await refineTurnContextWithHarness({
+    context: initial,
+    history,
+    harness: {
+      mode: 'test-model',
+      chat: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              turnType: 'INSTRUCTION',
+              confidence: 0.94,
+              reason: '这是输出格式要求，不执行问数',
+            }),
+          },
+        }],
+      }),
+    },
+  });
+
+  assert.equal(context.turnType, TURN_TYPES.INSTRUCTION);
+  assert.equal(context.conversationDirective, null);
+  assert.deepEqual(context.inheritedSlots, {});
+  assert.deepEqual(context.slots, {});
+});

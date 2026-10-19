@@ -1,4 +1,4 @@
-import { buildToolReview, describeToolStep, toolStageCode } from './agentToolPresentation.js';
+import { toolStageCode, buildToolReview, describeToolStep } from './agentToolPresentation.js';
 import { suggestChart } from './chart.js';
 import {
   buildChartRestyleOutcome,
@@ -7,7 +7,7 @@ import {
   selectReusableSnapshot,
 } from './chartIntent.js';
 import { validateAnalysisOutputs } from './analysisArtifact.js';
-import { buildAnalysisContractPrompt } from './analysisContract.js';
+import { ANALYSIS_RESULT_FILE, buildAnalysisContractPrompt } from './analysisContract.js';
 import { buildArtifactTitle, buildSessionFileName } from './fileName.js';
 import { rankIndicators, sortIndicators } from './indicatorSearch.js';
 import { resolveBusinessLexicon } from './businessLexicon.js';
@@ -50,14 +50,26 @@ import {
 } from './valueClarification.js';
 import { buildSemanticTaxonomyPrompt } from './analysisSemantics.js';
 import { buildSemanticPolicyPrompt } from './semanticPolicy.js';
+import { createProgressiveAnswerEmitter } from './answerStream.js';
 import { createProcessArtifactRecorder } from './processArtifacts.js';
 import { appendUserQuestionWithAttachments } from './chatAttachments.js';
 import { tokenBudgetError } from './tokenBudget.js';
 import { buildMetricResolverPrompt } from './metricResolver.js';
 import { USER_MEMORY_TOOLS, createUserMemoryToolHandler } from './userMemoryTools.js';
 import { resolveConversationRuntime } from './conversationRuntime.js';
+import {
+  applyConversationDirectivesToPresentationContract,
+  describeConversationDirective,
+  mergeSessionDirectives,
+  parseConversationDirective,
+} from './conversationDirectives.js';
 import { resolveMemoryPreInject, resolveSupersonicEnabled } from './memoryRetrieval.js';
-import { completeTaskState, formatTaskForPrompt, publicContextDecision } from './turnContext.js';
+import {
+  TURN_TYPES,
+  completeTaskState,
+  formatTaskForPrompt,
+  publicContextDecision,
+} from './turnContext.js';
 import { analyzeWithPlugins, resolveWithPlugins } from './analysisPluginRegistry.js';
 import {
   buildSemanticFastPathDraft,
@@ -91,6 +103,13 @@ import { LOCAL_FILE_GUIDANCE } from './localFileGuidance.js';
 import { buildResultAnalysisText } from './resultAnalyst.js';
 import { prepareBoundDatasetExecution } from './scopedMetrics.js';
 import { resolveThemeBusinessDatasets } from './themeDatasets.js';
+import {
+  buildAnswerEvidence,
+  looksLikeDataClaim,
+  requiresGroundedAnswer,
+  UNGROUNDED_ANSWER_MESSAGE,
+} from './answerEvidence.js';
+import { buildReplanCarryForward } from './executionRecovery.js';
 import {
   buildContractSourceContext as buildContextFromModule,
   buildStructuredClarification as buildClarificationFromModule,
@@ -1134,7 +1153,7 @@ function selectColumns(queryResult) {
   return queryResult?.columns ?? [];
 }
 
-function buildSystemPrompt({
+export function buildSystemPrompt({
   user,
   theme,
   scope,
@@ -1159,6 +1178,7 @@ function buildSystemPrompt({
   controlledRequeryAllowed = false,
   question = '',
   replanHint = '',
+  conversationDirectives = [],
 }) {
   const indicatorLines = indicators.map((indicator) => (
     `- ${indicator.name} (${indicator.id}): ${indicator.description || indicator.businessCaliber || '无补充说明'}`
@@ -1208,6 +1228,9 @@ function buildSystemPrompt({
     ].join('\n');
   }).join('\n') || '- 当前工作区暂无结果 artifact';
   const taskContextLines = formatTaskForPrompt(taskState);
+  const conversationDirectiveLines = (conversationDirectives ?? [])
+    .map((directive) => `- ${describeConversationDirective(directive)}`)
+    .join('\n');
   const analysisModeText = analysisMode?.mode ?? 'METRIC_QUERY';
   const clarificationAllowed = clarificationPolicy?.allowed !== false;
 
@@ -1289,6 +1312,7 @@ ${describeClarificationOption(clarificationOptionId)}
 }
 本轮结构化任务状态：
 ${taskContextLines}
+${conversationDirectiveLines ? `会话级输出指令（优先级高于长期记忆，低于用户本轮显式要求）：\n${conversationDirectiveLines}\n` : ''}
 执行侧契约（只允许使用这里的条件和槽位）：
 ${executionContext || '无'}
 
@@ -1845,6 +1869,30 @@ export class MetricAgentService {
     }
   }
 
+  getSessionDirectives(sessionId) {
+    const record = this.database.getPlatformSetting(
+      `chat_session_directives:${Number(sessionId)}`,
+      null,
+    );
+    return Array.isArray(record?.value?.directives) ? record.value.directives : [];
+  }
+
+  saveSessionDirective(sessionId, userId, directive) {
+    if (!directive) {
+      return this.getSessionDirectives(sessionId);
+    }
+    const key = `chat_session_directives:${Number(sessionId)}`;
+    const current = this.database.getPlatformSetting(key, null)?.value ?? {};
+    const directives = mergeSessionDirectives(current.directives ?? [], directive);
+    this.database.savePlatformSetting(key, {
+      sessionId: Number(sessionId),
+      userId: Number(userId),
+      directives,
+      updatedAt: new Date().toISOString(),
+    });
+    return directives;
+  }
+
   resolveContext(userId, themeId) {
     const user = this.database.getUser(userId);
     if (!user) {
@@ -1905,6 +1953,7 @@ export class MetricAgentService {
     onEvent = null,
     replanDepth = 0,
     replanHint = '',
+    carryForward = null,
     suppressUserMessage = false,
   }, runTraceId = currentTraceId()) {
     const normalizedQuestion = String(question ?? '').trim();
@@ -1927,6 +1976,7 @@ export class MetricAgentService {
         // A disconnected stream must not interrupt the query.
       }
     };
+    const progressiveAnswer = createProgressiveAnswerEmitter(emit);
     if (replanDepth === 0) {
       emit({
         type: 'run_started',
@@ -2049,6 +2099,14 @@ export class MetricAgentService {
       memoryTexts: [memoryPreInject],
     });
     const resolvedQuestion = conversationContext.question;
+    const existingSessionDirectives = this.getSessionDirectives(session.id);
+    const conversationDirective = conversationContext.conversationDirective
+      ?? (conversationContext.turnType === TURN_TYPES.INSTRUCTION
+        ? parseConversationDirective(conversationContext.originalQuestion)
+        : null);
+    const sessionDirectives = conversationDirective
+      ? mergeSessionDirectives(existingSessionDirectives, conversationDirective)
+      : existingSessionDirectives;
     const analysisMode = inferAnalysisMode(resolvedQuestion);
     const clarificationPolicy = resolveClarificationPolicy(
       conversationContext.mode === 'FOLLOW_UP' ? history : [],
@@ -2174,17 +2232,21 @@ export class MetricAgentService {
       });
     }
     const answerStartedAt = Date.now();
-    let lastQueryResult = null;
-    let lastChart = null;
-    let lastIndicator = null;
-    let lastBusinessDataset = null;
-    let lastSemanticParse = null;
+    const carriedExecutions = Array.isArray(carryForward?.executions)
+      ? carryForward.executions
+      : [];
+    const carriedExecutionCount = carriedExecutions.length;
+    let lastQueryResult = carryForward?.data ?? null;
+    let lastChart = carryForward?.chart ?? null;
+    let lastIndicator = carryForward?.indicator ?? null;
+    let lastBusinessDataset = carryForward?.dataset ?? null;
+    let lastSemanticParse = carryForward?.semanticParse ?? null;
     let skillAudit = null;
     let resultValidation = null;
     let resultAnalysis = null;
     const lockedExecutions = new Map();
-    const queryExecutions = [];
-    let lastLockedExecution = null;
+    const queryExecutions = [...carriedExecutions];
+    let lastLockedExecution = carryForward?.lockedExecution ?? null;
     const toolTrace = [];
     const processSteps = [];
     const generatedCodeArtifacts = [];
@@ -2703,6 +2765,7 @@ export class MetricAgentService {
         semanticResolutions: boundContract?.semanticResolutions,
         internalMetrics: boundContract?.internalMetrics,
         analysisPipeline: boundContract?.analysisPipeline,
+        limitPolicy: boundContract?.limitPolicy,
       });
       const fingerprint = queryFingerprint(queryContract);
       const fingerprintExecution = lockedExecutions.get(fingerprint);
@@ -2928,20 +2991,23 @@ export class MetricAgentService {
           message: `在线展示元数据加载失败，将由模型根据结果证据生成契约：${error.message}`,
         });
       }
-      const presentationContract = await this.presentationPlanner.plan({
-        harness: activeHarness,
-        prompt: theme.systemPrompt,
-        question: resolvedQuestion,
-        columns: displayResult.columns,
-        rows: displayResult.rows,
-        presentationEvidence,
-        metadata: {
-          userId: user.id,
-          sessionId: session.id,
-          themeId: theme.id,
-          signal,
-        },
-      });
+      const presentationContract = applyConversationDirectivesToPresentationContract(
+        await this.presentationPlanner.plan({
+          harness: activeHarness,
+          prompt: theme.systemPrompt,
+          question: resolvedQuestion,
+          columns: displayResult.columns,
+          rows: displayResult.rows,
+          presentationEvidence,
+          metadata: {
+            userId: user.id,
+            sessionId: session.id,
+            themeId: theme.id,
+            signal,
+          },
+        }),
+        sessionDirectives,
+      );
       for (const warning of presentationContract.meta?.warnings ?? []) {
         emit({
           type: 'warning',
@@ -3020,6 +3086,7 @@ export class MetricAgentService {
         filterLabels,
         lexicon: resolveBusinessLexicon(theme),
       });
+      progressiveAnswer.emit(summary);
       const queryScope = buildQueryScopeSummary({
         subjectName: indicator.name,
         columns: secureResult.columns,
@@ -3511,6 +3578,7 @@ export class MetricAgentService {
         semanticResolutions: boundContract?.semanticResolutions,
         internalMetrics: boundContract?.internalMetrics,
         analysisPipeline: boundContract?.analysisPipeline,
+        limitPolicy: boundContract?.limitPolicy,
       });
       const fingerprint = queryFingerprint(queryContract);
       const fingerprintExecution = lockedExecutions.get(fingerprint);
@@ -3603,7 +3671,9 @@ export class MetricAgentService {
         throw error;
       }
       const result = results[0];
-      const resultTruncated = results.some((item) => item.truncated === true);
+      const rawTruncated = results.some((item) => item.truncated === true);
+      const intentionalTopN = Number(queryContract?.limitPolicy?.intentionalTopN) || null;
+      const resultTruncated = rawTruncated && !intentionalTopN;
       if (resultTruncated) {
         emit({
           type: 'warning',
@@ -3838,20 +3908,23 @@ export class MetricAgentService {
           message: '最终展示项未匹配到在线指标，将由模型根据结果证据生成展示契约。',
         });
       }
-      const presentationContract = await this.presentationPlanner.plan({
-        harness: activeHarness,
-        prompt: theme.systemPrompt,
-        question: resolvedQuestion,
-        columns: displayResult.columns,
-        rows: displayResult.rows,
-        presentationEvidence,
-        metadata: {
-          userId: user.id,
-          sessionId: session.id,
-          themeId: theme.id,
-          signal,
-        },
-      });
+      const presentationContract = applyConversationDirectivesToPresentationContract(
+        await this.presentationPlanner.plan({
+          harness: activeHarness,
+          prompt: theme.systemPrompt,
+          question: resolvedQuestion,
+          columns: displayResult.columns,
+          rows: displayResult.rows,
+          presentationEvidence,
+          metadata: {
+            userId: user.id,
+            sessionId: session.id,
+            themeId: theme.id,
+            signal,
+          },
+        }),
+        sessionDirectives,
+      );
       for (const warning of presentationContract.meta?.warnings ?? []) {
         emit({
           type: 'warning',
@@ -3926,7 +3999,12 @@ export class MetricAgentService {
         metricDefinitions,
         filterLabels: queryScopeFilterLabels,
         lexicon: resolveBusinessLexicon(theme),
+        resultQuality: {
+          truncated: resultTruncated,
+          limit: result.limit ?? effectivePlan.limit,
+        },
       });
+      progressiveAnswer.emit(summary);
       const queryScope = buildQueryScopeSummary({
         subjectName: dataset.name,
         columns: secureResult.columns,
@@ -4211,6 +4289,8 @@ export class MetricAgentService {
       if (result.valid) {
         invalidContractAttempts = 0;
         pendingValueCandidates = [];
+        pendingSemanticSpans = [];
+        pendingModelClarification = null;
       } else {
         invalidContractAttempts += 1;
         pendingValueCandidates = collectValueCandidates(result.issues);
@@ -4316,15 +4396,25 @@ export class MetricAgentService {
         evidence: [{ type: 'QUERY_CONTRACT', id: contract.id }],
       });
       if (contract.sourceType === 'INDICATOR') {
-        return runQuery({
+        const result = await runQuery({
           indicatorId: contract.indicatorId,
           __contract: contract,
         });
+        return {
+          ...result,
+          stopAgent: true,
+          finalMessage: result?.finalMessage ?? result?.summary ?? '',
+        };
       }
-      return runBusinessDatasetQuery({
+      const result = await runBusinessDatasetQuery({
         datasetId: contract.datasetId,
         __contract: contract,
       });
+      return {
+        ...result,
+        stopAgent: true,
+        finalMessage: result?.finalMessage ?? result?.summary ?? '',
+      };
     };
 
     // 长期记忆检索是只读旁路：常驻上下文只放摘要，正文由这个处理器按需读取。
@@ -4766,6 +4856,7 @@ export class MetricAgentService {
       controlledRequeryAllowed,
       question: resolvedQuestion,
       replanHint,
+      conversationDirectives: sessionDirectives,
     });
     let enabledTools = this.skillRegistry.filterTools(TOOL_DEFINITIONS, skills);
     if (!supersonicEnabled) {
@@ -4835,6 +4926,7 @@ export class MetricAgentService {
     const canUseSemanticFastPath = activeHarness.mode !== 'local-rule'
       && businessDatasets.length > 0
       && !reuseArtifactsOnly
+      && conversationContext.turnType !== TURN_TYPES.INSTRUCTION
       && ['NEW_TOPIC', 'INDEPENDENT'].includes(conversationContext.mode);
     if (canUseSemanticFastPath) {
       const fastPath = buildSemanticFastPathDraft({
@@ -4957,7 +5049,37 @@ export class MetricAgentService {
       }
     }
     try {
-      if (chartRestyleApplied) {
+      if (conversationContext.turnType === TURN_TYPES.INSTRUCTION) {
+        const confirmation = conversationDirective?.confirmation
+          ?? '收到，本会话会按你的要求处理；这条消息不触发数据查询。';
+        this.saveSessionDirective(session.id, user.id, conversationDirective);
+        appendProcessStep({
+          id: `step-${processSteps.length + 1}`,
+          type: 'directive',
+          stageCode: 'INTENT',
+          status: 'success',
+          name: 'conversation_directive',
+          skillCode: null,
+          skillName: '会话指令',
+          title: '更新会话偏好',
+          detail: conversationDirective
+            ? describeConversationDirective(conversationDirective)
+            : '已识别为会话指令，本轮不执行数据查询',
+        });
+        emit({
+          type: 'conversation_directive',
+          directive: conversationDirective,
+          message: confirmation,
+        });
+        emit({
+          type: 'runtime_response',
+          provider: 'platform-directive',
+          model: 'conversation-directive',
+          content: confirmation,
+          toolCalls: [],
+        });
+        harnessResult = { content: confirmation, trace: [] };
+      } else if (chartRestyleApplied) {
         emit({
           type: 'runtime_response',
           provider: 'platform-native-chart',
@@ -5258,8 +5380,9 @@ export class MetricAgentService {
       && analysisMode.mode === 'ATTRIBUTION'
       && !clarificationPolicy.allowed
       && isClarificationText(harnessResult.content);
-    const deterministicMessage = queryExecutions.length > 0
-      ? queryExecutions.map((execution) => execution.finalMessage).join('\n\n')
+    const currentExecutions = queryExecutions.slice(carriedExecutionCount);
+    const deterministicMessage = currentExecutions.length > 0
+      ? currentExecutions.map((execution) => execution.finalMessage).join('\n\n')
       : '';
     // 过滤值歧义优先：候选值一旦存在，本轮只问「选哪个值」，用它覆盖模型那段
     // 口径反问。值确定后下一轮会重新编译契约，剩余阻塞项届时再按规则处理。
@@ -5283,18 +5406,50 @@ export class MetricAgentService {
       || (clarificationExhausted
         ? '本轮归因问题已达到澄清上限，系统不会继续逐项反问。请补齐主题提示词中的归因公式、同期规则或候选归因维度后重新执行。'
         : harnessResult.content)
+      || carryForward?.lastSummary
       || (lastBusinessDataset
         ? `已完成「${lastBusinessDataset.name}」业务数据查询。`
         : '查询已完成。');
     const validationWarnings = resultValidation?.checks
       ?.filter((check) => check.level === 'ERROR' || check.level === 'WARN')
       .map((check) => `- ${check.message}`) ?? [];
-    const analysisText = resultAnalysis && !chartRestyleApplied && !deterministicMessage
+    const analysisText = resultAnalysis && !chartRestyleApplied && !deterministicMessage && !carryForward
       ? buildResultAnalysisText(resultAnalysis.facts)
       : '';
-    const activeClarification = valueClarification
+    let activeClarification = valueClarification
       ?? semanticSpanClarification
       ?? modelClarification;
+    let answerEvidence = buildAnswerEvidence({
+      semanticParse: lastSemanticParse,
+      data: lastQueryResult,
+      queryFingerprint: lastLockedExecution?.queryFingerprint ?? null,
+      dataHash: lastLockedExecution?.dataHash ?? null,
+      executionCount: queryExecutions.length,
+    });
+    const groundingGuardCandidate = requiresGroundedAnswer({
+      analysisMode,
+      contextReason: conversationContext.reason,
+      hasClarification: Boolean(activeClarification),
+    }) && conversationContext.turnType !== TURN_TYPES.INSTRUCTION && !answerEvidence.grounded;
+    const groundingGuardApplied = groundingGuardCandidate
+      && looksLikeDataClaim(baseFinalMessage);
+    if (groundingGuardApplied) {
+      activeClarification = buildClarificationFromModule({
+        message: UNGROUNDED_ANSWER_MESSAGE,
+        clarificationPolicy,
+      }) ?? {
+        type: 'NEEDS_CONFIRMATION',
+        prompt: UNGROUNDED_ANSWER_MESSAGE,
+        recommendedOptionId: 'cancel',
+        options: [{
+          id: 'cancel',
+          label: '停止本轮查询',
+          description: '等待补充可验证的查询范围或口径。',
+          recommended: true,
+        }],
+      };
+      answerEvidence = { ...answerEvidence, guarded: true };
+    }
     const finalMessage = activeClarification
       ? activeClarification.prompt
       : [
@@ -5305,6 +5460,7 @@ export class MetricAgentService {
           : '',
       ].filter(Boolean).join('\n\n');
     const structuredClarification = !lastQueryResult
+      && conversationContext.turnType !== TURN_TYPES.INSTRUCTION
       ? (activeClarification ?? buildClarificationFromModule({
         message: finalMessage,
         clarificationPolicy,
@@ -5316,6 +5472,12 @@ export class MetricAgentService {
           continue;
         }
         workflow.skip(code, '本轮回答未执行数据查询');
+      }
+    } else if (carryForward && currentExecutions.length === 0) {
+      for (const code of ['SEMANTIC_RESOLVE', 'SEMANTIC_DISCOVERY', 'SEMANTIC_CONFIRM', 'PLAN', 'VALIDATE', 'EXECUTE']) {
+        if (!workflow.isCompleted(code)) {
+          workflow.skip(code, '复用上一轮已锁定查询结果，未重复取数');
+        }
       }
     }
     completeWorkflowStage('RESPOND', {
@@ -5335,6 +5497,7 @@ export class MetricAgentService {
       contract: lastSemanticParse,
       harness: activeHarness,
       depth: replanDepth,
+      judgeTimeoutMs: this.config?.reflection?.judgeTimeoutMs,
     });
     // Only a genuine strategy failure (with replan budget left) suppresses
     // persistence and hands control back to the replan loop. A passing
@@ -5354,7 +5517,23 @@ export class MetricAgentService {
         }],
       });
     }
-    const workflowSnapshot = workflow.finish(finalMessage);
+    const workflowWarnings = [];
+    if (!reflection.passed) {
+      workflowWarnings.push({
+        code: 'REFLECTION_WARNING',
+        message: reflection.checks
+          .filter((check) => !check.pass)
+          .map((check) => `${check.name}:${check.detail || '未通过'}`)
+          .join('；'),
+      });
+    }
+    if (groundingGuardApplied) {
+      workflowWarnings.push({
+        code: 'UNGROUNDED_ANSWER_BLOCKED',
+        message: '未发现可验证的查询证据，已阻止生成推测性数据答案。',
+      });
+    }
+    const workflowSnapshot = workflow.finish(finalMessage, { warnings: workflowWarnings });
     const taskState = completeTaskState({
       contextTask: conversationContext.taskState,
       answer: {
@@ -5383,10 +5562,13 @@ export class MetricAgentService {
       turnId: conversationContext.turnId,
       rootTaskId: conversationContext.rootTaskId,
       taskState,
+      conversationDirective,
+      sessionDirectives,
       contextDecision,
       analysisMode,
       clarificationPolicy,
       clarification: structuredClarification,
+      answerEvidence,
       reflection,
       gateSummary: lastSemanticParse?.gateSummary ?? null,
       user: {
@@ -5614,7 +5796,7 @@ export class MetricAgentService {
     return savedAnswer;
   }
 
-  async _runReflection({ question, answer, result, contract, harness, depth }) {
+  async _runReflection({ question, answer, result, contract, harness, depth, judgeTimeoutMs }) {
     if (this.config?.reflection?.enabled === false) {
       return {
         version: REFLECTION_VERSION,
@@ -5629,7 +5811,15 @@ export class MetricAgentService {
       };
     }
     const judge = createHarnessJudge(harness);
-    return reflectOnAnswer({ question, answer, result, contract, judge, depth });
+    return reflectOnAnswer({
+      question,
+      answer,
+      result,
+      contract,
+      judge,
+      depth,
+      judgeTimeoutMs,
+    });
   }
 
   // Public entry: runs the pipeline, then reflects; on a strategy failure it
@@ -5644,12 +5834,14 @@ export class MetricAgentService {
     let opts = options;
     let hint = '';
     let last = null;
+    let carryForward = null;
     for (let depth = 0; depth <= maxReplan; depth += 1) {
       last = await this._runOnce(
         {
           ...opts,
           replanDepth: depth,
           replanHint: hint,
+          carryForward,
           suppressUserMessage: depth > 0,
         },
         runTraceId,
@@ -5658,6 +5850,7 @@ export class MetricAgentService {
       if (!reflection || !reflection.needsReplan || depth === maxReplan) {
         return last;
       }
+      carryForward = buildReplanCarryForward(last) ?? carryForward;
       hint = reflection.hint || '请换一种查询或分析策略重试';
       // Reuse the same session: replan re-runs the full pipeline from INTENT
       // without creating a new session or appending the user question again.

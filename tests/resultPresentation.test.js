@@ -7,6 +7,10 @@ import {
   presentationValueForColumn,
   PresentationPlanner,
 } from '../src/resultPresentation.js';
+import {
+  applyConversationDirectivesToPresentationContract,
+  parseConversationDirective,
+} from '../src/conversationDirectives.js';
 
 test('presentation evidence preserves raw data and only carries online evidence', () => {
   const columns = [
@@ -223,6 +227,79 @@ test('presentation planner falls back to the theme prompt without online metadat
   assert.equal(contract.meta.warnings[0].code, 'PRESENTATION_CONTRACT_INVALID');
 });
 
+test('theme presentation rules override conflicting model metadata', async () => {
+  const contract = await new PresentationPlanner().plan({
+    harness: {
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      chat: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              fields: {
+                sale_amt: {
+                  type: 'amount',
+                  unit: '万元',
+                  displayScale: 0.0001,
+                  xlsxScale: 0.0001,
+                  decimals: 0,
+                  basis: 'ONLINE_METADATA',
+                },
+              },
+            }),
+          },
+        }],
+      }),
+    },
+    prompt: [
+      '展示规范：金额按万元、2 位小数展示。',
+      '```presentation',
+      '{"amount":{"unit":"万元","decimals":2,"match":["金额","销售额"]}}',
+      '```',
+    ].join('\n'),
+    question: '销售额是多少',
+    columns: [
+      { name: '销售额', bizName: 'sale_amt', showType: 'NUMBER' },
+    ],
+    rows: [{ sale_amt: 470_000 }],
+  });
+
+  assert.equal(contract.fields.sale_amt.decimals, 2);
+  assert.equal(contract.fields.sale_amt.numberFormat, '#,##0.00');
+  assert.equal(contract.fields.sale_amt.basis, 'THEME_PROMPT');
+  assert.deepEqual(contract.meta.fallbackFields, [{ field: 'sale_amt', basis: 'THEME_PROMPT' }]);
+});
+
+test('session decimal directives survive final result normalization', () => {
+  const directive = parseConversationDirective('保留两位小数');
+  const contract = applyConversationDirectivesToPresentationContract({
+    version: 1,
+    source: 'RAW',
+    fields: {
+      sale_amt: {
+        type: 'amount',
+        unit: '万元',
+        displayScale: 0.0001,
+        xlsxScale: 0.0001,
+        decimals: 0,
+        basis: 'THEME_PROMPT',
+      },
+    },
+    meta: {},
+  }, [directive]);
+  const rendered = applyResultPresentation({
+    columns: [{ name: '销售额', bizName: 'sale_amt', showType: 'NUMBER' }],
+    rows: [{ sale_amt: 470_000 }],
+    contract,
+  });
+
+  const amount = rendered.columns.find((column) => column.bizName === 'sale_amt');
+  assert.equal(amount.displayDecimals, 2);
+  assert.equal(amount.presentationBasis, 'SESSION_DIRECTIVE');
+  assert.equal(formatPresentationCell(470_000, amount), '47.00');
+  assert.equal(rendered.contract.meta.conversationDirective.decimals, 2);
+});
+
 test('presentation planner reuses a valid model contract for identical evidence', async () => {
   let chatCount = 0;
   const harness = {
@@ -328,6 +405,41 @@ test('deterministic renderer projects amount and percentage values', () => {
   assert.equal(formatPresentationCell(0.084, rate), '8.4%');
   assert.equal(presentationValueForColumn(0.084, rate), 0.084);
   assert.equal(rate.numberFormat, '0.0%');
+});
+
+test('aggregated metric aliases inherit presentation rules from their source field', () => {
+  const result = applyResultPresentation({
+    columns: [{
+      name: '销售额',
+      bizName: 'sale_amt_total',
+      sourceField: 'sale_amt',
+      sourceLabel: '销售额',
+      showType: 'NUMBER',
+    }],
+    rows: [{ sale_amt_total: 470_000 }],
+    contract: {
+      source: 'MODEL_PRESENTATION_CONTRACT',
+      meta: {
+        generatedByModel: true,
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+      },
+      fields: {
+        sale_amt: {
+          type: 'amount',
+          unit: '万元',
+          displayScale: 0.0001,
+          xlsxScale: 0.0001,
+          decimals: 0,
+          basis: 'THEME_PROMPT',
+        },
+      },
+    },
+  });
+  const column = result.columns[0];
+  assert.equal(column.name, '销售额（万元）');
+  assert.equal(column.displayScale, 0.0001);
+  assert.equal(formatPresentationCell(470_000, column), '47');
 });
 
 test('presentation planner reads percentage rules declared in the theme prompt', async () => {
