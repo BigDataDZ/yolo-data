@@ -226,10 +226,19 @@ export function buildQueryContract({
   semanticResolutions = [],
   internalMetrics = [],
   analysisPipeline = null,
+  limitPolicy = null,
 } = {}) {
   const normalizedTimeGrain = String(timeGrain ?? '').toUpperCase();
   const normalizedAnalysisMode = String(analysisMode ?? '').toUpperCase();
   const normalizedMetricSpecs = normalizeMetricSpecs(metricSpecs); const contractMetrics = normalizedMetricSpecs.length > 0 ? normalizedMetricSpecs.map((metric) => metric.outputField) : metrics;
+  const normalizedLimitPolicy = limitPolicy && typeof limitPolicy === 'object'
+    ? { ...limitPolicy }
+    : null;
+  const limitCeiling = analysisPipeline
+    ? 50000
+    : normalizedLimitPolicy?.expectedRowDensity === 'HIGH'
+      ? 10000
+      : 2000;
   return {
     version: 1,
     compilerVersion: CONTRACT_COMPILER_VERSION,
@@ -253,9 +262,10 @@ export function buildQueryContract({
       1,
       Math.min(
         Number(limit) || 200,
-        analysisPipeline ? 50000 : 2000,
+        limitCeiling,
       ),
     ),
+    limitPolicy: normalizedLimitPolicy,
     analysisMode: ['METRIC_QUERY', 'TREND', 'ATTRIBUTION'].includes(normalizedAnalysisMode)
       ? normalizedAnalysisMode
       : 'METRIC_QUERY',

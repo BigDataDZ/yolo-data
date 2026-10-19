@@ -2,6 +2,7 @@ import {
   TURN_TYPES,
   createTurnContext,
 } from './turnContext.js';
+import { parseConversationDirective } from './conversationDirectives.js';
 
 const ALLOWED_TURN_TYPES = new Set(Object.values(TURN_TYPES));
 
@@ -69,11 +70,12 @@ export async function refineTurnContextWithHarness({
     '- CONTINUATION：继续上一任务，省略了部分条件，例如“按周拆开”“只看某个筛选值”',
     '- REVISION：修正上一任务的条件，例如“不是本月，改成上月”',
     '- NEW_TASK：独立新问题，不应继承上一任务的指标、时间、筛选或结果',
+    '- INSTRUCTION：设置会话偏好或输出规范，本身不执行问数，例如“以后金额都按万元展示”',
     '- RESULT_OPERATION：操作上一轮结果，例如“导出 Excel”“加一行汇总”',
     '- CLARIFICATION_ANSWER：回答上一轮的澄清问题',
     '- AMBIGUOUS：仅凭当前信息无法可靠判断',
     '判断原则：当前用户明确表达优先；没有明确指代时，不要为了“连贯”而继承旧条件；跨指标且没有指代通常视为 NEW_TASK。',
-    '只输出 JSON：{"turnType":"CONTINUATION|REVISION|NEW_TASK|RESULT_OPERATION|CLARIFICATION_ANSWER|AMBIGUOUS","confidence":0到1,"referencedTask":true或false,"reason":"一句话理由"}',
+    '只输出 JSON：{"turnType":"CONTINUATION|REVISION|NEW_TASK|INSTRUCTION|RESULT_OPERATION|CLARIFICATION_ANSWER|AMBIGUOUS","confidence":0到1,"referencedTask":true或false,"reason":"一句话理由"}',
     '',
     `当前问题：${context.originalQuestion ?? ''}`,
     `规则初步判断：${context.turnType}（置信度 ${context.confidence}）`,
@@ -98,7 +100,14 @@ export async function refineTurnContextWithHarness({
       signal,
     });
     const decision = parseDecision(responseContent(payload));
-    if (!decision || decision.confidence < minConfidence || decision.turnType === TURN_TYPES.AMBIGUOUS) {
+    const directive = decision?.turnType === TURN_TYPES.INSTRUCTION
+      ? parseConversationDirective(context.originalQuestion)
+      : null;
+    if (
+      !decision
+      || decision.confidence < minConfidence
+      || decision.turnType === TURN_TYPES.AMBIGUOUS
+    ) {
       return {
         ...context,
         needsClassifier: false,
@@ -119,6 +128,7 @@ export async function refineTurnContextWithHarness({
       memorySlots: context.memorySlots ?? {},
       maxInheritTurns: context.inheritBudget?.maxTurns,
       maxInheritedSlots: context.inheritBudget?.maxSlots,
+      conversationDirective: directive,
     });
   } catch (error) {
     return {

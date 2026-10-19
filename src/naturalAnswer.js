@@ -1,6 +1,7 @@
 import { formatPresentationCell } from './resultPresentation.js';
 
 const RANKING_PATTERN = /排名|排行|榜单|最高|最低|最多|最少|top\s*\d*|前\s*\d+/i;
+const FULL_BREAKDOWN_LIMIT = 15;
 const DATE_DIMENSION_PATTERN =
   /(^|_)(date|time|day|week|month|quarter|year)($|_)|sdt|日期|时间|账期|月份/i;
 
@@ -79,6 +80,35 @@ function resolveDateDimension(columns, contract) {
     .find(isDateColumn) ?? (columns ?? []).find(isDateColumn) ?? null;
 }
 
+function temporalPeriods(columns, rows, contract) {
+  const dimension = resolveDateDimension(columns, contract);
+  const key = dimension ? columnKey(dimension) : '';
+  if (!key) {
+    return [];
+  }
+  return [...new Set(
+    (rows ?? []).map((row) => String(row?.[key] ?? '').trim()).filter(Boolean),
+  )].sort((left, right) => left.localeCompare(right));
+}
+
+function formatTemporalPeriod(value, timeGrain) {
+  const text = String(value ?? '');
+  const match = text.match(/^(\d{4})-(\d{2})/);
+  if (!match) {
+    return text;
+  }
+  switch (String(timeGrain ?? '').toUpperCase()) {
+    case 'MONTH':
+      return `${match[1]}-${match[2]}`;
+    case 'QUARTER':
+      return `${match[1]}-Q${Math.floor((Number(match[2]) - 1) / 3) + 1}`;
+    case 'YEAR':
+      return match[1];
+    default:
+      return text;
+  }
+}
+
 function composeBreakdown({ question, rows, columns, contract }) {
   const metricColumn = resolveMetric(columns, contract);
   const dimension = resolveBreakdownDimension(columns, contract);
@@ -111,8 +141,8 @@ function composeBreakdown({ question, rows, columns, contract }) {
       metricColumn,
     )}**` : ''}。`;
   }
-  const top = sorted.slice(0, 3);
-  const rest = sorted.slice(3);
+  const top = sorted.slice(0, sorted.length <= FULL_BREAKDOWN_LIMIT ? sorted.length : 3);
+  const rest = sorted.slice(top.length);
   const restText = rest.length > 0
     ? `，其余 ${rest.length} 个${dimensionLabel}合计 **${formatValue(
       rest.reduce((sum, row) => sum + Number(row[metricKey]), 0),
@@ -129,7 +159,10 @@ function composeComparison({ comparisons, analysisLines, movementLines }) {
   const statements = comparisons.map((item) => sentence(item.statement));
   const details = comparisons.flatMap((item) => item.details ?? []).map(sentence);
   const decomposition = analysisLines.length > 0 ? analysisLines : movementLines;
-  return [...statements, ...details, ...decomposition].join('\n');
+  // 同一维度在多指标比较时可能产生完全相同的解释句。保留一次即可，
+  // 避免回答像把同一段分析复制了两遍。
+  return [...new Set([...statements, ...details, ...decomposition].filter(Boolean))]
+    .join('\n');
 }
 
 export function composeNaturalAnswer({
@@ -163,6 +196,18 @@ export function composeNaturalAnswer({
   }
   const breakdown = composeBreakdown({ question, rows, columns, contract });
   if (breakdown) {
+    const periods = temporalPeriods(columns, rows, contract);
+    if (wantsTrend && periods.length === 1) {
+      const grain = String(contract?.timeGrain ?? '').toUpperCase();
+      const grainLabel = grain === 'MONTH'
+        ? '月'
+        : grain === 'QUARTER'
+          ? '季度'
+          : grain === 'YEAR'
+            ? '年'
+            : '期';
+      return `当前结果只覆盖 ${formatTemporalPeriod(periods[0], grain)} 一个${grainLabel}，无法形成跨${grainLabel}趋势；以下先给出该时间范围内的结构。\n${breakdown}`;
+    }
     return breakdown;
   }
   if (totals.length > 0) {

@@ -182,13 +182,13 @@ export async function startServer(configOverride, indicatorClientOverride = null
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(config.port, '0.0.0.0', resolve);
+    server.listen(config.port, config.host ?? '0.0.0.0', resolve);
   });
 
   return {
     server,
     application,
-    url: `http://localhost:${config.port}`,
+    url: `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`,
   };
 }
 

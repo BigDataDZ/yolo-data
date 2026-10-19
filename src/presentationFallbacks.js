@@ -31,7 +31,7 @@ export function mergeDeterministicFallbacks(contract, {
   const fallbackFields = [];
   for (const field of schema) {
     const key = String(field?.field ?? '').trim();
-    if (!key || fields[key]?.basis === 'ONLINE_METADATA') {
+    if (!key) {
       continue;
     }
     if (onlineTemplateRules[key]) {
@@ -40,7 +40,9 @@ export function mergeDeterministicFallbacks(contract, {
       continue;
     }
     const themeRule = themeRules[key];
-    if (themeRule && (!fields[key] || fields[key].basis === 'RESULT_EVIDENCE')) {
+    // 主题提示词是显式声明的机器契约。模型即使自报 THEME_PROMPT 或
+    // ONLINE_METADATA，也不能覆盖真实存在的主题规则或在线格式。
+    if (themeRule) {
       fields[key] = themeRule;
       fallbackFields.push({ field: key, basis: 'THEME_PROMPT' });
     }

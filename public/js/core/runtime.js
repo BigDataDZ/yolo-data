@@ -45,7 +45,7 @@ const state = {
   auditTab: 'platform',
   memoryUserId: null,
   memoryScope: 'self',
-  selectedThemeId: null,
+  selectedThemeId: null, indicatorThemeId: '',
   selectedModelId: null,
   indicators: [],
   indicatorTypes: [],

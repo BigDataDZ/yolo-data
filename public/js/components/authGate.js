@@ -78,7 +78,7 @@ export function showLogin(message = '') {
       <form class="login-card" id="loginForm" novalidate>
         <div class="login-brand">
           <img src="/yolo-mark.svg" alt="" />
-          <div><strong>YOLO Data Agnet</strong><small>先进稳定的智能数据分析平台</small></div>
+          <div><strong>YOLO Data Agent</strong><small>先进稳定的智能数据分析平台</small></div>
         </div>
         <label class="login-field">
           <span>用户名</span>

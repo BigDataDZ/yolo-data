@@ -279,6 +279,38 @@ function resolveComparisonPeriods(columns, rows, contract) {
   return { currentPeriod, previousPeriod };
 }
 
+function dateParts(value) {
+  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match
+    ? { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) }
+    : null;
+}
+
+function comparisonBasis(contract) {
+  const windows = contract?.timeWindows ?? [];
+  const baseIndex = Number.isInteger(contract?.calculation?.baseWindowIndex)
+    ? contract.calculation.baseWindowIndex
+    : 0;
+  const compareIndex = Number.isInteger(contract?.calculation?.compareWindowIndex)
+    ? contract.calculation.compareWindowIndex
+    : 1;
+  const current = dateParts(windows[baseIndex]?.startDate);
+  const previous = dateParts(windows[compareIndex]?.startDate);
+  if (!current || !previous) {
+    return '较上期';
+  }
+  if (current.month === previous.month && current.year === previous.year + 1) {
+    return '同比';
+  }
+  if (
+    current.year === previous.year
+    && current.month === previous.month + 1
+  ) {
+    return '环比';
+  }
+  return '较上期';
+}
+
 function periodComparisonFindings(
   columns,
   rows,
@@ -290,6 +322,7 @@ function periodComparisonFindings(
     return [];
   }
   const { currentPeriod, previousPeriod } = periods;
+  const basis = comparisonBasis(contract);
 
   const definitions = new Map(
     (metricDefinitions ?? []).map((definition) => [
@@ -332,14 +365,14 @@ function periodComparisonFindings(
     // negative percentage so the sentence reads naturally in Chinese.
     const rateText = rate === null
       ? ''
-      : `同比${direction} ${directionPrefix}${(Math.abs(rate) * 100).toFixed(1)}%`;
+      : `${basis}${direction} ${directionPrefix}${(Math.abs(rate) * 100).toFixed(1)}%`;
     const currentText = formatColumnValue(currentTotal, metricColumn);
     const previousText = formatColumnValue(previousTotal, metricColumn);
     const statement = `${currentPeriod}${metricLabel}为 ${currentText}，较${
       previousPeriod
     }${delta > 0 ? '增加' : delta < 0 ? '减少' : '变动'} ${
       formatColumnValue(Math.abs(delta), metricColumn)}（${
-      rateText || '同比持平'
+      rateText || `${basis}持平`
     }；上期 ${previousText}）`;
 
     const detail = [];
@@ -421,6 +454,59 @@ function periodComparisonFindings(
   });
 }
 
+function parseDateValue(value) {
+  const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return null;
+  }
+  const date = new Date(Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  ));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function daysBetween(start, end) {
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1;
+}
+
+function periodCoverageDays(period, grain, rangeStart, rangeEnd) {
+  const start = parseDateValue(period);
+  if (!start) {
+    return null;
+  }
+  const normalizedGrain = String(grain ?? '').toUpperCase();
+  let end;
+  if (normalizedGrain === 'WEEK') {
+    end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+  } else if (normalizedGrain === 'MONTH') {
+    end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
+  } else if (normalizedGrain === 'QUARTER') {
+    end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 3, 0));
+  } else if (normalizedGrain === 'YEAR') {
+    end = new Date(Date.UTC(start.getUTCFullYear() + 1, 0, 0));
+  } else {
+    end = new Date(start);
+  }
+  const clippedStart = rangeStart && rangeStart > start ? rangeStart : start;
+  const clippedEnd = rangeEnd && rangeEnd < end ? rangeEnd : end;
+  const days = daysBetween(clippedStart, clippedEnd);
+  return days > 0 ? days : null;
+}
+
+function nominalPeriodDays(grain, start) {
+  const normalizedGrain = String(grain ?? '').toUpperCase();
+  if (normalizedGrain === 'WEEK') return 7;
+  if (normalizedGrain === 'MONTH') {
+    return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+  }
+  if (normalizedGrain === 'QUARTER') return 92;
+  if (normalizedGrain === 'YEAR') return 366;
+  return 1;
+}
+
 function trendFinding(columns, rows, contract) {
   if (contract?.analysisMode === 'ATTRIBUTION' || rows.length < 2) {
     return '';
@@ -432,24 +518,70 @@ function trendFinding(columns, rows, contract) {
   if (!dateKey || !metricKey) {
     return '';
   }
-  const firstValue = Number(rows[0]?.[metricKey]);
-  const lastValue = Number(rows.at(-1)?.[metricKey]);
+  const grouped = new Map();
+  for (const row of rows) {
+    const period = String(row?.[dateKey] ?? '');
+    const value = Number(row?.[metricKey]);
+    if (!period || !Number.isFinite(value)) {
+      continue;
+    }
+    grouped.set(period, (grouped.get(period) ?? 0) + value);
+  }
+  const points = [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([period, value]) => ({ period, value }));
+  if (points.length < 2) {
+    return '';
+  }
+  const first = points[0];
+  const last = points[points.length - 1];
+  const firstValue = first.value;
+  const lastValue = last.value;
   if (!Number.isFinite(firstValue) || !Number.isFinite(lastValue)) {
     return '';
   }
   const metricColumn = findColumn(columns, metricKey);
   const metricLabel = columnLabel(metricColumn) || metricKey;
-  const firstPeriod = formatTemporalDisplay(rows[0]?.[dateKey], contract?.timeGrain);
-  const lastPeriodText = formatTemporalDisplay(rows.at(-1)?.[dateKey], contract?.timeGrain);
+  const firstPeriod = formatTemporalDisplay(first.period, contract?.timeGrain);
+  const lastPeriodText = formatTemporalDisplay(last.period, contract?.timeGrain);
   const base = `从 ${firstPeriod} 的 ${formatColumnValue(firstValue, metricColumn)} 变化到 ${
     lastPeriodText} 的 ${formatColumnValue(lastValue, metricColumn)}`;
-  const lastPeriod = String(rows.at(-1)?.[dateKey] ?? '');
-  const rangeEnd = String(contract?.dateInfo?.endDate ?? '');
-  const incompletePeriod = String(contract?.timeGrain ?? '').toUpperCase() === 'MONTH'
-    && lastPeriod.slice(0, 7) === rangeEnd.slice(0, 7)
-    && rangeEnd > lastPeriod
-    ? `（最后一个月截至 ${rangeEnd}，为未完整月）`
+  const rangeStart = parseDateValue(
+    contract?.dateInfo?.startDate ?? contract?.timeWindows?.[0]?.startDate,
+  );
+  const rangeEnd = parseDateValue(
+    contract?.dateInfo?.endDate ?? contract?.timeWindows?.[0]?.endDate,
+  );
+  const firstDays = periodCoverageDays(first.period, contract?.timeGrain, rangeStart, rangeEnd);
+  const lastDays = periodCoverageDays(last.period, contract?.timeGrain, rangeStart, rangeEnd);
+  const firstStart = parseDateValue(first.period);
+  const lastStart = parseDateValue(last.period);
+  const firstIncomplete = Boolean(
+    firstStart
+    && firstDays
+    && firstDays < nominalPeriodDays(contract?.timeGrain, firstStart),
+  );
+  const lastIncomplete = Boolean(
+    lastStart
+    && lastDays
+    && lastDays < nominalPeriodDays(contract?.timeGrain, lastStart),
+  );
+  const incompletePeriod = lastIncomplete && rangeEnd
+    ? String(contract?.timeGrain ?? '').toUpperCase() === 'MONTH'
+      ? `（最后一个月截至 ${rangeEnd.toISOString().slice(0, 10)}，为未完整月）`
+      : `（最后一周仅覆盖 ${last.period} 至 ${rangeEnd.toISOString().slice(0, 10)}，共 ${lastDays} 天）`
     : '';
+  if ((firstIncomplete || lastIncomplete) && firstDays && lastDays) {
+    const firstDaily = firstValue / firstDays;
+    const lastDaily = lastValue / lastDays;
+    const dailyChange = firstDaily === 0
+      ? null
+      : ((lastDaily - firstDaily) / Math.abs(firstDaily)) * 100;
+    return `${metricLabel}${base}${incompletePeriod}；按日均口径看，从 ${
+      formatColumnValue(firstDaily, metricColumn)} 变化到 ${formatColumnValue(lastDaily, metricColumn)}${
+      dailyChange === null ? '' : `，日均${dailyChange >= 0 ? '增长' : '下降'} ${Math.abs(dailyChange).toFixed(1)}%`
+    }`;
+  }
   if (firstValue === 0) {
     return `${metricLabel}${base}${incompletePeriod}`;
   }
@@ -573,7 +705,15 @@ export function buildDeterministicSummary({
   // ANALYSIS_CODE 阶段沙箱产出的分析结果（analysis.json 内容）。
   // 平台只校验并转述，不参与计算；缺失或校验不通过时回落到确定性事实。
   analysis = null,
+  resultQuality = null,
 }) {
+  if (resultQuality?.truncated) {
+    return [
+      `本轮查询达到结果上限${resultQuality.limit ? `（${resultQuality.limit} 行）` : ''}，数据未完整读取。`,
+      '为避免把部分数据误当成整体，我不会据此给出合计或归因结论。',
+      '请缩小时间范围或业务范围后重试。',
+    ].join('');
+  }
   const totals = metricTotals(columns, rows, contract, metricDefinitions, lexicon);
   const comparisons = periodComparisonFindings(columns, rows, contract, metricDefinitions);
   // 沙箱分析产物优先：有它就转述代码算出来的结论，平台不再自己拆一遍。

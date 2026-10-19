@@ -58,6 +58,12 @@ export function applyChatStreamEvent(stream, event) {
     next.answerDone = true;
     return next;
   }
+  if (event.type === 'assistant_answer_replace') {
+    next.answerStarted = true;
+    next.answerDone = false;
+    next.answerText = String(event.text ?? '');
+    return next;
+  }
   if (event.type === 'workflow_stage' || event.type === 'workflow_finished') {
     next.workflow = event.workflow ?? next.workflow;
   } else if (event.type === 'process_step') {
@@ -84,7 +90,7 @@ export function applyChatStreamEvent(stream, event) {
     next.processSteps = event.processSteps ?? next.processSteps;
     next.runtime = event.runtime ?? next.runtime;
     next.contextDecision = event.contextDecision ?? next.contextDecision;
-    if (!next.answerStarted && event.message) {
+    if (event.message) {
       next.answerStarted = true;
       next.answerDone = true;
       next.answerText = event.message;

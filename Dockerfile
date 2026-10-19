@@ -6,10 +6,12 @@
 # 或直接用仓库里的 docker-compose.yml：docker compose up -d
 FROM node:22-alpine
 
-# python3 供问数中的分析脚本执行（execute_analysis_code）使用；
+# Python 3 + pandas/openpyxl 是分析脚本执行（execute_analysis_code）与 XLSX 生成的必选运行时。
 # 上传的 xlsx 读取是纯 JS 实现（node:zlib），不依赖 Python。
-# 生成 .xlsx 需自行安装 pandas + openpyxl（可选，见 README「环境要求」）。
-RUN apk add --no-cache python3
+# 构建期直接导入一次，依赖缺失时让镜像构建失败，而不是等到服务启动后才告警。
+RUN apk add --no-cache python3 py3-pandas py3-openpyxl \
+    && python3 -c "import pandas, openpyxl"
+ENV PYTHON_BIN=/usr/bin/python3
 
 WORKDIR /app
 ENV PORT=8088

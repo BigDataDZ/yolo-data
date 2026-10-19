@@ -144,6 +144,8 @@ test('context injection sends only the summary and counts usage; paused document
   assert.match(context[0].content, /默认按含税口径看销售额/);
   assert.match(context[0].content, /v1/);
   assert.doesNotMatch(context[0].content, /特殊口径细节不应常驻/, '正文细节不常驻，按需检索');
+  assert.match(context[0].retrievalText, /默认按含税口径看销售额/);
+  assert.doesNotMatch(context[0].retrievalText, /search_user_memory|检索完整记忆正文/, '平台说明不参与业务槽位抽取');
   assert.equal(userMemories.getDocument(document.id).injectedCount, 1);
 
   userMemories.updateDocument(document.id, { status: 0 });

@@ -138,6 +138,24 @@ test('analysis pipeline keeps its projected column and row order', () => {
   );
 });
 
+test('complete result policies survive contract reconstruction', () => {
+  const contract = buildQueryContract({
+    indicatorId: 'dataset:1',
+    metrics: ['sale_amt'],
+    dimensions: ['customer_code', '__period'],
+    limit: 5000,
+    limitPolicy: {
+      reason: 'COMPLETE_RESULT_SET',
+      intentionalTopN: null,
+      expectedRowDensity: 'HIGH',
+    },
+  });
+
+  assert.equal(contract.limit, 5000);
+  assert.equal(contract.limitPolicy.reason, 'COMPLETE_RESULT_SET');
+  assert.equal(contract.limitPolicy.expectedRowDensity, 'HIGH');
+});
+
 test('deterministic summary keeps the answer focused on the aggregate result', () => {
   const contract = buildQueryContract({
     indicatorId: '2',
@@ -214,6 +232,38 @@ test('grouped answers name the dimension values instead of only repeating a tota
   assert.doesNotMatch(summary, /整体来看|以下是|关键结果/);
 });
 
+test('small grouped results list every dimension value instead of folding the rest', () => {
+  const contract = buildQueryContract({
+    indicatorId: '2',
+    metrics: ['sale_amt'],
+    dimensions: ['region'],
+    dateInfo: {
+      dateMode: 'BETWEEN',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      dateField: 'sdt',
+    },
+  });
+  const rows = Array.from({ length: 15 }, (_, index) => ({
+    region: `区域${index + 1}`,
+    sale_amt: 150 - index * 10,
+  }));
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns: [
+      { name: '大区', bizName: 'region', showType: 'CATEGORY' },
+      { name: '含税销售金额', bizName: 'sale_amt', showType: 'NUMBER' },
+    ],
+    rows,
+    contract,
+    question: '9月各大区含税销售金额',
+  });
+
+  assert.match(summary, /区域1\*\* 150/);
+  assert.match(summary, /区域15\*\* 10/);
+  assert.doesNotMatch(summary, /其余/);
+});
+
 test('monthly trend summary marks an incomplete final month', () => {
   const contract = buildQueryContract({
     indicatorId: '2',
@@ -243,6 +293,75 @@ test('monthly trend summary marks an incomplete final month', () => {
   assert.match(summary, /2026-01 的 100/);
   assert.match(summary, /2026-09 的 20/);
   assert.doesNotMatch(summary, /2026-01-01：100/);
+});
+
+test('a single-month trend request explains the missing cross-month baseline', () => {
+  const contract = buildQueryContract({
+    indicatorId: 'dataset:1',
+    metrics: ['sale_amt'],
+    dimensions: ['classify_name', 'sales_date'],
+    timeGrain: 'MONTH',
+    timeWindows: [{
+      label: '2026年9月',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+    }],
+  });
+  const message = buildDeterministicSummary({
+    subjectName: '含税销售额',
+    columns: [
+      { name: '经营管理分类', bizName: 'classify_name', showType: 'CATEGORY' },
+      { name: '销售月份', bizName: 'sales_date', showType: 'CATEGORY' },
+      {
+        name: '含税销售额（万元）',
+        bizName: 'sale_amt',
+        showType: 'NUMBER',
+        presentationType: 'amount',
+        displayScale: 0.0001,
+      },
+    ],
+    rows: [
+      { classify_name: '生鲜-蔬菜', sales_date: '2026-09-01', sale_amt: 7176600 },
+      { classify_name: '生鲜-水果', sales_date: '2026-09-01', sale_amt: 3994800 },
+    ],
+    contract,
+    question: '2026年9月销售额按品类和月份趋势',
+  });
+
+  assert.match(message, /只覆盖 2026-09 一个月，无法形成跨月趋势/);
+  assert.match(message, /生鲜-蔬菜/);
+});
+
+test('weekly trend aggregates business dimensions and compares an incomplete week by daily average', () => {
+  const contract = buildQueryContract({
+    indicatorId: '2',
+    metrics: ['sale_amt'],
+    dimensions: ['sdt', 'region'],
+    dateInfo: {
+      dateMode: 'BETWEEN',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      dateField: 'sdt',
+    },
+    timeGrain: 'WEEK',
+    limit: 200,
+  });
+  const summary = buildDeterministicSummary({
+    subjectName: '含税销售金额',
+    columns,
+    rows: [
+      { sdt: '2026-09-01', region: '华东', sale_amt: 100 },
+      { sdt: '2026-09-01', region: '华南', sale_amt: 50 },
+      { sdt: '2026-09-28', region: '华东', sale_amt: 60 },
+      { sdt: '2026-09-28', region: '华南', sale_amt: 30 },
+    ],
+    contract,
+    question: '2026年9月含税销售金额按周趋势',
+  });
+
+  assert.match(summary, /从 2026-09-01 的 150 变化到 2026-09-28 的 90/);
+  assert.match(summary, /最后一周仅覆盖 2026-09-28 至 2026-09-30，共 3 天/);
+  assert.match(summary, /按日均口径看/);
 });
 
 test('attribution summary ranks dimension changes for two aligned periods', () => {

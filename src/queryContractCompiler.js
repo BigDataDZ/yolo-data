@@ -34,6 +34,7 @@ import {
   completePlatformSemanticConditions,
 } from './semanticCompletion.js';
 import { buildSemanticTermRegistry } from './semanticTermRegistry.js';
+import { inferConditionBindings } from './conditionBindings.js';
 import {
   buildSemanticCoverageReport,
   splitQuestionClauses,
@@ -701,52 +702,6 @@ function resolveTopN(text) {
     /top\s*(\d+)|前\s*(\d+|[一二两三四五六七八九十]+)|排名前\s*(\d+|[一二两三四五六七八九十]+)/i,
   );
   return parseChineseNumber(match?.[1] ?? match?.[2] ?? match?.[3]);
-}
-
-function inferConditionBindings(conditions, bindings) {
-  const cloned = (bindings ?? []).map((binding) => ({
-    ...binding,
-    conditionIds: [...(binding.conditionIds ?? [])],
-  }));
-  for (const condition of conditions) {
-    const kindToBinding = {
-      METRIC: 'METRIC',
-      DIMENSION: 'DIMENSION',
-      FILTER: 'FILTER',
-      SCOPE: 'SCOPE',
-      TIME: 'TIME',
-      DERIVED: 'DERIVED',
-    };
-    const bindingType = kindToBinding[condition.kind];
-    if (!bindingType) {
-      continue;
-    }
-    const candidates = cloned.filter((binding) => {
-      const type = binding.kind ?? bindingType;
-      return type === bindingType;
-    });
-    if (candidates.some((binding) => binding.conditionIds.includes(condition.id))) {
-      continue;
-    }
-    if (candidates.length === 1) {
-      candidates[0].conditionIds.push(condition.id);
-      continue;
-    }
-    const matching = candidates.filter((binding) => {
-      const source = compact(condition.sourceText);
-      const bindingText = compact(
-        binding.requested || binding.sourceText || binding.label || '',
-      );
-      return source && (
-        source.includes(bindingText)
-        || bindingText.includes(source)
-      );
-    });
-    if (matching.length === 1) {
-      matching[0].conditionIds.push(condition.id);
-    }
-  }
-  return cloned;
 }
 
 function normalizeDateWindowFromMention(window, mention) {
@@ -1560,6 +1515,7 @@ export class QueryContractCompiler {
     const normalizedSourceType = String(sourceType ?? draft.sourceType ?? '').toUpperCase();
     const analysisMode = inferAnalysisMode(question);
     const timeGrainIntent = extractTimeGrainExpression(question);
+    const bindingText = String(sourceContext || question || '').trim();
     const issues = [];
     const semanticPolicyApplication = applySemanticPolicy({
       question,
@@ -1571,7 +1527,15 @@ export class QueryContractCompiler {
       conditions: [...(semanticPolicyApplication.draft.conditions ?? [])],
     };
     const semanticProfile = classifyAnalysisSemantics(question, now);
-    const conditions = draft.conditions.map(normalizeCondition);
+    const conditions = draft.conditions
+      .map(normalizeCondition)
+      .filter((condition) => {
+        if (condition.kind !== 'OTHER') {
+          return true;
+        }
+        const sourceText = compact(condition.sourceText);
+        return Boolean(sourceText) && compact(bindingText).includes(sourceText);
+      });
     const semanticCompletion = completePlatformSemanticConditions(
       semanticProfile,
       conditions,
@@ -1796,12 +1760,21 @@ export class QueryContractCompiler {
         if (timeWindows.length === 1) {
           timeWindows.push(previousWindow);
         } else {
+          const existingLabel = String(timeWindows[1].label ?? '').trim();
+          const genericComparisonLabel = /^(?:上期|对比期|同期|上期对比期|本期对比期)$/.test(existingLabel);
           timeWindows[1] = {
             ...timeWindows[1],
             ...previousWindow,
             id: timeWindows[1].id ?? previousWindow.id,
-            label: timeWindows[1].label || previousWindow.label,
-            expression: timeWindows[1].expression || previousWindow.expression,
+            label: genericComparisonLabel
+              ? previousWindow.label
+              : existingLabel || previousWindow.label,
+            expression: genericComparisonLabel
+              ? previousWindow.expression
+              : timeWindows[1].expression || previousWindow.expression,
+            detectWord: genericComparisonLabel
+              ? previousWindow.detectWord
+              : timeWindows[1].detectWord || previousWindow.detectWord,
           };
         }
       }
@@ -1877,18 +1850,54 @@ export class QueryContractCompiler {
       issues,
     });
 
+    const explicitTopN = Number(semanticCompletion.rankLimit)
+      || resolveTopN(question)
+      || null;
+    const requestedLimit = explicitTopN
+      || Number(draft.limit)
+      || Number(draft.topN)
+      || 200;
+    const businessDimensionCount = dimensionFields
+      .filter((dimension) => dimension.isTime !== true).length;
+    const attributionBreakdown = analysisMode.mode === 'ATTRIBUTION'
+      && businessDimensionCount >= 2
+      && !explicitTopN;
+    const crossTrend = !explicitTopN
+      && businessDimensionCount >= 1
+      && dimensionFields.some((dimension) => dimension.isTime === true)
+      && timeWindows.length >= 1;
+    const needsCompleteRows = !explicitTopN && (
+      attributionBreakdown
+      || businessDimensionCount >= 2
+      || crossTrend
+      || (
+        analysisMode.mode === 'ATTRIBUTION'
+        && businessDimensionCount >= 1
+        && timeWindows.length >= 2
+      )
+    );
     const limit = Math.max(
       1,
       Math.min(
         analysisPipeline
           ? 50000
-          : semanticCompletion.rankLimit
-          || Number(draft.limit)
-          || Number(draft.topN)
-          || 200,
-        analysisPipeline ? 50000 : 2000,
+          : needsCompleteRows
+            ? Math.max(requestedLimit, 5000)
+            : requestedLimit,
+        analysisPipeline ? 50000 : needsCompleteRows ? 10000 : 2000,
       ),
     );
+    const limitPolicy = {
+      reason: analysisPipeline
+        ? 'ANALYSIS_PIPELINE'
+        : explicitTopN
+          ? 'EXPLICIT_TOP_N'
+          : needsCompleteRows
+            ? 'COMPLETE_RESULT_SET'
+            : 'REQUESTED_LIMIT',
+      intentionalTopN: explicitTopN,
+      expectedRowDensity: needsCompleteRows ? 'HIGH' : 'NORMAL',
+    };
     const requestedCalculationType = String(
       draft.calculation?.type ?? draft.calculationType ?? 'NONE',
     ).toUpperCase();
@@ -1996,7 +2005,6 @@ export class QueryContractCompiler {
         ? deterministicIssues.filter((issue) => !pipelineExemptCodes.has(issue.code))
         : deterministicIssues
     ));
-    const bindingText = String(sourceContext || question || '').trim();
     issues.push(...validateFilterTraceability(
       analysisPipeline
         ? filterFields.filter((filter) => filter.scope !== 'AGGREGATE')
@@ -2137,6 +2145,7 @@ export class QueryContractCompiler {
       timeWindows,
       timeGrain: calculation.timeGrain,
       limit,
+      limitPolicy,
       order,
       calculation,
       postProcessing,

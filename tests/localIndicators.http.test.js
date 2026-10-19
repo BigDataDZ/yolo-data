@@ -71,3 +71,33 @@ test('local indicator lifecycle normalizes numeric statuses and enforces session
     assert.equal((await request(route, { cookie: admin, method: 'PUT', body: valid })).response.status, 404);
   });
 });
+
+test('mounting an existing indicator only updates theme indicatorIds', async () => {
+  await withSkillServer(async ({ application, request, login }) => {
+    application.database.savePlatformSetting('supersonic.enabled', false);
+    const admin = await login('admin');
+    const created = await request('/api/local-indicators', {
+      cookie: admin, method: 'POST', body: valid,
+    });
+    assert.equal(created.response.status, 200);
+
+    const theme = application.database.getTheme(1);
+    const mounted = await request(`/api/themes/${theme.id}`, {
+      cookie: admin,
+      method: 'PUT',
+      body: { indicatorIds: [created.data.id] },
+    });
+
+    assert.equal(mounted.response.status, 200, JSON.stringify(mounted.data));
+    assert.deepEqual(mounted.data.indicatorIds, [created.data.id]);
+    assert.equal(mounted.data.name, theme.name);
+    assert.equal(mounted.data.description, theme.description);
+    assert.equal(mounted.data.systemPrompt, theme.systemPrompt);
+    assert.deepEqual(mounted.data.businessDatasetIds, theme.businessDatasetIds);
+    assert.deepEqual(mounted.data.modelIds, theme.modelIds);
+    assert.deepEqual(
+      application.database.getTheme(theme.id).indicatorIds,
+      [created.data.id],
+    );
+  });
+});
