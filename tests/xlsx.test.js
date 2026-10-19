@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createXlsxBuffer } from '../src/xlsx.js';
+import { openZipArchive, readXlsxSheet } from '../src/xlsxReader.js';
 
 test('xlsx writer creates a two-level workbook buffer', () => {
   const buffer = createXlsxBuffer({
@@ -91,4 +92,29 @@ test('xlsx writer does not infer a format from a field name without a contract',
 
   assert.equal(buffer.includes(Buffer.from('formatCode=')), false);
   assert.ok(buffer.includes(Buffer.from('<v>8.4</v>')));
+});
+
+
+test('xlsx writer preserves text identifiers and omits blank numeric cells', () => {
+  const buffer = createXlsxBuffer({
+    columns: [
+      { name: 'code', bizName: 'code', showType: 'STRING', type: 'STRING' },
+      { name: 'amount', bizName: 'amount', showType: 'NUMBER' },
+      { name: 'label', bizName: 'label', showType: 'CATEGORY' },
+    ],
+    rows: [
+      { code: '00123', amount: '', label: '00123' },
+      { code: '9007199254740993', amount: null, label: 'A-1' },
+      { code: 'A-1', label: 'tail' },
+      { code: '0', amount: 0, label: 'zero' },
+    ],
+  });
+  assert.deepEqual(readXlsxSheet(buffer).rows.map((row) => row[0]),
+    ['code', '00123', '9007199254740993', 'A-1', '0']);
+  const xml = openZipArchive(buffer).get('xl/worksheets/sheet1.xml').toString();
+  for (const reference of ['B2', 'B3', 'B4']) {
+    assert.equal(xml.includes('r="' + reference + '"'), false);
+  }
+  assert.match(xml, new RegExp('<c r="B5"[^>]*><v>0</v></c>'));
+  assert.match(xml, new RegExp('<c r="C2"[^>]*t="inlineStr"[^>]*><is><t>00123</t>'));
 });
