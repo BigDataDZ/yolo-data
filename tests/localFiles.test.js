@@ -772,3 +772,35 @@ test('question attachments bind only own session files and are stored on the use
     harness.database.close();
   }
 });
+
+
+test('uploaded mixed identifiers and blank amounts survive workspace XLSX export', () => {
+  const harness = createHarness();
+  try {
+    const result = harness.uploads.upload({
+      userId: harness.user.id,
+      sessionId: harness.session.id,
+      name: 'identifiers.csv',
+      contentBase64: toBase64('code,amount,label\n00123,,first\n9007199254740993,12.5,second\nA-1,0,third\n'),
+    });
+    const params = { artifactId: result.table.artifactId, userId: harness.user.id };
+    const stored = harness.workspace.getArtifact(params);
+    assert.equal(stored.payload.data.columns[0].showType, 'STRING');
+    assert.deepEqual(stored.payload.data.rows, [
+      { code: '00123', amount: '', label: 'first' },
+      { code: '9007199254740993', amount: 12.5, label: 'second' },
+      { code: 'A-1', amount: 0, label: 'third' },
+    ]);
+    const csv = harness.workspace.exportArtifact({ ...params, format: 'csv' });
+    assert.match(csv.content, /00123,,first/);
+    assert.match(csv.content, /9007199254740993,12.5,second/);
+    const exported = harness.workspace.exportArtifact({ ...params, format: 'xlsx' });
+    const rows = readXlsxSheet(exported.content).rows;
+    assert.deepEqual(rows.map((row) => row[0]), ['code', '00123', '9007199254740993', 'A-1']);
+    assert.equal(rows[1][1] ?? '', '');
+    assert.equal(rows[2][1], '12.5');
+    assert.equal(rows[3][1], '0');
+  } finally {
+    harness.database.close();
+  }
+});
