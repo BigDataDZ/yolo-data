@@ -30,8 +30,3 @@ export async function resolveMemoryPreInject({
   }
   return blocks.length > 0 ? blocks.join('\n\n') : null;
 }
-
-export function resolveSupersonicEnabled(service) {
-  const stored = service?.database?.getPlatformSetting?.('supersonic.enabled', true);
-  return service?.getSupersonicEnabled?.() ?? Boolean(stored?.value ?? stored);
-}

@@ -17,7 +17,7 @@
   -> 条件账本
   -> 查询契约门禁
   -> 权限强制绑定
-  -> Supersonic 指标查询或只读数据集查询
+  -> 本地指标目录 指标查询或只读数据集查询
   -> Skill 结果验证
   -> 稳定结果、图表和回答
   -> 工作区产物、反馈和审计
@@ -28,7 +28,7 @@
 
 六个核心架构支点：
 
-1. Supersonic 实时指标适配负责统一在线指标语义。
+1. 本地指标目录 实时指标适配负责统一在线指标语义。
 2. Contract-first 编译器负责把自然语言转换为可审计查询边界。
 3. Harness 与 Skill Registry 负责智能体化、工具调用和主题能力裁剪。
 4. 指标与业务数据集双执行通道覆盖聚合指标和明细宽表分析。
@@ -45,7 +45,7 @@ YOLO 是面向企业经营分析场景的智能问数平台，核心目标不是
 
 平台解决五类问题：
 
-1. 以 Supersonic 为唯一在线指标体系，实时消费已上线的指标定义和聚合查询能力。
+1. 以 本地指标目录 为唯一在线指标体系，实时消费已上线的指标定义和聚合查询能力。
 2. 将自然语言问题编译为可审计、可复现、可拦截的查询契约和结构化查询计划。
 3. 按主题配置独立智能体，包括提示词、模型、Skills、指标范围和业务数据集范围。
 4. 在查询执行层强制落实主题、指标、数据集、行和列级用户权限。
@@ -57,7 +57,7 @@ YOLO 是面向企业经营分析场景的智能问数平台，核心目标不是
 | --- | --- |
 | Contract-first | 模型先提交条件账本和查询契约，门禁通过后才能执行 |
 | 模型提议，平台裁决 | 模型负责语义理解和方案生成，时间、权限、字段白名单和最终结果由平台确定 |
-| 数据集取数，指标做语义 | 主题绑定业务数据集时由数据集负责最终取数；Supersonic 负责指标、字段、业务公式和枚举口径确认 |
+| 数据集取数，指标做语义 | 主题绑定业务数据集时由数据集负责最终取数；本地指标目录 负责指标、字段、业务公式和枚举口径确认 |
 | 不向模型暴露 SQL | 模型只能提交指标、维度、字段、聚合和过滤语义，SQL 由适配器生成 |
 | 权限在执行层生效 | 权限不依赖提示词自觉，强制行级规则会覆盖模型条件 |
 | 结果可复现 | 查询契约、查询指纹、数据 Hash 和稳定排序构成结果锁 |
@@ -71,7 +71,7 @@ YOLO 是面向企业经营分析场景的智能问数平台，核心目标不是
 #### 平台负责
 
 - 用户、主题、智能体和数据权限管理。
-- Supersonic 指标目录、指标详情和指标聚合查询的适配。
+- 本地指标目录 指标目录、指标详情和指标聚合查询的适配。
 - DeepSeek/OpenAI-compatible Harness 的工具调用编排。
 - 多轮会话记忆、查询契约、查询计划、结果稳定化和工作区产物。
 - Doris/MySQL 兼容数据源的注册、字段语义、只读查询和审计。
@@ -79,8 +79,8 @@ YOLO 是面向企业经营分析场景的智能问数平台，核心目标不是
 
 #### 平台不负责
 
-- 不复制或替代 Supersonic 的指标治理流程。
-- 不调用 Supersonic Chat BI、Agent 或 Supersonic 的权限接口。
+- 不复制或替代 本地指标目录 的指标治理流程。
+- 不调用 本地指标目录 Chat BI、Agent 或 本地指标目录 的权限接口。
 - 不向模型提供数据库连接、物理表名或任意 SQL 执行能力。
 - 当前不承担企业 SSO、分布式调度和多租户物理隔离，这些属于生产化演进项。
 
@@ -88,12 +88,12 @@ YOLO 是面向企业经营分析场景的智能问数平台，核心目标不是
 
 | 外部系统 | 用途 | 接入方式 |
 | --- | --- | --- |
-| Supersonic | 指标类型、指标目录、指标详情、指标聚合查询 | `src/indicatorClient.js` |
+| 本地指标目录 | 指标类型、指标目录、指标详情、指标聚合查询 | `src/indicatorService.js` |
 | DeepSeek 或兼容模型 | 工具调用、语义理解、回答表达 | `src/harness.js` |
 | Doris/MySQL 兼容库 | 业务数据集明细和宽表查询 | `src/businessDatasets.js` |
 | 本地文件系统 | SQLite 数据库、密钥文件、静态资源 | `src/config.js` |
 
-Supersonic 只开放以下四类指标能力：
+本地指标目录 只开放以下四类指标能力：
 
 - `GET /api/semantic/asset/indicatorType/query`
 - `POST /api/semantic/asset/indicator/query`
@@ -129,7 +129,7 @@ flowchart LR
   AGENT --> EVAL["评测与回归"]
 
   HARNESS --> LLM["DeepSeek / OpenAI-compatible"]
-  SOURCES --> EXTERNAL["Supersonic / Doris / MySQL / PostgreSQL"]
+  SOURCES --> EXTERNAL["本地指标目录 / Doris / MySQL / PostgreSQL"]
 
   API --> DB["SQLite 平台库"]
   AGENT --> DB
@@ -175,7 +175,7 @@ flowchart TB
   end
 
   subgraph EXECUTION["执行适配层"]
-    SUPER["SupersonicIndicatorClient"]
+    SUPER["本地指标目录indicatorService"]
     BUSINESS["BusinessDatasetService"]
     RESULT["结果稳定化与时间聚合"]
     CHART["图表推荐"]
@@ -199,7 +199,7 @@ flowchart TB
 ```mermaid
 flowchart LR
   BROWSER["浏览器"] -->|HTTP / NDJSON| NODE["YOLO Node.js Process"]
-  NODE -->|实时指标目录和查询| S2["Supersonic"]
+  NODE -->|实时指标目录和查询| S2["本地指标目录"]
   NODE -->|只读 SELECT| DS["Doris / MySQL"]
   NODE -->|OpenAI-compatible Tool Calling| LLM["DeepSeek"]
   NODE -->|节点本地| SQLITE["data/platform.db"]
@@ -215,7 +215,7 @@ flowchart LR
 | --- | --- |
 | `src/server.js` | HTTP 入口：CORS、traceId 绑定、路由表分发、静态资源回退、NDJSON 流 |
 | `src/http/` | 声明式路由表与中间件管线（`router.js`/`middleware.js`/`support.js`）、按域拆分的 `routes/*.js`、由路由表生成的 OpenAPI |
-| `src/application.js` | 依赖装配、运行时初始化、Supersonic 健康检查和数据集引导 |
+| `src/application.js` | 依赖装配、运行时初始化、本地指标目录 健康检查和数据集引导 |
 | `src/agent.js` | Agent 主流程、工具协议、指标/数据集执行、结果锁和审计落库 |
 | `src/workflow.js` | 标准 DataAgent 十三阶段工作流和阶段事件 |
 | `src/harness.js` | DeepSeek/OpenAI-compatible 工具调用与本地规则降级 |
@@ -229,7 +229,7 @@ flowchart LR
 | `src/timeAggregation.js` | 日结果到周、月、季度、年的确定性聚合 |
 | `src/semanticCompiler.js` | 指标和数据集查询计划编译、白名单校验、证据生成 |
 | `src/permissions.js` | 主题、指标、数据集、行级和列级权限求值 |
-| `src/indicatorClient.js` | Supersonic 指标适配器、服务令牌交换和接口兼容 |
+| `src/indicatorService.js` | 本地指标目录 指标适配器、服务令牌交换和接口兼容 |
 | `src/businessDatasets.js` | 数据源、字段扫描、数据集注册、只读 SQL 编译和执行 |
 | `src/semanticValues.js` | 从字段说明和主题提示词初始化枚举值域，执行精确、别名和高置信模糊映射 |
 | `src/semanticDomain.js` | 值域来源分级、字段策略、快照状态、多来源合并和权限 Scope 签名 |
@@ -271,7 +271,7 @@ flowchart LR
 | `public/js/pages/admin.js` | 数据集、数据源和数据权限页面 |
 | `public/js/pages/growth.js` | 质量运营页面 |
 | `public/js/pages/audit.js` | 运行审计页面 |
-| `public/js/pages/settings.js` | 系统设置页面，可动态启停 Supersonic 指标模块 |
+| `public/js/pages/settings.js` | 系统设置页面，可动态启停 本地指标目录 指标模块 |
 | `public/js/pages/guide.js` | 使用引导页面与首登 spotlight 分步引导 |
 | `public/js/pages/help.js` | 帮助中心（搜索、分类、文章视图），内容来自 `public/docs/help/` |
 | `public/js/components/sectionTabs.js` | 侧栏合并入口（使用引导/帮助中心、智能体/模型管理）的页内标签条 |
@@ -345,7 +345,7 @@ API 客户端、弹层、自定义下拉框、运行状态和路由适配器集�
 | INTENT | 产物 | `ARTIFACT-001` 产物优先、缺能力时受控重查 | `artifactCapabilities.js` | 否 |
 | INTENT | 交互 | `CLARIFY-001` 返回推荐项和 `optionId` | `agent.js` | 否 |
 | SKILL_AUDIT | 指导 | `SKILL-001` 提供审计和检查清单 | `skillAdapter.js`、`skills.js` | 是 |
-| SEMANTIC_DISCOVERY | 语义 | `SEMANTIC-001` 实时指标和数据集发现 | `indicatorClient.js`、`businessDatasets.js` | 否 |
+| SEMANTIC_DISCOVERY | 语义 | `SEMANTIC-001` 实时指标和数据集发现 | `indicatorService.js`、`businessDatasets.js` | 否 |
 | SEMANTIC_CONFIRM | 语义 | `SEMANTIC-002` 指标或字段口径确认 | `agent.js` | 否 |
 | PLAN | 契约 | `CONTRACT-001` 条件账本完整覆盖 | `queryContractCompiler.js` | 否 |
 | PLAN | 契约 | `CONTRACT-002` 字段映射和数据源白名单 | `queryContractCompiler.js` | 否 |
@@ -391,7 +391,7 @@ AGENT_SKILL_DIRECTORIES
 
 1. 外部 Skill 正文不整体注入 Prompt，只在对应阶段按标题和关键词抽取有限片段。
 2. 外部 Skill 默认不自动启用，必须通过主题配置显式绑定。
-3. 注册表只负责执行约束和检查清单，不替代查询契约、权限和 Doris/Supersonic 适配层。
+3. 注册表只负责执行约束和检查清单，不替代查询契约、权限和 Doris/本地指标目录 适配层。
 4. `PRE_PLAN` 阶段用于数据含义、粒度、时间和来源审计；`POST_EXECUTE` 阶段用于结果来源、契约、时间范围、行数和结论证据验证。
 
 ### 3.2 主题业务语义包
@@ -597,7 +597,7 @@ erDiagram
 | 查询治理 | `query_plans` | 契约、计划、校验结果和执行证据 |
 | 质量闭环 | `qa_feedback`、`knowledge_gaps` | 用户反馈和知识缺口 |
 | 审计 | `audit_logs`、`llm_call_logs`、`dataset_query_logs` | 业务操作、模型调用和数据集查询审计 |
-| 指标兼容层 | `indicator_cache`、`indicator_types` | 历史兼容表；在线指标以 Supersonic 实时读取为准 |
+| 指标兼容层 | `indicator_cache`、`indicator_types` | 历史兼容表；在线指标以 本地指标目录 实时读取为准 |
 
 ## 5. DataAgent 标准工作流
 
@@ -651,10 +651,10 @@ flowchart LR
 
 | 缓存 | 默认 TTL | 失效依据 |
 | --- | --- | --- |
-| Supersonic 指标目录 | 60 秒 | 实时目录按 TTL 刷新，不复制为本地指标主数据 |
-| Supersonic 指标详情 | 120 秒 | 指标 ID 隔离，权限过滤仍在缓存之外执行 |
+| 本地指标目录 指标目录 | 60 秒 | 实时目录按 TTL 刷新，不复制为本地指标主数据 |
+| 本地指标目录 指标详情 | 120 秒 | 指标 ID 隔离，权限过滤仍在缓存之外执行 |
 | 业务枚举初始化 | 5 分钟 | 同时包含主题提示词、值域配置和数据表 Schema 指纹，表结构变化会改变缓存键 |
-| Supersonic 展示证据 | 60 秒 | 指标、指标字段、维度、过滤、时间窗口和行数共同组成缓存键 |
+| 本地指标目录 展示证据 | 60 秒 | 指标、指标字段、维度、过滤、时间窗口和行数共同组成缓存键 |
 | 模型展示契约 | 30 分钟 | 提示词、字段 Schema、在线模板、格式化样例和结果量级特征共同组成缓存键 |
 
 业务枚举仍以 `theme_semantic_value_domains` 为持久初始化结果，问数路径优先复用已保存值域；
@@ -711,7 +711,7 @@ sequenceDiagram
   participant AGENT as MetricAgentService
   participant MEM as SessionMemoryStore
   participant PERM as Permission Engine
-  participant S2 as Supersonic
+  participant S2 as 本地指标目录
   participant LLM as Harness Runtime
   participant GATE as QueryContractCompiler
   participant WS as WorkspaceService
@@ -804,7 +804,7 @@ flowchart TD
 
 | 来源 | 含义 | 用户提示 |
 | --- | --- | --- |
-| `INDICATOR_LIBRARY` | 来自 Supersonic 已确认指标定义 | 指标库口径 |
+| `INDICATOR_LIBRARY` | 来自 本地指标目录 已确认指标定义 | 指标库口径 |
 | `DATASET_EXACT` | 精确匹配业务数据集字段 | 数据集字段精确匹配 |
 | `DATASET_ALIAS` | 通过字段显示名或登记别名匹配 | 数据集字段语义匹配 |
 | `LLM_FUZZY` | 模型模糊匹配到数据集字段 | 黄色警示并要求复核 |
@@ -840,7 +840,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  META["Supersonic 字段说明 / 数据集字段注释"] --> EXTRACT["提取短枚举候选"]
+  META["本地指标目录 字段说明 / 数据集字段注释"] --> EXTRACT["提取短枚举候选"]
   PROMPT["主题提示词映射规则"] --> EXTRACT
   EXTRACT --> DOMAIN["规范值 + 别名 + 来源"]
   DOMAIN --> STORE["theme_semantic_value_domains"]
@@ -860,7 +860,7 @@ flowchart LR
 - 管理员可在智能体中选择性启用字段；新发现字段默认关闭，只有显式启用并刷新后才参与默认口径检查。
 - 已上线版本的历史共享值域会在启动时执行一次性迁移，按主题指标和数据集范围归属到对应智能体。
 - 只从明确的枚举字段名、短枚举描述、引号内代码和短提示词映射句提取，避免把说明性句子误识别成枚举值。
-- 字段元数据没有值清单时，指标维度调用 Supersonic `POST /api/semantic/dimension/queryDimValue`，业务数据集字段使用受限的 `SELECT DISTINCT` 补齐。
+- 字段元数据没有值清单时，指标维度调用 本地指标目录 `POST /api/semantic/dimension/queryDimValue`，业务数据集字段使用受限的 `SELECT DISTINCT` 补齐。
 - 每个字段只接受长度合理的短候选值，最多保留 200 个值。
 - 字段无有效值域时会清理历史残留，防止旧值继续参与匹配。
 - 精确值和已登记别名直接映射为规范值。
@@ -938,14 +938,14 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  LIVE["实时读取 Supersonic 指标目录"] --> FILTER["主题范围 + 用户指标白名单"]
+  LIVE["实时读取 本地指标目录 指标目录"] --> FILTER["主题范围 + 用户指标白名单"]
   FILTER --> SEARCH["search_indicators"]
   SEARCH --> DETAIL["get_indicator"]
   DETAIL --> CONTRACT["compile_query_contract"]
   CONTRACT --> GATE["能力门禁"]
   GATE --> EXEC["execute_query_contract"]
   EXEC --> POLICY["行级权限覆盖"]
-  POLICY --> ADAPTER["SupersonicIndicatorClient"]
+  POLICY --> ADAPTER["本地指标目录indicatorService"]
   ADAPTER --> COLUMN["列级隐藏或脱敏"]
   COLUMN --> STABLE["稳定排序 + 指纹 + Data Hash"]
   STABLE --> LOCK["首个有效结果锁定"]
@@ -968,7 +968,7 @@ flowchart LR
 | --- | --- |
 | 时间解析 | 显式日期、月份、年份、本月、上月、最近 N 天、业务 T-1、多时间窗口 |
 | 分组粒度 | `DAY`、`WEEK`、`MONTH`、`QUARTER`、`YEAR` |
-| 结果聚合 | Supersonic 或数据集返回的细粒度日期结果按目标粒度确定性聚合 |
+| 结果聚合 | 本地指标目录 或数据集返回的细粒度日期结果按目标粒度确定性聚合 |
 | 展示格式 | 月显示 `YYYY-MM`，季度显示 `YYYY-Qn`，年显示 `YYYY`，日显示 `YYYY-MM-DD` |
 
 对“本月、本季度、本年度”等未结束周期，右边界按业务 T-1 截止。月度趋势中的最后一个月
@@ -1119,7 +1119,7 @@ flowchart TD
 
 ```text
 有效指标 =
-  Supersonic 实时指标
+  本地指标目录 实时指标
   ∩ 主题指标范围
   ∩ 用户显式指标白名单
   ∩ 主题关联的指标模型范围
@@ -1203,7 +1203,7 @@ flowchart TD
 
 | API | 用途 |
 | --- | --- |
-| `GET /api/health` | 平台、Supersonic 和 LLM 运行状态 |
+| `GET /api/health` | 平台、本地指标目录 和 LLM 运行状态 |
 | `GET /api/bootstrap` | 当前用户、主题、Skills 和平台配置 |
 | `GET/POST/PUT/DELETE /api/themes` | 智能体管理 |
 | `PUT /api/themes/{id}/prompt` | 单智能体提示词管理 |
@@ -1216,7 +1216,7 @@ flowchart TD
 | --- | --- |
 | `GET /api/indicators` | 实时指标目录 |
 | `GET /api/indicators/{id}/detail` | 实时指标详情 |
-| `POST /api/indicators/sync` | 触发 Supersonic 健康与指标同步检查 |
+| `POST /api/indicators/sync` | 触发 本地指标目录 健康与指标同步检查 |
 | `GET/POST /api/data-sources` | 数据源管理 |
 | `POST /api/data-sources/{id}/test` | 数据源连接测试 |
 | `GET /api/data-sources/{id}/{databases|tables|columns}` | 元数据扫描 |
@@ -1249,7 +1249,7 @@ flowchart TD
 ### 17.1 可替换性
 
 - Harness 统一为 `run({ messages, tools, executeTool })`，可替换 DeepSeek、内部 Harness 或其他模型。
-- IndicatorClient 统一为指标目录、详情和查询契约，可替换 Supersonic 或内部指标平台。
+- indicatorService 统一为指标目录、详情和查询契约，可替换 本地指标目录 或内部指标平台。
 - 业务数据集和指标体系使用同一 Contract-first 主链。
 - 前端无构建步骤，静态文件可独立部署。
 
@@ -1290,7 +1290,7 @@ flowchart TD
 当前有 329 项自动化测试，覆盖：
 
 - Agent 权限、上下文继承、工具编排和结果锁。
-- Supersonic 接口适配、服务令牌和日期解析。
+- 本地指标目录 接口适配、服务令牌和日期解析。
 - 查询契约、条件门禁、字段绑定和结果稳定化。
 - 时间语义、周/月聚合和数据集查询编译。
 - 行级与列级权限、业务数据集、工作区版本和反馈闭环。
@@ -1301,18 +1301,18 @@ flowchart TD
 
 | 功能域 | 已实现能力 | 关键模块 |
 | --- | --- | --- |
-| 指标体系 | 实时指标目录、类型、详情、口径、维度、关联模型、搜索 | `indicatorClient.js`、`indicatorSearch.js` |
+| 指标体系 | 实时指标目录、类型、详情、口径、维度、关联模型、搜索 | `indicatorService.js`、`indicatorSearch.js` |
 | 智能体 | 提示词、模型、API Key、温度、工具轮次、Skills、指标与数据集范围 | `themes`、`skills.js`、`harness.js` |
 | 模型管理 | 模型 CRUD、密钥加密、默认模型、主题多模型选择 | `database.js`、`public/js/pages/models.js`、`harness.js` |
 | 智能问数 | 多轮会话、上下文模式、NDJSON 流、查询契约、结果锁 | `agent.js`、`memory.js`、`queryContractCompiler.js` |
 | 可视化分析 | 自动图表、查询明细、KPI、时间粒度格式 | `chart.js`、`public/js/pages/query.js` |
-| 指标体系接入 | Supersonic 服务令牌、实时目录和语义查询 | `indicatorClient.js` |
+| 指标体系接入 | 本地指标目录 服务令牌、实时目录和语义查询 | `indicatorService.js` |
 | 业务数据集 | Doris/MySQL 注册、字段语义、抽样、只读查询、审计 | `businessDatasets.js` |
 | 工作区 | 结果产物与过程文件、版本、血缘、继续加工、CSV/JSON 导出、对话定位 | `workspace.js`、`processArtifacts.js`、`public/js/components/workspaceArtifacts.js` |
 | 数据权限 | 主题、指标、数据集、行级、列级、按用户属性取值 | `permissions.js` |
 | 质量运营 | 正负反馈、纠错样例、知识缺口、缺口处置 | `feedback.js`、`growth.js` |
 | 运行审计 | 问数、同步、权限、数据集、LLM 和产物审计 | `database.js`、`llmAudit.js` |
-| 运维 | 健康检查、Supersonic 状态、数据源测试、统计计数 | `application.js`、`server.js` |
+| 运维 | 健康检查、本地指标目录 状态、数据源测试、统计计数 | `application.js`、`server.js` |
 
 ## 19. 当前阶段约束
 
@@ -1332,7 +1332,7 @@ flowchart TD
 - SSO/OIDC 和正式用户上下文。
 - SQLite → MySQL/PostgreSQL。
 - 密钥迁移到 KMS/Vault。
-- 模型、Supersonic 和数据集查询限流、超时、重试和成本预算。
+- 模型、本地指标目录 和数据集查询限流、超时、重试和成本预算。
 
 ### 阶段 B：语义质量
 
@@ -1352,7 +1352,7 @@ flowchart TD
 当前项目的核心不是“让模型连接数据库”，而是一个以指标语义为中心、以查询契约为边界、
 以权限执行和数据证据为底座的企业 DataAgent。其最关键的技术资产是：
 
-- Supersonic 指标语义适配。
+- 本地指标目录 指标语义适配。
 - Contract-first 查询门禁。
 - 指标和业务数据集双执行通道。
 - 用户级权限下沉到执行层。

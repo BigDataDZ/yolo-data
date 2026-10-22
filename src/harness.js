@@ -524,9 +524,9 @@ export class RuleBasedHarness {
     }
     if (
       metadata.sourceMode
-      && !['supersonic'].includes(String(metadata.sourceMode))
+      && !['local', 'direct-llm'].includes(String(metadata.sourceMode))
     ) {
-      const content = '指标平台尚未配置，无法执行真实指标查询。请配置指标平台后重试。';
+      const content = '当前没有可执行的业务数据集查询配置，请先配置数据集后重试。';
       await this.onCall?.({
         ...metadata,
         callType: 'AGENT_RULE_FALLBACK',

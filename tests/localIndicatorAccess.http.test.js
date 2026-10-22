@@ -4,7 +4,7 @@ import { withSkillServer } from './fixtures/skillServer.js';
 
 test('local indicator bindings intersect user grants and exclude disabled or deleted entries', async () => {
   await withSkillServer(async ({ application, request, login }) => {
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const admin = await login('admin');
     const analyst = await login('east_manager');
     const user = application.database.getUserByUsername('east_manager');
@@ -90,7 +90,7 @@ test('revoked theme grants block catalogs, new queries and existing session acce
 
 test('local metadata cannot execute indicator tools or fabricate business query results', async () => {
   await withSkillServer(async ({ application, request, login }) => {
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const admin = await login('admin');
     const analyst = await login('east_manager');
     const created = await request('/api/local-indicators', { cookie: admin, method: 'POST',
@@ -111,7 +111,7 @@ test('local metadata cannot execute indicator tools or fabricate business query 
         }
         await assert.rejects(executeTool('compile_query_contract', {
           sourceType: 'INDICATOR', sourceId: created.data.id,
-        }), (error) => error.code === 'SUPERSONIC_MODULE_DISABLED');
+        }), (error) => error.code === '本地指标目录_MODULE_DISABLED');
         toolChecks += 1;
         return { content: '请先绑定可查询的业务数据集。', toolTrace: [] };
       },

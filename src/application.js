@@ -3,11 +3,8 @@ import { resolveAuthMode, seedDefaultPasswordsAsync } from './auth.js';
 import path from 'node:path';
 import { createPlatformDatabase, initializePlatformDatabase } from './platformDatabase.js';
 import { LocalIndicatorRepository } from './localIndicatorRepository.js';
+import { LocalIndicatorService } from './indicatorService.js';
 import { createHarness, HarnessFactory } from './harness.js';
-import {
-  createSupersonicIndicatorClient,
-  UnavailableIndicatorClient,
-} from './indicatorClient.js';
 import { MetricAgentService } from './agent.js';
 import { SessionMemoryStore } from './memory.js';
 import { UserMemoryStore } from './userMemory.js';
@@ -28,7 +25,6 @@ import { WorkspaceService } from './workspace.js';
 import { SemanticValueRegistry } from './semanticValues.js';
 import { CodeExecutionService } from './codeExecution.js';
 import { UploadService } from './uploads.js';
-import { describeIndicatorSource } from './indicatorSource.js';
 import { assertGateCoverage } from './gateRegistry.js';
 import { STAGE_DEFINITIONS } from './workflow.js';
 
@@ -52,7 +48,54 @@ export async function ensurePlatformMysqlDatasource({ backend, mysql = {}, busin
   });
 }
 
-export async function createApplication(config = loadConfig(), indicatorClientOverride = null) {
+async function seedConfiguredModel(database, modelConfig) {
+  if (!String(modelConfig?.apiKey ?? '').trim() || !String(modelConfig?.model ?? '').trim()) return;
+  const isAsync = database.isAsyncPlatformStore === true;
+  const models = isAsync ? await database.listModelsAsync() : database.listModels();
+  const configured = models.find((model) => (
+    model.modelName === modelConfig.model
+    && model.baseUrl === modelConfig.baseUrl
+    && model.apiKeyEnv === 'API_KEY'
+  ));
+  const model = configured ?? (isAsync
+    ? await database.modelRepository.saveModelAsync({
+      name: `${modelConfig.model} (yolo-conf)`,
+      provider: 'openai-compatible',
+      modelName: modelConfig.model,
+      baseUrl: modelConfig.baseUrl,
+      apiKeyEnv: 'API_KEY',
+      temperature: modelConfig.temperature,
+      maxTokens: modelConfig.maxTokens,
+      timeoutMs: modelConfig.timeoutMs,
+      maxToolRounds: modelConfig.maxToolRounds,
+      isDefault: true,
+      status: 1,
+    })
+    : database.saveModel({
+      name: `${modelConfig.model} (yolo-conf)`,
+      provider: 'openai-compatible',
+      modelName: modelConfig.model,
+      baseUrl: modelConfig.baseUrl,
+      apiKeyEnv: 'API_KEY',
+      temperature: modelConfig.temperature,
+      maxTokens: modelConfig.maxTokens,
+      timeoutMs: modelConfig.timeoutMs,
+      maxToolRounds: modelConfig.maxToolRounds,
+      isDefault: true,
+      status: 1,
+    }));
+  if (!model) return;
+
+  const themes = isAsync ? await database.listThemesAsync() : database.listThemes();
+  for (const theme of themes) {
+    if ((theme.modelIds ?? []).length > 0) continue;
+    const payload = { ...theme, modelIds: [model.id], defaultModelId: model.id };
+    if (isAsync) await database.saveThemeAsync(payload, theme.id);
+    else database.saveTheme(payload, theme.id);
+  }
+}
+
+export async function createApplication(config = loadConfig()) {
   resolveAuthMode(config);
   const platformDatabaseConfig = {
     ...(config.platformDatabase ?? {}),
@@ -97,7 +140,9 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     return Object.fromEntries(safeTables.map((table) => [table, Number(row?.[table] ?? 0)]));
   };
   await seedDefaultPasswordsAsync(database);
+  await seedConfiguredModel(database, config.deepseek);
   database.localIndicators = new LocalIndicatorRepository(database.db, database);
+  const indicatorService = new LocalIndicatorService(database.localIndicators);
   // 业务词表以平台设置为准，首次启动时用仓库配置初始化成可维护的设置项。
   const storedLexicon = database.isAsyncPlatformStore
     ? (await database.getPlatformSettingAsync('business.lexicon', null))?.value ?? null
@@ -110,24 +155,6 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     }
   }
   configureBusinessLexicon(storedLexicon);
-  const indicatorClient = indicatorClientOverride
-    ?? (config.supersonic.baseUrl
-      ? createSupersonicIndicatorClient(config.supersonic)
-      : new UnavailableIndicatorClient());
-  function getSupersonicEnabled() { // Default to local mode; explicit administrator settings take precedence.
-    const clientConfigured = indicatorClient.mode === 'supersonic' || Boolean(config.supersonic.baseUrl);
-    if (database.isAsyncPlatformStore) return Boolean(database._supersonicEnabled ?? clientConfigured);
-    const stored = database.getPlatformSetting('supersonic.enabled', clientConfigured);
-    return Boolean(stored?.value ?? stored);
-  }
-  if (database.isAsyncPlatformStore) {
-    database._supersonicEnabled = Boolean(
-      (await database.getPlatformSettingAsync(
-        'supersonic.enabled',
-        indicatorClientOverride?.mode === 'supersonic' || Boolean(config.supersonic.baseUrl),
-      ))?.value,
-    );
-  }
   const harness = createHarness(config.deepseek);
   const llmAudit = new LlmAuditService(database);
   const tokenBudget = new TokenBudgetService(database);
@@ -171,7 +198,6 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
   const semanticValues = new SemanticValueRegistry(database);
   const agent = new MetricAgentService({
     database,
-    indicatorClient,
     harness,
     harnessFactory,
     memory,
@@ -185,9 +211,9 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     codeExecution,
     semanticValues,
     userMemories,
-    getSupersonicEnabled,
     tokenBudget,
     config,
+    indicatorService,
   });
   // 长期记忆沉淀依赖主题可用模型：有 key 时用模型提炼并压缩，否则只沉淀用户显式要求记住的内容。
   const userMemoryConfig = config.userMemory ?? {};
@@ -197,7 +223,7 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
       const theme = database.themeRepository?.getThemeAsync
         ? await database.themeRepository.getThemeAsync(themeId)
         : database.getTheme(themeId);
-      return harnessFactory.forTheme(agent.resolveThemeModel(theme) ?? {});
+      return harnessFactory.forTheme(await agent.resolveThemeModel(theme) ?? {});
     },
     autoConsolidateAt: userMemoryConfig.autoConsolidateAt,
     compactRatio: userMemoryConfig.compactRatio,
@@ -223,117 +249,15 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     },
   });
   const runtime = {
-    sourceMode: getSupersonicEnabled()
-      ? indicatorClient.mode ?? (config.supersonic.baseUrl ? 'supersonic' : 'unconfigured')
-      : 'direct-llm',
-    supersonicEnabled: getSupersonicEnabled(),
+    sourceMode: 'local',
     sourceError: null,
-    lastSyncAt: null,
-    lastSyncCount: 0,
-    lastTypeCount: 0,
     skillSync: null,
-    indicatorSource: { source: 'UNAVAILABLE', freshAt: null, snapshotCount: 0 },
-    indicatorSnapshot: { count: 0, freshAt: null, typeCount: 0 },
+    indicatorSource: { source: 'LOCAL', freshAt: null, snapshotCount: 0 },
   };
 
   function resolveIndicatorSource() {
-    const snapshot = database.isAsyncPlatformStore
-      ? { count: 0, freshAt: null, typeCount: 0 }
-      : database.indicatorCacheStats();
-    const live = getSupersonicEnabled()
-      && indicatorClient.mode !== 'unconfigured'
-      && indicatorClient.mode !== 'unavailable'
-      && !runtime.sourceError;
-    const local = !getSupersonicEnabled();
-    runtime.indicatorSnapshot = snapshot;
-    runtime.indicatorSource = describeIndicatorSource({
-      live: { available: live },
-      local,
-      snapshot,
-    });
+    runtime.indicatorSource = { source: 'LOCAL', freshAt: null, snapshotCount: 0 };
     return runtime.indicatorSource;
-  }
-
-  async function syncIndicators({ persist = false } = {}) {
-    if (!getSupersonicEnabled()) {
-      runtime.sourceMode = 'direct-llm';
-      runtime.supersonicEnabled = false;
-      runtime.sourceError = null;
-      resolveIndicatorSource();
-      return {
-        disabled: true,
-        types: 0,
-        indicators: 0,
-        source: runtime.indicatorSource,
-      };
-    }
-    try {
-      const [types, page] = await Promise.all([
-        indicatorClient.listTypes(),
-        indicatorClient.listIndicators({ current: 1, pageSize: 500 }),
-      ]);
-      if (persist) {
-        // Snapshot persistence is an explicit management action only; startup
-        // must not write to (or clear) the indicator cache.
-        const list = page.list ?? [];
-        const total = Number(page.total ?? list.length);
-        if (!database.isAsyncPlatformStore) {
-          database.syncIndicatorTypes(types ?? []);
-          database.syncIndicators(list, { prune: total <= list.length });
-        }
-      }
-      runtime.sourceMode = indicatorClient.mode ?? 'supersonic';
-      runtime.supersonicEnabled = true;
-      runtime.sourceError = null;
-      runtime.lastSyncAt = new Date().toISOString();
-      runtime.lastSyncCount = Number(page.total ?? page.list?.length ?? 0);
-      runtime.lastTypeCount = types?.length ?? 0;
-      resolveIndicatorSource();
-      return {
-        types: types?.length ?? 0,
-        indicators: runtime.lastSyncCount,
-        persisted: persist,
-        source: runtime.indicatorSource,
-      };
-    } catch (error) {
-      runtime.sourceError = error.message;
-      resolveIndicatorSource();
-      throw error;
-    }
-  }
-
-  async function applySupersonicSetting(enabled) {
-    const normalized = enabled !== false;
-    if (database.isAsyncPlatformStore) {
-      await database.savePlatformSettingAsync('supersonic.enabled', normalized);
-      database._supersonicEnabled = normalized;
-    } else {
-      database.savePlatformSetting('supersonic.enabled', normalized);
-    }
-    runtime.supersonicEnabled = normalized;
-    if (!normalized) {
-      runtime.sourceMode = 'direct-llm';
-      runtime.sourceError = null;
-      return {
-        enabled: false,
-        sourceMode: runtime.sourceMode,
-      };
-    }
-    try {
-      const result = await syncIndicators();
-      return {
-        enabled: true,
-        sourceMode: runtime.sourceMode,
-        sync: result,
-      };
-    } catch (error) {
-      runtime.sourceError = `指标平台启用后同步失败：${error.message}`;
-      return {
-        enabled: true,
-        sourceMode: runtime.sourceMode,
-        syncError: error.message,
-      };
-    }
   }
 
   async function init() {
@@ -367,19 +291,8 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
         },
       }, theme.id);
     }
-    try {
-      if (getSupersonicEnabled()) {
-        await syncIndicators();
-      } else {
-        runtime.sourceMode = 'direct-llm';
-        runtime.supersonicEnabled = false;
-        runtime.sourceError = null;
-      }
-    } catch (error) {
-      runtime.sourceError = getSupersonicEnabled()
-        ? `指标平台初始化失败：${error.message}`
-        : error.message;
-    }
+    runtime.sourceMode = 'local';
+    runtime.sourceError = null;
     try {
       const bootstrapped = await businessDatasets.bootstrap(
         config.bootstrapDatasource ?? {},
@@ -444,24 +357,18 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
         'dataset_fields', 'theme_semantic_value_domains', 'semantic_value_domains',
       ]),
     ]);
-    runtime.supersonicEnabled = getSupersonicEnabled();
-    runtime.sourceMode = runtime.supersonicEnabled ? indicatorClient.mode ?? 'unconfigured' : 'direct-llm';
     const indicatorSource = resolveIndicatorSource();
     return {
       status: 'ok',
       now: new Date().toISOString(),
       source: {
-        mode: runtime.sourceMode,
-        enabled: runtime.supersonicEnabled,
-        configured: runtime.supersonicEnabled && runtime.sourceMode === 'supersonic',
-        localIndicatorManagement: !runtime.supersonicEnabled,
+        mode: 'local',
+        enabled: false,
+        configured: false,
+        localIndicatorManagement: true,
         localIndicatorCount,
         indicatorSource: indicatorSource.source,
         indicatorSourceDetail: indicatorSource,
-        snapshot: runtime.indicatorSnapshot,
-        baseUrl: config.supersonic.baseUrl || null,
-        lastSyncAt: runtime.lastSyncAt,
-        lastSyncCount: runtime.lastSyncCount,
         error: runtime.sourceError,
       },
       llm: {
@@ -488,12 +395,8 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
       counts: {
         users: counts.app_users,
         themes: counts.themes,
-        indicators: runtime.supersonicEnabled
-          ? runtime.lastSyncCount
-          : localIndicatorCount,
-        indicatorTypes: runtime.supersonicEnabled
-          ? runtime.lastTypeCount
-          : localIndicatorTypes.length,
+        indicators: localIndicatorCount,
+        indicatorTypes: localIndicatorTypes.length,
         localIndicators: localIndicatorCount,
         conversations: counts.conversations,
         chatSessions: counts.chat_sessions,
@@ -519,7 +422,6 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
   return {
     config,
     database,
-    indicatorClient,
     harness,
     memory,
     userMemories,
@@ -537,14 +439,12 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     workspace,
     codeExecution,
     uploads,
+    indicatorService,
     harnessFactory,
     agent,
     runtime,
     init,
-    syncIndicators,
     resolveIndicatorSource,
-    applySupersonicSetting,
-    getSupersonicEnabled,
     currentHealth,
   };
 }

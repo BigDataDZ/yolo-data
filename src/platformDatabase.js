@@ -31,6 +31,7 @@ function attachAsyncRepositories(store) {
   store.sumTokenUsageAsync = (...args) => store.logRepository.sumTokenUsageAsync(...args);
   store.getUserAsync = (...args) => store.userRepository.getUserAsync(...args);
   store.listModelsAsync = (...args) => store.modelRepository.listModelsAsync(...args);
+  store.getModelAsync = (...args) => store.modelRepository.getModelAsync(...args);
   store.listDataSourcesAsync = (...args) => store.dataSourceRepository.listDataSourcesAsync(...args);
   store.listBusinessDatasetsAsync = async ({ userId = null, includeDisabled = false } = {}) => {
     const rows = await store.query(`
@@ -249,13 +250,39 @@ function attachAsyncRepositories(store) {
     await store.execute('UPDATE chat_sessions SET updated_at=? WHERE id=?', [timestamp, Number(sessionId)]);
     return { id: Number(inserted.insertId), sessionId: Number(sessionId), userId: Number(userId), role: String(role), content: String(content ?? ''), result, createdAt: timestamp };
   };
+  store.saveConversationAsync = async ({ userId, themeId, question, answer }) => {
+    const inserted = await store.execute(`INSERT INTO conversations
+      (user_id, theme_id, question, answer_json, created_at) VALUES (?, ?, ?, ?, ?)`, [
+      Number(userId), Number(themeId), String(question ?? ''), JSON.stringify(answer ?? {}), new Date().toISOString(),
+    ]);
+    return Number(inserted.insertId);
+  };
   store.listChatMessagesAsync = async (sessionId, userId, limit = 50) => {
     const session = await store.getChatSessionAsync(sessionId, userId);
     if (!session) return null;
     const rows = await store.query(`SELECT m.id, m.session_id AS sessionId, m.user_id AS userId,
-      m.role, m.content, m.result_json AS resultJson, m.created_at AS createdAt
-      FROM chat_messages m WHERE m.session_id=? ORDER BY m.id DESC LIMIT ?`, [Number(sessionId), Math.max(1, Math.min(Number(limit) || 50, 200))]);
-    return rows.reverse().map((row) => { let result = {}; try { result = JSON.parse(row.resultJson || '{}'); } catch {} return { ...row, result }; });
+      m.role, m.content, m.result_json AS resultJson, m.created_at AS createdAt,
+      a.id AS artifactId, a.workspace_id AS workspaceId,
+      a.title AS artifactTitle, a.artifact_type AS artifactType
+      FROM chat_messages m LEFT JOIN workspace_artifacts a ON a.id = (
+        SELECT candidate.id FROM workspace_artifacts candidate
+        WHERE candidate.message_id=m.id AND candidate.status=1
+        ORDER BY candidate.updated_at DESC, candidate.id DESC LIMIT 1
+      ) WHERE m.session_id=? ORDER BY m.id DESC LIMIT ?`, [Number(sessionId), Math.max(1, Math.min(Number(limit) || 50, 200))]);
+    return rows.reverse().map((row) => {
+      let result = {};
+      try { result = JSON.parse(row.resultJson || '{}'); } catch { /* use empty result */ }
+      return {
+        ...row,
+        result: {
+          ...result,
+          artifactId: row.artifactId ?? result.artifactId ?? null,
+          workspaceId: row.workspaceId ?? result.workspaceId ?? null,
+          artifactTitle: row.artifactTitle ?? result.artifactTitle ?? null,
+          artifactType: row.artifactType ?? result.artifactType ?? null,
+        },
+      };
+    });
   };
   store.getWorkspaceAsync = async (id, userId = null) => {
     const [row] = await store.query(`SELECT w.id, w.user_id AS userId, w.theme_id AS themeId,

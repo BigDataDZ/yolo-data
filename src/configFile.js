@@ -85,13 +85,6 @@ export const CONFIG_FILE_MAP = {
 
   'datasource.secretKey': 'DATASOURCE_SECRET_KEY',
 
-  'supersonic.baseUrl': 'SUPERSONIC_BASE_URL',
-  'supersonic.token': 'SUPERSONIC_TOKEN',
-  'supersonic.appKey': 'SUPERSONIC_APP_KEY',
-  'supersonic.serviceClientId': 'SUPERSONIC_SERVICE_CLIENT_ID',
-  'supersonic.serviceClientSecret': 'SUPERSONIC_SERVICE_CLIENT_SECRET',
-  'supersonic.timeoutMs': 'SUPERSONIC_TIMEOUT_MS',
-
   'bootstrapDatasource.enabled': 'DORIS_BOOTSTRAP_ENABLED',
   'bootstrapDatasource.host': 'DORIS_BOOTSTRAP_HOST',
   'bootstrapDatasource.port': 'DORIS_BOOTSTRAP_PORT',

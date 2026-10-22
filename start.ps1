@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ProjectRoot
 
@@ -34,9 +34,9 @@ if (Test-Path $VenvPython) {
 
 if (-not $NodeReady -or -not $PythonReady) {
     Write-Host '首次启动或检测到依赖缺失，需要初始化运行环境。'
-    $NpmChoice = Read-Host 'npm registry（回车沿用当前配置，输入 m 使用 npmmirror）'
+    $NpmChoice = Read-Host 'npm registry (Enter keeps current setting; m selects npmmirror)'
     if ($NpmChoice -match '^[mM]$') { $env:npm_config_registry = 'https://registry.npmmirror.com' }
-    $PipChoice = Read-Host 'Python 包源（回车沿用当前配置，输入 a 使用阿里云镜像）'
+    $PipChoice = Read-Host 'Python package index (Enter keeps current setting; a selects Aliyun mirror)'
     if ($PipChoice -match '^[aA]$') { $env:PIP_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple/' }
     & npm run setup
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

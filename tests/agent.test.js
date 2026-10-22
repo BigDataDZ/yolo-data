@@ -12,7 +12,7 @@ function testConfig() {
     projectRoot: process.cwd(),
     port: 0,
     dbPath: path.join(directory, 'test.db'),
-    supersonic: {
+    本地指标目录: {
       baseUrl: '',
       token: '',
       timeoutMs: 5_000,
@@ -65,6 +65,40 @@ test('agent answer enforces user row policy during indicator execution', async (
   assert.deepEqual(queryTrace.args.filters, [
     { bizName: 'region', operator: 'IN', value: ['华东'] },
   ]);
+});
+
+test('configured model is seeded, available to initialized themes, and resolved for chat', async () => {
+  const config = testConfig();
+  config.deepseek = {
+    baseUrl: 'https://models.example/v1',
+    apiKey: 'test-secret',
+    model: 'example-chat',
+    temperature: 0.2,
+    maxTokens: 2048,
+    timeoutMs: 12_000,
+    maxToolRounds: 5,
+  };
+  const application = await createApplication(config, new FakeIndicatorClient());
+  const [model] = application.database.listModels();
+  assert.equal(model.modelName, 'example-chat');
+  assert.equal(model.baseUrl, 'https://models.example/v1');
+  assert.equal(model.apiKeyEnv, 'API_KEY');
+  assert.equal(model.hasApiKey, false);
+
+  const [theme] = application.database.listThemes();
+  assert.deepEqual(theme.modelIds, [model.id]);
+  assert.equal(theme.defaultModelId, model.id);
+  assert.deepEqual(await application.agent.resolveThemeModel(theme), {
+    provider: 'openai-compatible',
+    model: 'example-chat',
+    baseUrl: 'https://models.example/v1',
+    apiKeyEnv: 'API_KEY',
+    apiKeyEncrypted: '',
+    temperature: 0.2,
+    maxTokens: 2048,
+    timeoutMs: 12_000,
+    maxToolRounds: 5,
+  });
 });
 
 test('theme permission blocks users without a query grant', async () => {
@@ -304,13 +338,13 @@ test('agent emits auditable runtime events while answering', async () => {
   );
 });
 
-test('unconfigured Supersonic defaults to the same local mode in health and agent execution', async () => {
+test('unconfigured 本地指标目录 defaults to the same local mode in health and agent execution', async () => {
   const config = testConfig();
   const application = await createApplication(config);
   try {
     await application.init();
-    assert.equal(application.getSupersonicEnabled(), false);
-    assert.equal(application.agent.isSupersonicEnabled(), false);
+    assert.equal(application.get本地指标目录Enabled(), false);
+    assert.equal(application.agent.is本地指标目录Enabled(), false);
     assert.equal((await application.currentHealth()).source.mode, 'direct-llm');
     const user = application.database.getUserByUsername('east_manager');
     const theme = application.database.listThemes().find((item) => item.name === '经营总览');
@@ -321,18 +355,18 @@ test('unconfigured Supersonic defaults to the same local mode in health and agen
     });
     assert.equal(answer.runtime.executionAdapter, 'direct-llm');
     assert.equal(events.find((event) => event.type === 'runtime_selected').source.mode, 'direct-llm');
-    assert.ok(!events.some((event) => event.code === 'SUPERSONIC_NOT_CONFIGURED'));
-    assert.equal(application.database.getPlatformSetting('supersonic.enabled', null), null);
+    assert.ok(!events.some((event) => event.code === '本地指标目录_NOT_CONFIGURED'));
+    assert.equal(application.database.getPlatformSetting('本地指标目录.enabled', null), null);
   } finally {
     await application.database.closeAsync();
     fs.rmSync(path.dirname(config.dbPath), { recursive: true, force: true });
   }
 });
 
-test('explicitly enabled Supersonic requires a configured indicator source', async () => {
+test('explicitly enabled 本地指标目录 requires a configured indicator source', async () => {
   const config = testConfig();
   const application = await createApplication(config);
-  application.database.savePlatformSetting('supersonic.enabled', true);
+  application.database.savePlatformSetting('本地指标目录.enabled', true);
   await application.init();
   const user = application.database.getUserByUsername('east_manager');
   const theme = application.database.listThemes().find((item) => item.name === '经营总览');
@@ -352,11 +386,11 @@ test('agent reuses identical snapshots but preserves distinct query results', as
   await application.init();
   const user = application.database.getUserByUsername('east_manager');
   const theme = application.database.listThemes().find((item) => item.name === '经营总览');
-  const originalQuery = application.indicatorClient.queryIndicator.bind(
-    application.indicatorClient,
+  const originalQuery = application.indicatorService.queryIndicator.bind(
+    application.indicatorService,
   );
   let queryCount = 0;
-  application.indicatorClient.queryIndicator = async (args) => {
+  application.indicatorService.queryIndicator = async (args) => {
     queryCount += 1;
     return originalQuery(args);
   };

@@ -506,11 +506,15 @@ export function registerMemoryRoutes(table) {
         throw Object.assign(new Error('需要提供会话 sessionId'), { statusCode: 400 });
       }
       const isAdmin = user.role === 'ADMIN';
-      const session = database.getChatSession(sessionId, isAdmin ? null : user.id);
+      const session = await (database.getChatSessionAsync
+        ? database.getChatSessionAsync(sessionId, isAdmin ? null : user.id)
+        : database.getChatSession(sessionId, isAdmin ? null : user.id));
       if (!session) {
         throw Object.assign(new Error('会话不存在或无权访问'), { statusCode: 404 });
       }
-      const messages = database.listChatMessages(session.id, session.userId, 200) ?? [];
+      const messages = await (database.listChatMessagesAsync
+        ? database.listChatMessagesAsync(session.id, session.userId, 200)
+        : database.listChatMessages(session.id, session.userId, 200)) ?? [];
       const userMessages = messages.filter((message) => message.role === 'user');
       const lastAssistant = [...messages].reverse()
         .find((message) => message.role === 'assistant')?.content ?? '';

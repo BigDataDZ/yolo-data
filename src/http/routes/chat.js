@@ -90,7 +90,7 @@ export function registerChatRoutes(table) {
       const sessionId = request.url.includes('?')
         ? Number(new URL(request.url, 'http://localhost').searchParams.get('sessionId'))
         : null;
-      sendJson(response, 200, workspace.listForUser({
+      sendJson(response, 200, await (workspace.listForUserAsync ?? workspace.listForUser).call(workspace, {
         userId: user.id,
         sessionId: Number.isFinite(sessionId) && sessionId > 0 ? sessionId : null,
       }));
@@ -402,10 +402,15 @@ export function registerChatRoutes(table) {
       const { request, response, database, params, getRequestUser, sendJson } = ctx;
       const queryPlanRoute = params;
       const user = await getRequestUser(request, database);
-      const plan = database.getQueryPlan(
+      const plan = await (database.getQueryPlanAsync
+        ? database.getQueryPlanAsync(
         queryPlanRoute[0],
         user.role === 'ADMIN' ? null : user.id,
-      );
+        )
+        : database.getQueryPlan(
+          queryPlanRoute[0],
+          user.role === 'ADMIN' ? null : user.id,
+        ));
       if (!plan) {
         throw Object.assign(new Error('query plan not found'), { statusCode: 404 });
       }

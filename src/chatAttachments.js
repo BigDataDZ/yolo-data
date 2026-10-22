@@ -86,7 +86,12 @@ export function appendUserQuestionWithAttachments({
 
 export async function appendUserQuestionWithAttachmentsAsync(args) {
   const attachments = await resolveQuestionAttachmentsAsync({ workspace: args.workspace, userId: args.user.id, sessionId: args.session.id, artifactIds: args.artifactIds });
-  const message = args.memory.appendUserMessage(args.session.id, args.user.id, String(args.displayQuestion ?? '').trim() || args.question, { attachments, question: args.question });
+  const message = await args.memory.appendUserMessageAsync(
+    args.session.id,
+    args.user.id,
+    String(args.displayQuestion ?? '').trim() || args.question,
+    { attachments, question: args.question },
+  );
   if (attachments.length > 0 && args.workspace) {
     const input = { artifactIds: attachments.map((item) => item.artifactId), userId: args.user.id, messageId: message.id };
     if (args.workspace.bindArtifactsToMessageAsync) await args.workspace.bindArtifactsToMessageAsync(input);

@@ -147,6 +147,33 @@ export class SkillRegistry {
       .filter((item) => item.guidance);
   }
 
+  async buildPhaseInstructionsAsync(skills, phase) {
+    const normalizedPhase = String(phase ?? '').toUpperCase();
+    const selected = (skills ?? []).filter((skill) => (
+      ['SKILL_MD', 'UPLOAD'].includes(String(skill.source ?? '').toUpperCase())
+      && (skill.phaseTags ?? []).map(String).map((item) => item.toUpperCase())
+        .includes(normalizedPhase)
+    ));
+    return Promise.all(selected.map(async (skill) => {
+      const full = this.database.getSkillAsync
+        ? (await this.database.getSkillAsync(skill.code) ?? skill)
+        : this.database.isAsyncPlatformStore
+          ? skill
+          : (this.database.getSkill(skill.code) ?? skill);
+      const guidance = extractSkillGuidance({
+        ...full,
+        body: full.content ?? '',
+      }, normalizedPhase);
+      return {
+        code: skill.code,
+        name: skill.name,
+        phase: normalizedPhase,
+        sourcePath: skill.sourcePath ?? null,
+        guidance,
+      };
+    })).then((items) => items.filter((item) => item.guidance));
+  }
+
   auditPlanningContext({
     skills,
     question,
@@ -154,7 +181,26 @@ export class SkillRegistry {
     businessDatasets = [],
     primaryBusinessDatasetId = null,
   }) {
-    const guidance = this.buildPhaseInstructions(skills, 'PRE_PLAN');
+    return this.buildPlanningAudit({
+      skills,
+      question,
+      theme,
+      businessDatasets,
+      primaryBusinessDatasetId,
+    }, this.buildPhaseInstructions(skills, 'PRE_PLAN'));
+  }
+
+  async auditPlanningContextAsync(args) {
+    const guidance = await this.buildPhaseInstructionsAsync(args.skills, 'PRE_PLAN');
+    return this.buildPlanningAudit(args, guidance);
+  }
+
+  buildPlanningAudit({
+    question,
+    theme,
+    businessDatasets = [],
+    primaryBusinessDatasetId = null,
+  }, guidance) {
     const checks = [
       {
         id: 'source-of-truth',
@@ -206,7 +252,21 @@ export class SkillRegistry {
     indicator,
     data,
   }) {
-    const guidance = this.buildPhaseInstructions(skills, 'POST_EXECUTE');
+    return this.buildQueryResultValidation({
+      question,
+      semanticParse,
+      dataset,
+      indicator,
+      data,
+    }, this.buildPhaseInstructions(skills, 'POST_EXECUTE'));
+  }
+
+  async validateQueryResultAsync(args) {
+    const guidance = await this.buildPhaseInstructionsAsync(args.skills, 'POST_EXECUTE');
+    return this.buildQueryResultValidation(args, guidance);
+  }
+
+  buildQueryResultValidation({ question, semanticParse, dataset, indicator, data }, guidance) {
     const contract = semanticParse?.queryContract ?? null;
     const hasResult = Array.isArray(data?.rows);
     const checks = [

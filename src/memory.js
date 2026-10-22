@@ -1,4 +1,5 @@
-import { buildExecutionContext, buildLegacyModelContext, buildUnderstandingContext, updateInitialTitle } from './sessionMemoryContext.js';
+import { buildExecutionContext, buildLegacyModelContext, buildUnderstandingContext, buildUnderstandingContextAsync, updateInitialTitle, updateInitialTitleAsync } from './sessionMemoryContext.js';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 
 // 会话记忆只负责“理解上下文”；执行阶段通过结构化任务状态单独装配，
 // 避免原始聊天记录和长期记忆直接污染查询契约。
@@ -20,34 +21,28 @@ export class SessionMemoryStore {
   }
 
   async createSessionAsync(args) {
-    return this.database.createChatSessionAsync
-      ? this.database.createChatSessionAsync(args) : this.createSession(args);
+    return callPlatformDatabase(this.database, 'createChatSessionAsync', 'createChatSession', args);
   }
   async listSessionsAsync(userId) {
-    return this.database.listChatSessionsAsync
-      ? this.database.listChatSessionsAsync(userId) : this.listSessions(userId);
+    return callPlatformDatabase(this.database, 'listChatSessionsAsync', 'listChatSessions', userId);
   }
   async getSessionAsync(sessionId, userId) {
-    const session = this.database.getChatSessionAsync
-      ? await this.database.getChatSessionAsync(sessionId, userId)
-      : this.database.getChatSession(sessionId, userId);
+    const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', sessionId, userId);
     if (!session) throw new Error('chat session not found');
     return session;
   }
   async listMessagesAsync(sessionId, userId, limit = 100) {
-    const messages = this.database.listChatMessagesAsync
-      ? await this.database.listChatMessagesAsync(sessionId, userId, limit)
-      : this.database.listChatMessages(sessionId, userId, limit);
+    const messages = await callPlatformDatabase(this.database, 'listChatMessagesAsync', 'listChatMessages', sessionId, userId, limit);
     if (messages === null) throw new Error('chat session not found');
     return messages;
   }
-  async deleteSessionAsync(sessionId, userId) { return this.database.deleteChatSessionAsync ? this.database.deleteChatSessionAsync(sessionId, userId) : this.deleteSession(sessionId, userId); }
-  async appendUserMessageAsync(sessionId, userId, content, result = {}) { return this.database.appendChatMessageAsync ? this.database.appendChatMessageAsync({ sessionId, userId, role: 'user', content, result }) : this.appendUserMessage(sessionId, userId, content, result); }
+  async deleteSessionAsync(sessionId, userId) { return callPlatformDatabase(this.database, 'deleteChatSessionAsync', 'deleteChatSession', sessionId, userId); }
+  async appendUserMessageAsync(sessionId, userId, content, result = {}) {
+    return callPlatformDatabase(this.database, 'appendChatMessageAsync', 'appendChatMessage', { sessionId, userId, role: 'user', content, result });
+  }
   async appendAssistantMessageAsync(sessionId, userId, content, result) {
-    const message = this.database.appendChatMessageAsync
-      ? await this.database.appendChatMessageAsync({ sessionId, userId, role: 'assistant', content, result })
-      : this.appendAssistantMessage(sessionId, userId, content, result);
-    this.distillAfterTurn({ sessionId, userId, content, result });
+    const message = await callPlatformDatabase(this.database, 'appendChatMessageAsync', 'appendChatMessage', { sessionId, userId, role: 'assistant', content, result });
+    void this.distillAfterTurnAsync({ sessionId, userId, content, result });
     return message;
   }
 
@@ -101,6 +96,10 @@ export class SessionMemoryStore {
     return buildUnderstandingContext(this, sessionId, userId);
   }
 
+  buildUnderstandingContextAsync(sessionId, userId) {
+    return buildUnderstandingContextAsync(this, sessionId, userId);
+  }
+
   buildExecutionContext({ taskState = null, question = '' } = {}) {
     return buildExecutionContext({ taskState, question });
   }
@@ -133,15 +132,31 @@ export class SessionMemoryStore {
     }
   }
 
+  async distillAfterTurnAsync({ sessionId, userId, content, result }) {
+    if (!this.distiller || result?.error || !String(content ?? '').trim()) return;
+    try {
+      const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', sessionId, userId);
+      const messages = await callPlatformDatabase(this.database, 'listChatMessagesAsync', 'listChatMessages', sessionId, userId, this.contextLimit);
+      const question = messages
+        .filter((message) => message.role === 'user')
+        .at(-1)?.content ?? '';
+      await this.distiller.ingest({
+        userId,
+        themeId: session?.themeId ?? null,
+        sessionId,
+        question,
+        answer: content,
+      });
+    } catch {
+      // Memory distillation is best-effort and must not affect the answer.
+    }
+  }
+
   maybeSetInitialTitle(sessionId, content) {
     return updateInitialTitle(this, sessionId, content);
   }
 
   async maybeSetInitialTitleAsync(sessionId, content) {
-    if (!this.database.getChatSessionAsync || !this.database.updateChatSessionAsync) return this.maybeSetInitialTitle(sessionId, content);
-    const session = await this.database.getChatSessionAsync(sessionId);
-    if (!session || session.title !== '新会话') return session;
-    const title = String(content ?? '').trim().replace(/\s+/g, ' ').slice(0, 24) || '新会话';
-    return this.database.updateChatSessionAsync(sessionId, { title });
+    return updateInitialTitleAsync(this, sessionId, content);
   }
 }

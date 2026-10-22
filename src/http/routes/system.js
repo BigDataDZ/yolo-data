@@ -6,7 +6,7 @@ export function registerSystemRoutes(table) {
     method: 'GET',
     path: '/api/health',
     tags: ['system'],
-    summary: '运行健康与指标来源状态',
+    summary: '运行健康状态',
     handler: async (ctx) => {
       const { response, application, sendJson } = ctx;
       sendJson(response, 200, await application.currentHealth());
@@ -18,64 +18,17 @@ export function registerSystemRoutes(table) {
     method: 'GET',
     path: '/api/settings',
     tags: ['system'],
-    summary: '读取指标平台设置（管理员）',
+    summary: '读取系统设置（管理员）',
     middleware: ['auth', 'admin'],
     adminOnly: true,
     handler: async (ctx) => {
-      const { request, response, database, application, config, getRequestUser, sendJson } = ctx;
+      const { request, response, database, getRequestUser, sendJson } = ctx;
       const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const health = await application.currentHealth();
       sendJson(response, 200, {
-        supersonic: {
-          enabled: application.getSupersonicEnabled(),
-          localIndicatorManagement: !application.getSupersonicEnabled(),
-          localIndicatorCount: await database.localIndicators.countAsync(),
-          configured: Boolean(config.supersonic.baseUrl),
-          baseUrl: config.supersonic.baseUrl || null,
-          mode: health.source.mode,
-          lastSyncAt: health.source.lastSyncAt,
-          lastSyncCount: health.source.lastSyncCount,
-          error: health.source.error,
-        },
-      });
-    },
-  });
-
-  table.add({
-    id: 'system.settings.supersonic',
-    method: 'PUT',
-    path: '/api/settings/supersonic',
-    tags: ['system'],
-    summary: '启停指标平台（管理员）',
-    middleware: ['auth', 'admin'],
-    adminOnly: true,
-    handler: async (ctx) => {
-      const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = await getRequestUser(request, database);
-      if (user.role !== 'ADMIN') {
-        throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
-      }
-      const body = await readJson(request);
-      const enabled = body.enabled !== false;
-      const result = await application.applySupersonicSetting(enabled);
-      await database.addAuditLogAsync({
-        userId: user.id,
-        action: 'SUPERSONIC_SETTING_UPDATE',
-        detail: { enabled },
-      });
-      sendJson(response, 200, {
-        supersonic: {
-          enabled,
-          localIndicatorManagement: !enabled,
-          localIndicatorCount: await database.localIndicators.countAsync(),
-          sourceMode: result.sourceMode,
-          sync: result.sync ?? null,
-          syncError: result.syncError ?? null,
-        },
-        health: await application.currentHealth(),
+        localIndicatorCount: await database.localIndicators.countAsync(),
       });
     },
   });

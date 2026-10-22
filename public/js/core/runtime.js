@@ -20,7 +20,7 @@ const PAGE_META = {
   mcp: ['MCP 令牌', '开放 MCP 能力给外部客户端：服务开关、访问令牌与连接器下载'],
   eval: ['评测看板', 'L1/L2/L3 语义评测的可量化准确率、门禁分布与回归 diff'],
   themeEditor: ['编辑智能体', '配置主题的数据范围、运行模型、Skills 和独立提示词'],
-  datasets: ['数据集', '管理 MySQL、TiDB、Doris 数据源、业务数据集和字段语义'],
+  datasets: ['数据集', '管理数据源、业务数据集和字段语义'],
   permissions: ['数据权限', '配置用户可见主题、指标、行级过滤和列级脱敏'],
   growth: ['质量运营', '跟踪用户反馈、知识缺口与 LLM 调用质量'],
   audit: ['运行审计', '跟踪指标连接、权限变更、智能问数执行和数据集查询记录'],
@@ -683,10 +683,10 @@ function formatModelName(runtime) {
 }
 
 function formatSourceMode(mode) {
-  if (mode === 'supersonic') {
+  if (mode === 'remote-indicator') {
     return '指标平台指标源';
   }
-  if (mode === 'supersonic-indicator') {
+  if (mode === 'local-indicator-catalog') {
     return '指标平台指标查询';
   }
   if (mode === 'unconfigured') {

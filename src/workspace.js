@@ -1,6 +1,7 @@
 import { buildArtifactFileName, buildArtifactTitle } from './fileName.js';
 import { createXlsxBuffer } from './xlsx.js';
 import { buildArtifactCapabilities } from './artifactCapabilities.js';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 import { formatPresentationCell } from './resultPresentation.js';
 import { getPlatformLexicon, profileHintPattern } from './businessLexicon.js';
 
@@ -225,10 +226,11 @@ export class WorkspaceService {
   }
 
   async ensureForSessionAsync(args) {
-    if (!this.database.ensureWorkspaceAsync) return this.ensureForSession(args);
-    const existing = await this.database.getWorkspaceBySessionAsync(args.sessionId, args.userId);
-    if (existing && args.name && existing.name !== String(args.name).trim()) return this.database.updateWorkspaceAsync(existing.id, args.userId, { name: args.name });
-    return this.database.ensureWorkspaceAsync(args);
+    const existing = await callPlatformDatabase(this.database, 'getWorkspaceBySessionAsync', 'getWorkspaceBySession', args.sessionId, args.userId);
+    if (existing && args.name && existing.name !== String(args.name).trim()) {
+      return callPlatformDatabase(this.database, 'updateWorkspaceAsync', 'updateWorkspace', existing.id, args.userId, { name: args.name });
+    }
+    return callPlatformDatabase(this.database, 'ensureWorkspaceAsync', 'ensureWorkspace', args);
   }
 
   listForUser({ userId, sessionId = null }) {
@@ -241,9 +243,7 @@ export class WorkspaceService {
 
   async listForUserAsync({ userId, sessionId = null }) {
     if (!sessionId) return [];
-    const workspace = this.database.getWorkspaceBySessionAsync
-      ? await this.database.getWorkspaceBySessionAsync(sessionId, userId)
-      : this.database.getWorkspaceBySession(sessionId, userId);
+    const workspace = await callPlatformDatabase(this.database, 'getWorkspaceBySessionAsync', 'getWorkspaceBySession', sessionId, userId);
     return workspace ? [workspace] : [];
   }
 
@@ -256,12 +256,9 @@ export class WorkspaceService {
   }
 
   async listArtifactsAsync({ workspaceId, userId }) {
-    if (!this.database.getWorkspaceAsync || !this.database.listWorkspaceArtifactsAsync) {
-      return this.listArtifacts({ workspaceId, userId });
-    }
-    const workspace = await this.database.getWorkspaceAsync(workspaceId, userId);
+    const workspace = await callPlatformDatabase(this.database, 'getWorkspaceAsync', 'getWorkspace', workspaceId, userId);
     if (!workspace) throw new Error('workspace not found');
-    return this.database.listWorkspaceArtifactsAsync(workspace.id, userId);
+    return callPlatformDatabase(this.database, 'listWorkspaceArtifactsAsync', 'listWorkspaceArtifacts', workspace.id, userId);
   }
 
   getArtifact({ artifactId, userId }) {
@@ -273,16 +270,14 @@ export class WorkspaceService {
   }
 
   async getArtifactAsync({ artifactId, userId }) {
-    if (!this.database.getWorkspaceArtifactAsync) return this.getArtifact({ artifactId, userId });
-    const artifact = await this.database.getWorkspaceArtifactAsync(artifactId, userId);
+    const artifact = await callPlatformDatabase(this.database, 'getWorkspaceArtifactAsync', 'getWorkspaceArtifact', artifactId, userId);
     if (!artifact) throw new Error('workspace artifact not found');
     return artifact;
   }
 
   async createResultArtifactAsync(params) {
-    if (!this.database.createWorkspaceArtifactAsync) return this.createResultArtifact(params);
     const result = this.createResultArtifactPayload(params);
-    return this.database.createWorkspaceArtifactAsync(result);
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', result);
   }
 
   createResultArtifactPayload({ workspaceId, userId, sessionId, messageId, conversationId, answer, artifactType = 'QUERY_RESULT', inputArtifactIds = [], runId = null, source = null }) {
@@ -381,8 +376,7 @@ export class WorkspaceService {
   }
 
   async createProcessArtifactAsync(input) {
-    if (!this.database.createWorkspaceArtifactAsync) return this.createProcessArtifact(input);
-    return this.database.createWorkspaceArtifactAsync({ ...input, artifactType: 'PROCESS_STEP' });
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', { ...input, artifactType: 'PROCESS_STEP' });
   }
 
   createFileArtifact({
@@ -428,9 +422,8 @@ export class WorkspaceService {
   }
 
   async createFileArtifactAsync(input) {
-    if (!this.database.createWorkspaceArtifactAsync) return this.createFileArtifact(input);
     const { workspaceId, userId, sessionId, messageId = null, title, content, encoding = 'utf8', format, mimeType, purpose = '', runId = null, inputArtifactIds = [], size = 0, source = null } = input;
-    return this.database.createWorkspaceArtifactAsync({ workspaceId, userId, sessionId, messageId, artifactType: 'FILE', title, metadata: { format, mimeType, size, purpose, source, runId, inputArtifactIds, parentArtifactIds: inputArtifactIds }, payload: { encoding, content, format, mimeType } });
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', { workspaceId, userId, sessionId, messageId, artifactType: 'FILE', title, metadata: { format, mimeType, size, purpose, source, runId, inputArtifactIds, parentArtifactIds: inputArtifactIds }, payload: { encoding, content, format, mimeType } });
   }
 
   // 通用表格产物写入：用于本地上传解析等非查询来源的表格数据。
@@ -439,9 +432,7 @@ export class WorkspaceService {
   }
 
   async createTableArtifactAsync({ artifactType = 'TABLE', ...params }) {
-    return this.database.createWorkspaceArtifactAsync
-      ? this.database.createWorkspaceArtifactAsync({ artifactType, ...params })
-      : this.createTableArtifact({ artifactType, ...params });
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', { artifactType, ...params });
   }
 
   createCodeArtifact({
@@ -486,9 +477,8 @@ export class WorkspaceService {
   }
 
   async createCodeArtifactAsync(input) {
-    if (!this.database.createWorkspaceArtifactAsync) return this.createCodeArtifact(input);
     const { workspaceId, userId, sessionId, messageId = null, title, code, stdout = '', stderr = '', success = true, durationMs = 0, runId, inputArtifacts = [], outputs = [], purpose = '' } = input;
-    return this.database.createWorkspaceArtifactAsync({ workspaceId, userId, sessionId, messageId, artifactType: 'CODE', title, metadata: { runId, purpose, success, durationMs, inputArtifactIds: inputArtifacts.map((item) => item.artifactId), outputArtifactIds: outputs.map((item) => item.artifactId), inputArtifacts, outputs }, payload: { code: String(code ?? ''), stdout: String(stdout ?? ''), stderr: String(stderr ?? '') } });
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', { workspaceId, userId, sessionId, messageId, artifactType: 'CODE', title, metadata: { runId, purpose, success, durationMs, inputArtifactIds: inputArtifacts.map((item) => item.artifactId), outputArtifactIds: outputs.map((item) => item.artifactId), inputArtifacts, outputs }, payload: { code: String(code ?? ''), stdout: String(stdout ?? ''), stderr: String(stderr ?? '') } });
   }
 
   bindArtifactsToMessage({ artifactIds, userId, messageId }) {
@@ -500,13 +490,11 @@ export class WorkspaceService {
   }
 
   async bindArtifactsToMessageAsync(args) {
-    return this.database.bindWorkspaceArtifactsToMessageAsync
-      ? this.database.bindWorkspaceArtifactsToMessageAsync(args)
-      : this.bindArtifactsToMessage(args);
+    return callPlatformDatabase(this.database, 'bindWorkspaceArtifactsToMessageAsync', 'bindWorkspaceArtifactsToMessage', args);
   }
 
   async transformArtifactAsync({ artifactId, userId, operation, params = {} }) {
-    if (!this.database.createWorkspaceArtifactAsync) {
+    if (!this.database.isAsyncPlatformStore && !this.database.createWorkspaceArtifactAsync) {
       return this.transformArtifact({ artifactId, userId, operation, params });
     }
     const artifact = await this.getArtifactAsync({ artifactId, userId });
@@ -516,9 +504,7 @@ export class WorkspaceService {
     handler(payload, params);
     const metadata = { ...artifact.metadata, rowCount: payload.data?.rows?.length ?? 0, columnCount: payload.data?.columns?.length ?? 0, parentArtifactIds: [artifact.id], derivedFromArtifactId: artifact.id, operation, operationParams: params };
     const input = { workspaceId: artifact.workspaceId, userId, sessionId: artifact.sessionId, messageId: artifact.messageId, conversationId: artifact.conversationId, artifactType: 'DERIVED_RESULT', title: `${artifact.title} · ${ARTIFACT_OPERATION_LABELS[operation] ?? operation}`, metadata, payload };
-    return this.database.createWorkspaceArtifactAsync
-      ? this.database.createWorkspaceArtifactAsync(input)
-      : this.database.createWorkspaceArtifact(input);
+    return callPlatformDatabase(this.database, 'createWorkspaceArtifactAsync', 'createWorkspaceArtifact', input);
   }
 
   transformArtifact({
@@ -563,9 +549,8 @@ export class WorkspaceService {
   }
 
   async exportArtifactAsync({ artifactId, userId, format = 'json' }) {
-    if (!this.database.getWorkspaceAsync) return this.exportArtifact({ artifactId, userId, format });
     const artifact = await this.getArtifactAsync({ artifactId, userId });
-    const workspace = await this.database.getWorkspaceAsync(artifact.workspaceId, userId);
+    const workspace = await callPlatformDatabase(this.database, 'getWorkspaceAsync', 'getWorkspace', artifact.workspaceId, userId);
     return this.exportArtifactRecord(artifact, workspace, format);
   }
 

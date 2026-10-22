@@ -176,7 +176,7 @@ export function registerUserRoutes(table) {
     summary: '前端启动所需的全量上下文',
     middleware: ['auth'],
     handler: async (ctx) => {
-      const { request, response, database, application, agent, indicatorClient, getRequestUser, sendJson, toPublicTheme, toPublicModel, supersonicAvailable } = ctx;
+      const { request, response, database, application, agent, getRequestUser, sendJson, toPublicTheme, toPublicModel } = ctx;
       const user = await getRequestUser(request, database);
       const canManage = user.role === 'ADMIN';
       const [themes, preferences, managedThemes, skills, datasetOptions, businessDatasets,
@@ -194,10 +194,7 @@ export function registerUserRoutes(table) {
         user.role === 'ADMIN' ? database.dataSourceRepository.listDataSourcesAsync() : Promise.resolve([]),
         user.role === 'ADMIN' ? database.modelRepository.listModelsAsync() : Promise.resolve([]),
         application.currentHealth(),
-        !canManage ? Promise.resolve([])
-          : !application.getSupersonicEnabled() ? database.localIndicators.listTypesAsync()
-            : !supersonicAvailable() ? Promise.resolve([])
-              : indicatorClient.listTypes().catch(() => []),
+        !canManage ? Promise.resolve([]) : database.localIndicators.listTypesAsync(),
       ]);
       sendJson(response, 200, {
         currentUser: user,

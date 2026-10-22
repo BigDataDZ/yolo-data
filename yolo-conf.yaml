@@ -1,31 +1,43 @@
-# YOLO Data conf
+# YOLO Data configuration / YOLO Data 配置
+# Environment variables with non-empty values override this file; blank values use defaults.
+# 非空环境变量优先于本文件；留空时使用程序默认值。密钥等机密请用环境变量提供。
+# Only registered keys take effect. See src/configFile.js for YAML-key/environment-variable mappings.
+# 仅登记过的配置键会生效；YAML 字段与环境变量的映射见 src/configFile.js。
+
+# HTTP server / HTTP 服务
 server:
+  # Listening port / 监听端口
   port: 8088
-  # 留空按鉴权模式取默认：dev 只监听 127.0.0.1，session 监听 0.0.0.0
+  # Bind address; blank selects the address based on auth mode / 绑定地址；留空时根据鉴权模式决定
   host: ""
 
+# Authentication / 身份认证
 auth:
-  # dev（内网体验，x-user-id 直连） | session（强制登录）
+  # dev (trusted-network testing) | session (require login) / dev（可信网络体验）| session（强制登录）
   mode: ""
+  # Session lifetime in hours / 会话有效期（小时）
   sessionTtlHours: 12
-  # 留空：NODE_ENV=production 时强制 true
+  # Secure cookie flag; blank is secure in production / Cookie Secure 标志；留空时生产环境启用
   secureCookies: ""
-  # 初始化内置账号时写入的默认口令；留空用 yolo123456。机密：建议用环境变量覆盖
+  # Password for initialized built-in accounts; secret, prefer environment variable / 初始化内置账号口令；机密，建议用环境变量
   defaultUserPassword: ""
-  # 预留项：填写后不会启用 SSO
+  # OIDC settings reserved for future use; currently do not enable SSO / OIDC 预留配置；目前填写也不会启用 SSO
   oidc:
     issuer: ""
     clientId: ""
     audience: ""
     jwksUri: ""
 
+# Platform state database / 平台状态数据库
 platformDatabase:
-  # sqlite | mysql
+  # sqlite | mysql / 数据库类型：sqlite 或 mysql
   backend: mysql
+  # SQLite file path / SQLite 数据库文件路径
   path: ./data/platform.db
-  # 首次启动是否写入安装包预置资源（用户/主题/模型模板等）
+  # Load bundled starter resources on first launch / 首次启动是否导入预置用户、主题和模型等资源
   bootstrapResources: true
   mysql:
+    # MySQL connection settings / MySQL 连接参数
     host: "10.0.76.148"
     port: 3306
     database: yolo-data
@@ -36,74 +48,104 @@ platformDatabase:
     initSqlPath: ./config/platform/mysql-init.sql
 
 skills:
-  # 额外技能目录，留空用默认<install-path>/skills 
+  # Additional Skills directories; empty uses the installation's skills directory / 额外 Skills 目录；留空使用安装目录下的 skills
   directories: []
 
 models:
+  # OpenAI-compatible API endpoint / OpenAI 兼容接口地址
   baseUrl: https://api-inference.modelscope.cn/v1
-  # 机密：留空走本地规则（local-rule），填了才调用真实大模型
+  # API credential (secret); blank uses local-rule / API 密钥（机密）；留空使用本地规则模型
   apiKey: "ms-2f3dba7d-22c6-47e6-9dee-d6edbfa844b5"
+  # Model identifier / 模型标识
   model: deepseek-ai/DeepSeek-V4.1-Flash-1017
+  # Sampling temperature / 采样温度
   temperature: 0
+  # Maximum output tokens; 0 uses provider default / 最大输出 Token 数；0 使用服务商默认值
   maxTokens: 0
+  # Request timeout in milliseconds / 请求超时（毫秒）
   timeoutMs: 180000
+  # Maximum tool-call rounds / 最大工具调用轮数
   maxToolRounds: 12
 
+# Conversation context / 对话上下文
 chat:
+  # Number of recent messages retained / 保留的近期消息数
   memoryMessageLimit: 20
 
+# Long-term user memory / 用户长期记忆
 userMemory:
+  # Consolidate memory after this many new messages / 新增多少条消息后整理记忆
   autoConsolidateAt: 8
+  # Target compacted-to-original size ratio / 压缩后与原内容的目标比例
   compactRatio: 0.8
+  # Background maintenance interval in milliseconds / 后台维护间隔（毫秒）
   maintenanceIntervalMs: 900000
+  # Delay before maintenance starts / 启动维护前的延迟（毫秒）
   maintenanceStartupDelayMs: 60000
+  # Maximum records handled per maintenance batch / 每批维护的最大记录数
   maintenanceBatchSize: 20
   preInject:
+    # Inject relevant memories into prompts / 是否向提示词注入相关记忆
     enabled: true
+    # Maximum memories to inject / 最多注入的记忆条数
     topN: 6
+    # Maximum injected characters / 注入内容最大字符数
     maxChars: 1200
 
+# Answer reflection and replanning / 答案反思与重规划
 reflection:
+  # Enable reflection / 是否启用反思
   enabled: true
-  # 换策略重规划的最大次数（0 表示只反思不重跑）
+  # Maximum replans (0 means reflect without rerunning) / 最大重规划次数（0 表示只反思、不重跑）
   maxReplan: 2
+  # Judge timeout in milliseconds / 评估超时（毫秒）
   judgeTimeoutMs: 20000
 
+# Code execution / 代码执行
 codeExecution:
+  # Workspace for code execution / 代码执行工作目录
   root: ./data/code-runs
-  # 留空按平台自动探测；npm run setup 会把虚拟环境解释器的绝对路径写在这里
+  # Python executable; blank enables automatic detection / Python 解释器；留空时自动探测
   pythonBin: ""
   sandbox:
-    # inprocess（默认，非安全边界） | container | podman
+    # inprocess (not a security boundary) | container | podman / 执行方式：inprocess（非安全边界）| container | podman
     backend: inprocess
+    # Container image / 容器镜像
     image: "python:3.12-slim"
+    # Optional seccomp profile / 可选的 seccomp 配置文件
     seccomp: ""
 
+# Daily token spending limits; 0 means unlimited / 每日 Token 预算；0 表示不限制
 tokenBudget:
   # Token 成本预算闸门，按日滚动；0 表示不限制（主题级可在主题配置的 budgetTokens 覆盖）
   userDaily: 0
   themeDaily: 0
 
 distributedLock:
-  # 多实例部署时使用；留空为单进程模式
+  # Redis URL for multi-instance locking; blank uses single-process mode / 多实例锁使用的 Redis URL；留空为单进程模式
   redisUrl: ""
 
 uploads:
+  # Maximum upload size in bytes / 单文件最大上传字节数
   maxBytes: 8388608
+  # Maximum files per session / 每个会话最多上传文件数
   maxFilesPerSession: 20
+  # Maximum total uploaded bytes per session / 每个会话累计上传字节数上限
   maxTotalBytesPerSession: 41943040
+  # Maximum rows accepted from an uploaded table / 上传表格最大行数
   maxTableRows: 50000
+  # Allowed file extensions / 允许的文件扩展名
   allowedExtensions:
     - csv
     - xls
     - xlsx
 
 datasource:
-  # 数据源密码的加密密钥；留空则自动生成到 data/.datasource-key
+  # Encryption key for data-source credentials; blank generates data/.datasource-key / 数据源凭据加密密钥；留空时自动生成到 data/.datasource-key
   secretKey: ""
 
 bootstrapDatasource:
-  # 接入真实 Doris：开启后启动会按下面的连接信息建数据源与数据集
+  # Optional Doris bootstrap; enabled creates the source and datasets on startup / 可选 Doris 初始化；开启后启动时创建数据源和数据集
   enabled: false
   host: ""
   port: 9030
@@ -113,7 +155,7 @@ bootstrapDatasource:
   salesTable: ""
   goodsTable: ""
 
-  # 内置演示数据（详见 config/demo/README.md）：开启后启动即建表、灌数并注册数据集
+  # Demo data: create tables, load rows, and register datasets on startup / 演示数据：启动时建表、灌数并注册数据集
   demo:
     enabled: true
     loadData: true
@@ -122,9 +164,9 @@ bootstrapDatasource:
     seed: 20261022
     startDate: 2024-11-01
     endDate: 2026-10-20
-    # 默认灌到平台 MySQL 数据源 platform_mysql（需 platformDatabase.backend=mysql）
+    # Default target is platform_mysql (requires MySQL platform database) / 默认写入 platform_mysql（要求平台数据库为 MySQL）
     datasourceCode: platform_mysql
-    # 想灌独立演示库时填这组
+    # Optional standalone demo database / 可选的独立演示数据库连接
     db:
       type: MYSQL
       host: ""

@@ -38,7 +38,9 @@ async function collectThemeSemantics({ theme, user, application, database }) {
     }
   }
   for (const indicatorId of theme?.indicatorIds ?? []) {
-    const indicator = database.localIndicators?.get?.(indicatorId);
+    const indicator = database.localIndicators?.getAsync
+      ? await database.localIndicators.getAsync(indicatorId)
+      : database.localIndicators?.get?.(indicatorId);
     const label = String(indicator?.bizName || indicator?.name || '').trim();
     if (label) {
       metricNames.push(label);

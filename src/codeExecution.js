@@ -58,7 +58,7 @@ const BLOCKED_PATTERNS = [
   /\b(?:mysql|mariadb|postgres(?:ql)?|doris|clickhouse|mongodb|redis|oracle|sqlserver|jdbc|odbc):\/\//i,
   /\b(?:pymysql|psycopg2?|sqlalchemy|pyodbc|sqlite3|MySQLdb|clickhouse_driver|pymongo|oracledb)\./i,
   /\bos\.(?:environ|getenv)\b/i,
-  /\b(?:DATASOURCE_SECRET_KEY|DORIS_BOOTSTRAP_PASSWORD|SUPERSONIC_TOKEN|API_KEY|DEEPSEEK_API_KEY)\b/,
+  /\b(?:DATASOURCE_SECRET_KEY|DORIS_BOOTSTRAP_PASSWORD|API_KEY|DEEPSEEK_API_KEY)\b/,
   /\b__import__\s*\(/i,
 ];
 

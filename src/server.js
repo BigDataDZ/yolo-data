@@ -71,16 +71,12 @@ function applyCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
 }
 
-export async function startServer(configOverride, indicatorClientOverride = null) {
-  const application = await createApplication(
-    configOverride,
-    indicatorClientOverride,
-  );
+export async function startServer(configOverride) {
+  const application = await createApplication(configOverride);
   await application.init();
   const {
     config,
     database,
-    indicatorClient,
     agent,
     workspace,
   } = application;
@@ -89,10 +85,6 @@ export async function startServer(configOverride, indicatorClientOverride = null
   // 注入 MCP 运行实例，供 /mcp 路由处理器在请求时取用。
   application.mcp = createMcpModule(application);
   const middleware = createMiddlewareRegistry();
-  const supersonicAvailable = () => (
-    application.getSupersonicEnabled()
-    && indicatorClient.mode !== 'unconfigured'
-  );
 
   // Shared request-scoped context. Middleware may enrich it (e.g. `user`);
   // handlers destructure only what they need, exactly as they did before the
@@ -101,12 +93,10 @@ export async function startServer(configOverride, indicatorClientOverride = null
     application,
     config,
     database,
-    indicatorClient,
     agent,
     workspace,
     uploads: application.uploads,
     router,
-    supersonicAvailable,
     renderMetrics,
     getRequestUser: (request, targetDatabase) => (
       getRequestUser(request, targetDatabase ?? database, config)

@@ -16,18 +16,6 @@ YOLO Data 把智能体、指标和业务数据集、权限及分析工作区连�
 - **从结果继续工作**：会话记忆帮助承接上下文；表格、图表、文件和代码分析结果可保留在工作区，方便下载、复查和后续追问。
 - **管理和复盘使用情况**：管理员可查看查询计划、数据集访问记录、模型调用、反馈和知识缺口，定位配置问题并持续改进。
 
-## 如何开始
-
-部署并完成初始化后，建议按下面顺序配置：
-
-1. **配置模型**：在“模型管理”中添加可用的 OpenAI 兼容模型，并选择平台或主题默认模型。
-2. **接入数据**：接入指标服务，或在“数据集管理”配置 MySQL、TiDB、Doris、PostgreSQL 数据源并同步字段。
-3. **整理业务语义**：为数据集字段设置业务名称、指标/维度/时间角色及聚合方式；也可以使用“智能识别”生成建议后由管理员确认。
-4. **配置智能体与权限**：按业务主题配置提示词、数据范围、模型、Skills 和用户授权。先用管理员账号验证，再授权给业务用户。
-5. **开始问数**：进入问数页面，选择主题后用自然语言提问；需要时继续追问或将结果保存到工作区。
-
-普通用户只会看到已授权的智能体和数据范围；具体可用能力取决于管理员的模型、数据与权限配置。
-
 ## 页面截图
 
 ![开始问数](docs/screenshots/query_index.png) 
@@ -49,13 +37,6 @@ YOLO Data 把智能体、指标和业务数据集、权限及分析工作区连�
 - **MCP 接入**：通过 Streamable HTTP `/mcp` 提供指标发现、权限读取、快照读取、查询解析和执行工具；查询遵循“先解析、再执行”。详见 [MCP 连接器](mcp-connector/README.md)。
 - **部署安全能力**：支持会话登录、提示注入清洗、每日 Token 预算，以及 Docker/Podman + seccomp 代码执行隔离。默认 `inprocess` 只适合可信环境；多租户部署应配置容器沙箱。
 
-## 业务规则与提示词设置
-
-提示词用于展示效果或结论能够按照业务要求自由定义；业务词、枚举映射、计算公式和默认口径应放在：
-
-- 主题提示词，参考docs/theme-prompts/sales-operation.md
-- 数据集字段说明
-- 默认值域配置
 
 
 ## 工作方式
@@ -77,78 +58,72 @@ flowchart LR
 ```
 
 
+## 如何开始
+
+部署并完成初始化后，建议按下面顺序配置：
+
+1. **配置模型**：在“模型管理”中添加可用的 OpenAI 兼容模型，并选择平台或主题默认模型。
+2. **接入数据**：接入指标服务，或在“数据集管理”配置 MySQL、TiDB、Doris、PostgreSQL 数据源并同步字段。
+3. **整理业务语义**：为数据集字段设置业务名称、指标/维度/时间角色及聚合方式；也可以使用“智能识别”生成建议后由管理员确认。
+4. **配置智能体与权限**：按业务主题配置提示词、数据范围、模型、Skills 和用户授权。先用管理员账号验证，再授权给业务用户。
+5. **开始问数**：进入问数页面，选择主题后用自然语言提问；需要时继续追问或将结果保存到工作区。
+
+普通用户只会看到已授权的智能体和数据范围；具体可用能力取决于管理员的模型、数据与权限配置。
+
+
+
+## 业务规则与提示词设置
+
+提示词用于展示效果或结论能够按照业务要求自由定义；业务词、枚举映射、计算公式和默认口径应放在：
+
+- 主题提示词，参考docs/theme-prompts/sales-operation.md
+- 数据集字段说明
+- 默认值域配置
+
+
+
 ## 环境要求
 
 - Node.js `>= 22.5`
 - 平台存储：SQLite（默认）或 MySQL；通过 `PLATFORM_DB_BACKEND` 选择。MySQL 模式还需配置 `PLATFORM_DB_HOST`、`PLATFORM_DB_PORT`、`PLATFORM_DB_NAME`、`PLATFORM_DB_USER` 和 `PLATFORM_DB_PASSWORD`。
 - npm 或 pnpm
-- Python 3：用于高级数据处理和文件生成。`npm run setup` 会自动创建 `.venv` 并安装 `pandas`、`openpyxl`
+- Python 3：用于高级数据处理和文件生成。`npm run setup` 会自动初始化环境
 - 或：Docker + Docker Compose，一条命令启动完整平台，无需本机 Node/Python（见 [Docker 一键部署](#docker-一键部署)）
 - 可选外部服务：
-  - 指标平台
   - Doris 或 MySQL 兼容业务数据库
   - DeepSeek 或其他 OpenAI 兼容模型服务
 
-## 快速开始
+## 快速部署
+
+### 方式一：启动脚本（Linux / Windows）
 
 ```bash
-# 克隆仓库
 git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
+./start.sh
+```
+Windows PowerShell 运行 `./start.ps1`。启动脚本会引导完成首次初始化，之后再次运行即可启动。
+
+### 方式二：Docker Compose
+
+```bash
 docker compose up -d --build
 ```
-```bash
-docker build -t yolo-data .
-docker run -d -p 8088:8088 -v yolo-data:/app/data --restart unless-stopped yolo-data
-```
 
-默认镜像包含 MySQL 兼容驱动、Python 3、`pandas` 和 `openpyxl`。PostgreSQL 需要在构建时启用可选的 `pg` 驱动：
+服务启动后访问 [http://localhost:8088/](http://localhost:8088/)。按需在 `yolo-conf.yaml` 中配置模型和数据源；首次登录后请修改默认口令。详细配置见下方配置说明。
 
-```bash
-# Compose（POSIX shell；PowerShell 先执行 $env:INSTALL_PG='true'）
-INSTALL_PG=true docker compose up -d --build
-# 或直接构建
-docker build --build-arg INSTALL_PG=true -t yolo-data .
-```
+PostgreSQL 数据源接入方式见 [PostgreSQL 接入文档](docs/postgresql.md)。
 
-`INSTALL_PG` 是构建参数，修改后需要重新构建镜像。Python 分析依赖会在镜像构建期校验，缺失时构建直接失败。
 
-SQLite 模式下，数据卷 `/app/data` 保存平台数据库、数据源加密密钥和分析产物；MySQL 模式下平台表保存在配置的 MySQL 实例中，数据卷仍保存加密密钥和分析产物。`docker compose down` 后重新启动会保留命名卷；`docker compose down -v` 会删除数据卷。备份时需同时备份所选平台数据库、数据卷及 `.datasource-key`，并妥善保管密钥。
+### 登录与会话
 
-`docker compose ps` 可查看容器健康状态，`docker compose logs yolo-data` 可查看启动日志。Compose 默认启用 `session` 登录，并且只绑定 `127.0.0.1`；局域网调试可显式设置 `AUTH_MODE=dev` 和 `HOST_BIND=0.0.0.0`，但不要直接暴露到公网。生产环境通过 HTTPS 反向代理访问，参见下方生产部署说明。
-
-### 本地启动
-
-本地初始化（会自动创建 Python `.venv` 并安装分析依赖）：
-
-```bash
-npm run setup          # 安装 Node/Python 依赖；项目虚拟环境路径由应用自动探测
-# 按需编辑 yolo-conf.yaml：模型密钥、指标平台、Doris 连接
-npm run dev            # 启动，默认 http://localhost:8088/
-```
-
-也可使用交互式启动脚本：Linux 运行 `bash start.sh`，Windows PowerShell 运行 `./start.ps1`。脚本会检查依赖，首次启动时引导初始化，之后直接启动服务。
-
-PostgreSQL 仅在使用 PostgreSQL 数据源时额外安装可选驱动 `pg`：
-
-```bash
-npm install pg
-```
-
-打开：
-
-```text
-http://localhost:8088/
-```
 | 用户名               | 显示名称  | 角色        | 默认口令         |
 | ----------------- | ----- | --------- | ------------ |
 | `admin`           | 平台管理员 | `ADMIN`   | `yolo123456` |
 | `east_manager`    | 区域经理  | `ANALYST` | `yolo123456` |
 | `channel_analyst` | 渠道分析员 | `ANALYST` | `yolo123456` |
 
-以上为首次初始化的示例账号。首次登录后请立即修改默认口令，并按实际需要创建账号与授权。
-
-### 登录与会话
+- 以上为首次初始化的示例账号。首次登录后请立即修改默认口令，并按实际需要创建账号与授权。
 
 - 角色分管理员与分析员：管理员管理平台，分析员只能查看已授权智能体并用其问数。
 
@@ -156,40 +131,14 @@ http://localhost:8088/
 
 ### 配置文件 `yolo-conf.yaml`
 
-仓库根目录的 `yolo-conf.yaml` 是**唯一的配置面**，按模块分组（`server` / `auth` / `platformDatabase` / `models` / `codeExecution` / `reflection` / `bootstrapDatasource` …），
-每个键旁边都有注释说明取值与含义。平台**不读取 `.env` 文件**。
-
-**优先级（从高到低）**：
-
-```
-真实环境变量（非空值）  >  yolo-conf.yaml  >  代码内置默认
-```
-
-也就是说 YAML 负责「结构与默认值」，**机密和部署差异用环境变量覆盖**（Docker Compose 的 `environment`、systemd 的 `EnvironmentFile`、shell `export`）。
-YAML 里填 `""` 或留空的键等同于「没写」，会继续由环境变量或内置默认决定。
-
-```bash
-# 调整结构与默认值：直接编辑 yolo-conf.yaml
-# 换一份配置：用 YOLO_CONF_FILE 指向别的文件（相对路径按项目根解析）
-YOLO_CONF_FILE=./config/yolo-conf.yaml npm start
-
-# 只在当前 shell 覆盖个别机密，不落盘
-export PLATFORM_DB_PASSWORD='...'
-```
-
-- **只认登记过的键**：映射关系见 `src/configFile.js` 的 `CONFIG_FILE_MAP`（YAML 路径 → 环境变量名，一对一）。写错或拼错的键不会静默失效，启动时会打印
-  `[config] yolo 配置里这些键不会生效（未登记或拼写错误）：...`。
-- **环境变量仍可覆盖**：Docker、CI 只需传环境变量，不需要改配置文件，读取语义与之前完全一致。
-- **数组写成 YAML 列表**（如 `uploads.allowedExtensions`），加载时会转成逗号分隔字符串，与对应的环境变量语义一致。
-- **从 `.env` 迁移**：旧的 `.env` 已不再被读取。把其中的键按 `CONFIG_FILE_MAP` 改写成 YAML 路径（如 `PLATFORM_DB_PASSWORD` → `platformDatabase.mysql.password`），
-  机密值建议改用环境变量提供，避免落进版本库。
+根目录的 `yolo-conf.yaml` 是配置文件，字段说明见文件内注释。
 
 ### OpenAI协议模型(推荐DeepSeek)
 
 - 智能体可以选择一个或多个模型，并指定默认模型。
 
 ### 业务数据集
-支持 MySQL、TiDB、Doris，以及 PostgreSQL 数据源（需安装可选驱动 `pg`，参见 [PostgreSQL 接入](docs/postgresql.md)）。查询由平台根据字段语义编译，模型不会直接提交原始 SQL。
+支持 MySQL、Doris、PostgreSQL以及TiDB数据源（需安装可选驱动 `pg`，参见 [PostgreSQL 接入](docs/postgresql.md)）。查询由平台根据字段语义编译，模型不会直接提交原始 SQL。
 
 #### 数据集智能识别
 
@@ -204,8 +153,8 @@ export PLATFORM_DB_PASSWORD='...'
 
 ### 内置演示数据（Demo）
 
-`config/demo/` 自带一套「生鲜 B2B 销售明细」演示数据（表 `ads_sale_detail`，80 个字段，默认 **5000 行 / 覆盖 2 年 / 8 个虚拟客户**）。
-开启开关后，服务启动时会依次完成**建表 → 灌数 → 注册数据源与数据集 → 绑定到所有主题**，装完即可问数，不需要先接真实业务库。
+`config/demo/` 自带一套「供应链销售明细」演示数据。
+开启开关后，服务启动时会依次完成Demo数据初始化。
 
 ```yaml
 # yolo-conf.yaml
@@ -215,22 +164,8 @@ bootstrapDatasource:
 ```
 
 - **数据落在哪个库**：默认复用平台 MySQL 数据源 `platform_mysql`（需 `platformDatabase.backend: mysql`）；
-  也可以用 `bootstrapDatasource.demo.db` 的 `type/host/port/database/user/password` 指向任意 MySQL（8.0+）或 Doris 演示库。
-- **幂等**：表已存在且有数据时只补注册数据集，不会重复写入；需要追加时显式设 `demo.appendToExisting: true`。
-- **失败不阻断启动**：连不上库只在启动日志里留一行 `[demo]` 警告，服务照常可用。
-- **其它开关**：`demo.rows`（默认 5000）、`demo.startDate` / `demo.endDate`（默认 `2024-11-01 ~ 2026-10-20`）、
-  `demo.seed`（确定性种子，同参数必得同一批数据）、`demo.loadData: false`（只注册数据集，不灌数）。
-  对应的环境变量形式（`DEMO_DATA_*` / `DEMO_DB_*`）同样可用，见 `src/configFile.js` 的 `CONFIG_FILE_MAP`。
-
-不想开开关也可以导出数据文件手动导入：
-
-```bash
-npm run demo:export -- --rows 5000
-# -> data/demo/ads_sale_detail.{csv,mysql.sql,doris.sql,ddl.sql}
-```
-
-演示数据自带金额口径闭合关系（`sale_amt = sale_qty × sale_price`、`profit = sale_amt − sale_cost`、
-未税金额与税金按 `tax_rate` 折算），可直接用来验证时间趋势、维度下钻与平台的数字自洽校验。
+  也可以用 `bootstrapDatasource.demo.db` 的 `type/host/port/database/user/password` 指向任意演示库。
+`。
 
 ## API 示例
 
@@ -262,8 +197,7 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 
 - `docker compose up -d` 默认使用 `AUTH_MODE=session` 且仅绑定 `127.0.0.1`。对外部署仍必须修改默认口令，并在 HTTPS 反向代理后运行；`NODE_ENV=production` 下直接用 HTTP 访问会因 Secure Cookie 导致登录失败。
 - 代码执行默认 `SANDBOX_BACKEND=inprocess`，这不是安全边界。不可信用户场景应配置 Docker/Podman 容器、seccomp、无网络和只读根文件系统。
-- 平台状态可选择 SQLite 或 MySQL（`PLATFORM_DB_BACKEND=sqlite|mysql`）；SQLite 适合单机/轻量部署，MySQL 适合希望将平台配置与业务服务统一运维的环境。PostgreSQL 作为业务数据源可用，不代表它可作为平台状态库。
-- `REFLECTION_ENABLED` 与 `REFLECTION_MAX_REPLAN` 控制执行后反思；`npm run eval` 或 `/api/eval` 可查看 L1/L2/L3 回归评测。
+- 平台状态可选择 SQLite 或 MySQL（`PLATFORM_DB_BACKEND=sqlite|mysql`）；SQLite 适合单机/轻量部署，MySQL 适合希望将平台配置与业务服务统一运维的环境。
 
 ## 相关文档
 
@@ -271,7 +205,6 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 - [长期记忆架构](docs/memory-architecture.md)
 - [PostgreSQL 接入](docs/postgresql.md)
 - [MCP 连接器](mcp-connector/README.md)
-- [P0 加固报告](P0-HARDENING-REPORT.md)
 
 ## 参与贡献
 

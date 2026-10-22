@@ -46,6 +46,49 @@ test('standard SKILL.md metadata and phase guidance are parsed', () => {
   assert.match(skill.phaseGuides.POST_EXECUTE, /Recompute/);
 });
 
+test('async skill planning and result validation never use synchronous platform lookups', async () => {
+  const fullSkill = {
+    code: 'external:async-audit',
+    name: 'Async audit',
+    source: 'SKILL_MD',
+    phaseTags: ['PRE_PLAN', 'PLAN', 'POST_EXECUTE'],
+    content: [
+      '# Audit',
+      '## Audit the data',
+      '- Verify the source and row grain.',
+      '## Workflow',
+      '- Make the plan reproducible.',
+      '## Validate the result',
+      '- Recheck every reported number.',
+    ].join('\n'),
+  };
+  const database = {
+    isAsyncPlatformStore: true,
+    getSkill: () => { throw new Error('sync skill lookup must not be called'); },
+    getSkillAsync: async (code) => code === fullSkill.code ? fullSkill : null,
+  };
+  const registry = new SkillRegistry(database);
+  const selected = [{ ...fullSkill, content: '' }];
+
+  const audit = await registry.auditPlanningContextAsync({
+    skills: selected,
+    question: '本月销售额',
+    theme: { name: '经营总览' },
+  });
+  assert.equal(audit.skillCount, 1);
+  assert.match(audit.guidance[0].guidance, /source and row grain/i);
+  const planGuidance = await registry.buildPhaseInstructionsAsync(selected, 'PLAN');
+  assert.match(planGuidance[0].guidance, /reproducible/i);
+  const validation = await registry.validateQueryResultAsync({
+    skills: selected,
+    question: '本月销售额',
+    semanticParse: { queryContract: {} },
+    dataset: { name: 'sales' },
+    data: { rows: [{ amount: 1 }], columns: [{ name: 'amount' }] },
+  });
+  assert.match(validation.guidance[0].guidance, /reported number/i);
+});
+
 test('skill registry syncs SKILL.md files and binds them per theme', async () => {
   const root = createSkillDirectory();
   const database = new PlatformDatabase(

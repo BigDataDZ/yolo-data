@@ -81,7 +81,7 @@ export function registerExecuteQuery(server, ctx) {
       let dataset = null;
       if (record.sourceType === 'INDICATOR') {
         indicator = record.indicatorId
-          ? await agent.indicatorClient.getIndicator(record.indicatorId).catch(() => null)
+          ? await agent.indicatorService.getIndicator(record.indicatorId).catch(() => null)
           : null;
       } else {
         dataset = database.getBusinessDatasetAsync
@@ -96,7 +96,7 @@ export function registerExecuteQuery(server, ctx) {
       let result;
       if (record.sourceType === 'INDICATOR') {
         const window = (contract.timeWindows && contract.timeWindows[0]) || contract.dateInfo;
-        result = await agent.indicatorClient.queryIndicator({
+        result = await agent.indicatorService.queryIndicator({
           metricNames: contract.metrics ?? [],
           dimensionNames: contract.dimensions ?? [],
           filters: (contract.filters ?? []).map((f) => ({

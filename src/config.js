@@ -85,16 +85,6 @@ export function loadConfig(env = process.env) {
         initSqlPath: String(env.PLATFORM_DB_INIT_SQL ?? './config/platform/mysql-init.sql').trim(),
       },
     },
-    supersonic: {
-      baseUrl: normalizeBaseUrl(env.SUPERSONIC_BASE_URL),
-      token: String(env.SUPERSONIC_TOKEN ?? '').trim(),
-      appKey: String(env.SUPERSONIC_APP_KEY ?? '').trim(),
-      serviceClientId: String(env.SUPERSONIC_SERVICE_CLIENT_ID ?? '').trim(),
-      serviceClientSecret: String(
-        env.SUPERSONIC_SERVICE_CLIENT_SECRET ?? '',
-      ).trim(),
-      timeoutMs: readInt(env.SUPERSONIC_TIMEOUT_MS, 30_000),
-    },
     deepseek: {
       // 通用环境变量优先；保留旧变量作为兼容回退。
       baseUrl: normalizeBaseUrl(env.API_BASE_URL || env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1'),

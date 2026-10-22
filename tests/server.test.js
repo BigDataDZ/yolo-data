@@ -12,7 +12,7 @@ function testConfig(directory) {
     projectRoot: process.cwd(),
     port: 0,
     dbPath: path.join(directory, 'test.db'),
-    supersonic: {
+    本地指标目录: {
       baseUrl: '',
       token: '',
       timeoutMs: 5_000,
@@ -196,7 +196,7 @@ test('theme semantic value API persists field switches independently per agent',
   }
 });
 
-test('system settings can disable Supersonic and switch the agent to direct LLM mode', async () => {
+test('system settings can disable 本地指标目录 and switch the agent to direct LLM mode', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-settings-'));
   const { server, application } = await startServer(testConfig(directory), new FakeIndicatorClient());
   const address = server.address();
@@ -212,16 +212,16 @@ test('system settings can disable Supersonic and switch the agent to direct LLM 
     });
     const settings = await settingsResponse.json();
     assert.equal(settingsResponse.status, 200);
-    assert.equal(settings.supersonic.enabled, true);
+    assert.equal(settings.本地指标目录.enabled, true);
 
-    const disabledResponse = await fetch(`${baseUrl}/api/settings/supersonic`, {
+    const disabledResponse = await fetch(`${baseUrl}/api/settings/本地指标目录`, {
       method: 'PUT',
       headers: adminHeaders,
       body: JSON.stringify({ enabled: false }),
     });
     const disabled = await disabledResponse.json();
     assert.equal(disabledResponse.status, 200);
-    assert.equal(disabled.supersonic.enabled, false);
+    assert.equal(disabled.本地指标目录.enabled, false);
     assert.equal(disabled.health.source.mode, 'direct-llm');
 
     const indicatorsResponse = await fetch(`${baseUrl}/api/indicators`, {
@@ -231,19 +231,19 @@ test('system settings can disable Supersonic and switch the agent to direct LLM 
     assert.equal(indicators.disabled, true);
     assert.deepEqual(indicators.items, []);
     assert.equal(
-      application.database.getPlatformSetting('supersonic.enabled').value,
+      application.database.getPlatformSetting('本地指标目录.enabled').value,
       false,
     );
 
-    const enabledResponse = await fetch(`${baseUrl}/api/settings/supersonic`, {
+    const enabledResponse = await fetch(`${baseUrl}/api/settings/本地指标目录`, {
       method: 'PUT',
       headers: adminHeaders,
       body: JSON.stringify({ enabled: true }),
     });
     const enabled = await enabledResponse.json();
     assert.equal(enabledResponse.status, 200);
-    assert.equal(enabled.supersonic.enabled, true);
-    assert.equal(enabled.health.source.mode, 'supersonic');
+    assert.equal(enabled.本地指标目录.enabled, true);
+    assert.equal(enabled.health.source.mode, '本地指标目录');
   } finally {
     await new Promise((resolve) => server.close(resolve));
     await application.database.closeAsync();

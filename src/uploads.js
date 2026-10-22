@@ -3,6 +3,7 @@
 // 只做通用的格式校验与解析，不包含任何业务口径或指标名。
 
 import { createHash } from 'node:crypto';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 import { profileDataset } from './datasetProfiler.js';
 import { getPlatformLexicon } from './businessLexicon.js';
 import { buildTable, decodeBuffer, parseTabularContent } from './fileParsing.js';
@@ -330,9 +331,7 @@ export class UploadService {
 
   async performUploadAsync({ userId, sessionId, name, contentBase64 }) {
     if (!this.workspace) throw uploadError('workspace service is not configured', 500, 'UPLOAD_UNAVAILABLE');
-    const session = this.database.getChatSessionAsync
-      ? await this.database.getChatSessionAsync(Number(sessionId), userId)
-      : this.database.getChatSession(Number(sessionId), userId);
+    const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', Number(sessionId), userId);
     if (!session) throw uploadError('上传前需要先建立会话', 404, 'UPLOAD_SESSION_REQUIRED');
     const { safeName, extension, buffer } = this.validate({ name, contentBase64 });
     const workspaceRecord = this.workspace.ensureForSessionAsync

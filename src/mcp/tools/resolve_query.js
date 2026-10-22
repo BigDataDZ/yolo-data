@@ -65,7 +65,7 @@ export function registerResolveQuery(server, ctx) {
       let dataset = null;
       if (args.sourceType === 'INDICATOR') {
         indicator = args.indicatorId
-          ? await agent.indicatorClient.getIndicator(args.indicatorId).catch(() => null)
+          ? await agent.indicatorService.getIndicator(args.indicatorId).catch(() => null)
           : null;
       } else {
         dataset = database.getBusinessDatasetAsync

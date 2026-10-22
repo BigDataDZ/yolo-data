@@ -110,6 +110,10 @@ test('configured MySQL backend connects and executes its selected init script', 
         calls.push(['initialize', scriptPath]);
         return 42;
       },
+      execute: async (sql) => {
+        calls.push(['execute', sql]);
+        return { insertId: calls.length, affectedRows: 1 };
+      },
       close: async () => calls.push(['close']),
     }),
   });
@@ -117,10 +121,19 @@ test('configured MySQL backend connects and executes its selected init script', 
   assert.equal(initialized.statementCount, 42);
   assert.equal(typeof initialized.database.listBusinessDatasetsAsync, 'function');
   assert.equal(typeof initialized.database.addAuditLogAsync, 'function');
+  assert.equal(typeof initialized.database.createChatSessionAsync, 'function');
+  assert.equal(typeof initialized.database.getChatSessionAsync, 'function');
+  assert.equal(typeof initialized.database.listChatMessagesAsync, 'function');
+  assert.equal(typeof initialized.database.appendChatMessageAsync, 'function');
+  assert.equal(typeof initialized.database.saveConversationAsync, 'function');
   assert.deepEqual(calls, [
     ['connect', 'mysql-test'],
     ['initialize', 'config/platform/mysql-init.sql'],
   ]);
+  const savedMessage = await initialized.database.appendChatMessageAsync({ sessionId: 7, userId: 3, role: 'user', content: 'question' });
+  assert.equal(savedMessage.id, calls.length - 1);
+  const conversationId = await initialized.database.saveConversationAsync({ userId: 3, themeId: 2, question: 'question', answer: {} });
+  assert.equal(typeof conversationId, 'number');
   await initialized.close();
   assert.deepEqual(calls.at(-1), ['close']);
 });
