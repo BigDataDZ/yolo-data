@@ -93,6 +93,11 @@ export class BusinessDatasetService {
     return this.database.dataSourceRepository.getDataSourceAsync(sourceId);
   }
 
+  async getDataSourceByCodeAsync(code) {
+    if (this.database.isInMemory) return this.database.getDataSourceByCode(code);
+    return this.database.dataSourceRepository.getDataSourceByCodeAsync(code);
+  }
+
   async listDatasetsAsync({ userId = null, includeDisabled = false } = {}) {
     if (this.database.isInMemory) return this.database.listBusinessDatasets({ userId, includeDisabled });
     return this.database.listBusinessDatasetsAsync({ userId, includeDisabled });
@@ -913,7 +918,16 @@ export class BusinessDatasetService {
     }
   }
 
-  async bootstrap(config) {
+  async bootstrap(config = {}) {
+    // 演示数据与「接真实 Doris」互斥：开了 demo 就不再要求 DORIS_BOOTSTRAP_* 连接信息。
+    if (config?.demo?.enabled) {
+      const { bootstrapDemoDatasets } = await import('./demo/demoBootstrap.js');
+      return bootstrapDemoDatasets({
+        demo: config.demo,
+        businessDatasets: this,
+        database: this.database,
+      });
+    }
     if (!config.enabled || !config.host || !config.username || !config.password) {
       return null;
     }

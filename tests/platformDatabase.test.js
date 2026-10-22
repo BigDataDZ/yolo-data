@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { PlatformDatabase } from '../src/database.js';
+import { ensurePlatformMysqlDatasource } from '../src/application.js';
 import { createKnexPlatformStore } from '../src/knexPlatformStore.js';
 import {
   createPlatformDatabase,
@@ -122,6 +123,38 @@ test('configured MySQL backend connects and executes its selected init script', 
   ]);
   await initialized.close();
   assert.deepEqual(calls.at(-1), ['close']);
+});
+
+test('PLATFORM_DB MySQL connection is initialized as an enabled read-only dataset datasource', async () => {
+  const payloads = [];
+  const service = {
+    getDataSourceByCodeAsync: async () => null,
+    saveDataSourceAsync: async (payload) => { payloads.push(payload); return payload; },
+  };
+  const source = await ensurePlatformMysqlDatasource({
+    backend: 'mysql',
+    mysql: { host: 'db.example', port: 3307, database: 'analytics', user: 'reader', password: 'secret' },
+    businessDatasets: service,
+  });
+  assert.equal(source.code, 'platform_mysql');
+  assert.equal(payloads.length, 1);
+  assert.deepEqual(payloads[0], {
+    code: 'platform_mysql', name: '平台 MySQL 数据源', dbType: 'MYSQL', host: 'db.example', port: 3307,
+    databaseName: 'analytics', username: 'reader', password: 'secret', status: 1,
+    options: { readonly: true, maxRows: 1000, queryTimeoutMs: 20000 },
+  });
+});
+
+test('PLATFORM_DB datasource seeding is skipped for SQLite and never overwrites an existing source', async () => {
+  let saves = 0;
+  const existing = { code: 'platform_mysql', host: 'custom-host' };
+  const service = {
+    getDataSourceByCodeAsync: async () => existing,
+    saveDataSourceAsync: async () => { saves += 1; },
+  };
+  assert.equal(await ensurePlatformMysqlDatasource({ backend: 'sqlite', mysql: { host: 'x', database: 'x', user: 'x' }, businessDatasets: service }), null);
+  assert.equal(await ensurePlatformMysqlDatasource({ backend: 'mysql', mysql: { host: 'x', database: 'x', user: 'x' }, businessDatasets: service }), existing);
+  assert.equal(saves, 0);
 });
 
 test('mysql platform backend fails clearly until the async store migration is enabled', () => {

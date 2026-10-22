@@ -32,6 +32,26 @@ import { describeIndicatorSource } from './indicatorSource.js';
 import { assertGateCoverage } from './gateRegistry.js';
 import { STAGE_DEFINITIONS } from './workflow.js';
 
+export async function ensurePlatformMysqlDatasource({ backend, mysql = {}, businessDatasets }) {
+  if (String(backend ?? '').toLowerCase() !== 'mysql'
+    || !mysql.host || !mysql.database || !mysql.user) return null;
+  const code = 'platform_mysql';
+  const existing = await businessDatasets.getDataSourceByCodeAsync(code);
+  if (existing) return existing;
+  return businessDatasets.saveDataSourceAsync({
+    code,
+    name: '平台 MySQL 数据源',
+    dbType: 'MYSQL',
+    host: mysql.host,
+    port: mysql.port ?? 3306,
+    databaseName: mysql.database,
+    username: mysql.user,
+    password: mysql.password ?? '',
+    status: 1,
+    options: { readonly: true, maxRows: 1000, queryTimeoutMs: 20_000 },
+  });
+}
+
 export async function createApplication(config = loadConfig(), indicatorClientOverride = null) {
   resolveAuthMode(config);
   const platformDatabaseConfig = {
@@ -120,6 +140,11 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     database,
     crypto: datasourceCrypto,
     config,
+  });
+  await ensurePlatformMysqlDatasource({
+    backend: platformDatabaseConfig.backend,
+    mysql: platformDatabaseConfig.mysql,
+    businessDatasets,
   });
   const harnessFactory = new HarnessFactory(
     config.deepseek,

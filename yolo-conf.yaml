@@ -1,0 +1,134 @@
+# YOLO Data conf
+server:
+  port: 8088
+  # 留空按鉴权模式取默认：dev 只监听 127.0.0.1，session 监听 0.0.0.0
+  host: ""
+
+auth:
+  # dev（内网体验，x-user-id 直连） | session（强制登录）
+  mode: ""
+  sessionTtlHours: 12
+  # 留空：NODE_ENV=production 时强制 true
+  secureCookies: ""
+  # 初始化内置账号时写入的默认口令；留空用 yolo123456。机密：建议用环境变量覆盖
+  defaultUserPassword: ""
+  # 预留项：填写后不会启用 SSO
+  oidc:
+    issuer: ""
+    clientId: ""
+    audience: ""
+    jwksUri: ""
+
+platformDatabase:
+  # sqlite | mysql
+  backend: mysql
+  path: ./data/platform.db
+  # 首次启动是否写入安装包预置资源（用户/主题/模型模板等）
+  bootstrapResources: true
+  mysql:
+    host: "10.0.76.148"
+    port: 3306
+    database: yolo-data
+    user: datagrouptest
+    password: "OUl2u82p83$#2"
+    charset: utf8mb4
+    initialize: true
+    initSqlPath: ./config/platform/mysql-init.sql
+
+skills:
+  # 额外技能目录，留空用默认<install-path>/skills 
+  directories: []
+
+models:
+  baseUrl: https://api-inference.modelscope.cn/v1
+  # 机密：留空走本地规则（local-rule），填了才调用真实大模型
+  apiKey: "ms-2f3dba7d-22c6-47e6-9dee-d6edbfa844b5"
+  model: deepseek-ai/DeepSeek-V4.1-Flash-1017
+  temperature: 0
+  maxTokens: 0
+  timeoutMs: 180000
+  maxToolRounds: 12
+
+chat:
+  memoryMessageLimit: 20
+
+userMemory:
+  autoConsolidateAt: 8
+  compactRatio: 0.8
+  maintenanceIntervalMs: 900000
+  maintenanceStartupDelayMs: 60000
+  maintenanceBatchSize: 20
+  preInject:
+    enabled: true
+    topN: 6
+    maxChars: 1200
+
+reflection:
+  enabled: true
+  # 换策略重规划的最大次数（0 表示只反思不重跑）
+  maxReplan: 2
+  judgeTimeoutMs: 20000
+
+codeExecution:
+  root: ./data/code-runs
+  # 留空按平台自动探测；npm run setup 会把虚拟环境解释器的绝对路径写在这里
+  pythonBin: ""
+  sandbox:
+    # inprocess（默认，非安全边界） | container | podman
+    backend: inprocess
+    image: "python:3.12-slim"
+    seccomp: ""
+
+tokenBudget:
+  # Token 成本预算闸门，按日滚动；0 表示不限制（主题级可在主题配置的 budgetTokens 覆盖）
+  userDaily: 0
+  themeDaily: 0
+
+distributedLock:
+  # 多实例部署时使用；留空为单进程模式
+  redisUrl: ""
+
+uploads:
+  maxBytes: 8388608
+  maxFilesPerSession: 20
+  maxTotalBytesPerSession: 41943040
+  maxTableRows: 50000
+  allowedExtensions:
+    - csv
+    - xls
+    - xlsx
+
+datasource:
+  # 数据源密码的加密密钥；留空则自动生成到 data/.datasource-key
+  secretKey: ""
+
+bootstrapDatasource:
+  # 接入真实 Doris：开启后启动会按下面的连接信息建数据源与数据集
+  enabled: false
+  host: ""
+  port: 9030
+  username: ""
+  password: ""
+  database: ""
+  salesTable: ""
+  goodsTable: ""
+
+  # 内置演示数据（详见 config/demo/README.md）：开启后启动即建表、灌数并注册数据集
+  demo:
+    enabled: true
+    loadData: true
+    appendToExisting: false
+    rows: 5000
+    seed: 20261022
+    startDate: 2024-11-01
+    endDate: 2026-10-20
+    # 默认灌到平台 MySQL 数据源 platform_mysql（需 platformDatabase.backend=mysql）
+    datasourceCode: platform_mysql
+    # 想灌独立演示库时填这组
+    db:
+      type: MYSQL
+      host: ""
+      port: 3306
+      database: ""
+      user: ""
+      password: ""

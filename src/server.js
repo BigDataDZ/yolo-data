@@ -192,7 +192,8 @@ export async function startServer(configOverride, indicatorClientOverride = null
   };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1]
+  && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
   startServer()
     .then(async ({ url, application }) => {
       const health = await application.currentHealth();

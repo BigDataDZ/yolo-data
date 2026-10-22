@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
+import { loadConfig } from '../src/config.js';
 
-const port = Number(process.env.PORT || 8088);
-const host = process.env.HOST || '127.0.0.1';
+// 端口/监听地址以配置面为准（yolo-conf.yaml + 环境变量），不再假设默认值。
+const config = loadConfig();
+const port = config.port;
+const host = config.host;
 
 async function inspectExistingService() {
   try {

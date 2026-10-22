@@ -2,31 +2,11 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readPythonBin, writePythonBin } from './confFileEdit.mjs';
 
 const VENV_DIRECTORY = '.venv';
 const REQUIREMENTS_FILE = 'requirements.txt';
 const STAMP_FILE = '.yolo-analysis-requirements';
-
-function readEnvValue(envPath, key) {
-  if (!fs.existsSync(envPath)) {
-    return null;
-  }
-  const match = fs.readFileSync(envPath, 'utf8')
-    .split('\n')
-    .map((line) => line.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*)$`)))
-    .find(Boolean);
-  return match ? match[1].trim() : null;
-}
-
-function writeEnvValue(envPath, key, value) {
-  const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
-  const line = `${key}=${value}`;
-  const pattern = new RegExp(`^\\s*${key}\\s*=.*$`, 'm');
-  const next = pattern.test(text)
-    ? text.replace(pattern, line)
-    : `${text.replace(/\n*$/, '\n')}${line}\n`;
-  fs.writeFileSync(envPath, next, 'utf8');
-}
 
 function canRunPython(bin, args = ['-c', 'print(1)']) {
   if (!bin) {
@@ -42,8 +22,8 @@ function venvPythonPath(projectRoot) {
     : path.join(projectRoot, VENV_DIRECTORY, 'bin', 'python');
 }
 
-function resolveBasePython(envPath) {
-  const configured = process.env.PYTHON_BIN || readEnvValue(envPath, 'PYTHON_BIN');
+function resolveBasePython(confPath) {
+  const configured = process.env.PYTHON_BIN || readPythonBin(confPath);
   const candidates = [
     configured,
     process.platform === 'win32' ? 'python' : 'python3',
@@ -99,7 +79,7 @@ function installRequirements(projectRoot, pythonBin, requirementsPath, onInfo) {
   }
 }
 
-export function ensurePythonAnalysisRuntime({ projectRoot, envPath, onInfo = () => {} }) {
+export function ensurePythonAnalysisRuntime({ projectRoot, confPath, onInfo = () => {} }) {
   const requirementsPath = path.join(projectRoot, REQUIREMENTS_FILE);
   if (!fs.existsSync(requirementsPath)) {
     throw new Error(`缺少 ${REQUIREMENTS_FILE}，无法初始化 Python 分析依赖。`);
@@ -107,7 +87,7 @@ export function ensurePythonAnalysisRuntime({ projectRoot, envPath, onInfo = () 
   const venvPath = path.join(projectRoot, VENV_DIRECTORY);
   const pythonBin = venvPythonPath(projectRoot);
   if (!canRunPython(pythonBin)) {
-    const basePython = resolveBasePython(envPath);
+    const basePython = resolveBasePython(confPath);
     if (!basePython) {
       throw new Error(
         '未找到可用的 Python 3 解释器。Python 分析能力为完整安装必选项，'
@@ -133,7 +113,9 @@ export function ensurePythonAnalysisRuntime({ projectRoot, envPath, onInfo = () 
   if (!hasAnalysisDependencies(pythonBin)) {
     throw new Error('pandas / openpyxl 安装后仍无法导入，请检查虚拟环境。');
   }
-  writeEnvValue(envPath, 'PYTHON_BIN', pythonBin);
+  if (!writePythonBin(confPath, pythonBin)) {
+    onInfo(`未能写入 yolo-conf.yaml，请手动设置 codeExecution.pythonBin: ${pythonBin}`);
+  }
   return {
     pythonBin,
     version: pythonVersion(pythonBin),

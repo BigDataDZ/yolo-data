@@ -17,7 +17,8 @@
     "lint": "node scripts/check-architecture.mjs",
     "lint:baseline": "node scripts/check-architecture.mjs --baseline",
     "eval": "node scripts/run-eval.mjs",
-    "smoke:query": "node scripts/run-query-smoke.mjs"
+    "smoke:query": "node scripts/run-query-smoke.mjs",
+    "demo:export": "node scripts/demo-export.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
@@ -25,6 +26,7 @@
     "knex": "^3.3.0",
     "mysql2": "^3.24.5",
     "sqlite3": "^6.0.1",
+    "yaml": "^2.9.1",
     "zod": "^3.23.0"
   }
 }

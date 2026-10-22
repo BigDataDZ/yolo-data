@@ -4,16 +4,16 @@
 //   1. checks the Node.js floor
 //   2. installs dependencies, including the mysql2 driver used by
 //      MySQL/Doris data sources
-//   3. creates .env from .env.example when it is missing
+//   3. verifies that the yolo-conf.yaml config surface is present
 //   4. verifies that mysql2 actually loads
 //
 // Dependency-free on purpose so it can run before `npm install`.
 
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensurePythonAnalysisRuntime } from './python-setup.mjs';
+import { resolveConfPath } from './confFileEdit.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIN_NODE_MAJOR = 22;
@@ -51,19 +51,14 @@ function installDependencies() {
   ok('依赖已安装');
 }
 
-function ensureEnvFile() {
-  const envPath = path.join(projectRoot, '.env');
-  const examplePath = path.join(projectRoot, '.env.example');
-  if (fs.existsSync(envPath)) {
-    ok('.env 已存在（保持不变）');
-    return;
+function ensureConfigFile() {
+  const confPath = resolveConfPath(projectRoot);
+  if (confPath) {
+    ok(`${path.basename(confPath)} 已就绪（配置面）`);
+    return confPath;
   }
-  if (!fs.existsSync(examplePath)) {
-    warn('未找到 .env.example，跳过配置文件生成');
-    return;
-  }
-  fs.copyFileSync(examplePath, envPath);
-  ok('已从 .env.example 生成 .env（请按需填写密钥）');
+  warn('未找到 yolo-conf.yaml：平台将只使用代码内置默认值与环境变量');
+  return null;
 }
 
 async function verifyMysqlDriver() {
@@ -81,12 +76,12 @@ async function verifyMysqlDriver() {
   }
 }
 
-// Python 分析环境是完整安装的一部分：自动创建 .venv、安装依赖并写入 PYTHON_BIN。
-function setupPythonRuntime() {
+// Python 分析环境是完整安装的一部分：自动创建 .venv、安装依赖并写回 codeExecution.pythonBin。
+function setupPythonRuntime(confPath) {
   try {
     const runtime = ensurePythonAnalysisRuntime({
       projectRoot,
-      envPath: path.join(projectRoot, '.env'),
+      confPath,
       onInfo: info,
     });
     ok(`Python 分析环境就绪（${runtime.pythonBin} ${runtime.version ?? ''}）`.trim());
@@ -98,10 +93,10 @@ function setupPythonRuntime() {
 console.log('\nYOLO Data 环境初始化\n');
 assertNodeVersion();
 installDependencies();
-ensureEnvFile();
+const confPath = ensureConfigFile();
 await verifyMysqlDriver();
-setupPythonRuntime();
+setupPythonRuntime(confPath);
 
 console.log('\n完成。下一步：');
-console.log('  1. 编辑 .env 配置 API_KEY / SUPERSONIC_* / Doris 连接');
+console.log('  1. 编辑 yolo-conf.yaml 配置模型密钥、指标平台、Doris 连接（机密建议用环境变量覆盖）');
 console.log('  2. npm run dev   然后打开 http://localhost:8088/\n');

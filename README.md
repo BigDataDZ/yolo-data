@@ -122,8 +122,8 @@ SQLite 模式下，数据卷 `/app/data` 保存平台数据库、数据源加密
 本地初始化（会自动创建 Python `.venv` 并安装分析依赖）：
 
 ```bash
-npm run setup          # 安装 Node/Python 依赖并生成 .env
-# 按需编辑 .env 中的模型密钥、指标平台、Doris 连接
+npm run setup          # 安装 Node/Python 依赖，并把解释器路径写回 yolo-conf.yaml
+# 按需编辑 yolo-conf.yaml：模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
 ```
 
@@ -152,6 +152,36 @@ http://localhost:8088/
 
 ## 配置说明
 
+### 配置文件 `yolo-conf.yaml`
+
+仓库根目录的 `yolo-conf.yaml` 是**唯一的配置面**，按模块分组（`server` / `auth` / `platformDatabase` / `models` / `codeExecution` / `reflection` / `bootstrapDatasource` …），
+每个键旁边都有注释说明取值与含义。平台**不读取 `.env` 文件**。
+
+**优先级（从高到低）**：
+
+```
+真实环境变量（非空值）  >  yolo-conf.yaml  >  代码内置默认
+```
+
+也就是说 YAML 负责「结构与默认值」，**机密和部署差异用环境变量覆盖**（Docker Compose 的 `environment`、systemd 的 `EnvironmentFile`、shell `export`）。
+YAML 里填 `""` 或留空的键等同于「没写」，会继续由环境变量或内置默认决定。
+
+```bash
+# 调整结构与默认值：直接编辑 yolo-conf.yaml
+# 换一份配置：用 YOLO_CONF_FILE 指向别的文件（相对路径按项目根解析）
+YOLO_CONF_FILE=./config/yolo-conf.yaml npm start
+
+# 只在当前 shell 覆盖个别机密，不落盘
+export PLATFORM_DB_PASSWORD='...'
+```
+
+- **只认登记过的键**：映射关系见 `src/configFile.js` 的 `CONFIG_FILE_MAP`（YAML 路径 → 环境变量名，一对一）。写错或拼错的键不会静默失效，启动时会打印
+  `[config] yolo 配置里这些键不会生效（未登记或拼写错误）：...`。
+- **环境变量仍可覆盖**：Docker、CI 只需传环境变量，不需要改配置文件，读取语义与之前完全一致。
+- **数组写成 YAML 列表**（如 `uploads.allowedExtensions`），加载时会转成逗号分隔字符串，与对应的环境变量语义一致。
+- **从 `.env` 迁移**：旧的 `.env` 已不再被读取。把其中的键按 `CONFIG_FILE_MAP` 改写成 YAML 路径（如 `PLATFORM_DB_PASSWORD` → `platformDatabase.mysql.password`），
+  机密值建议改用环境变量提供，避免落进版本库。
+
 ### OpenAI协议模型(推荐DeepSeek)
 
 - 智能体可以选择一个或多个模型，并指定默认模型。
@@ -169,6 +199,36 @@ http://localhost:8088/
 「字段」弹窗支持逐个字段启用/禁用，**默认全部启用**。数据集列表与「智能体 → 数据范围」共用同一入口，  
 两边修改的是同一份配置。agent 与查询链路统一按启用读取字段，禁用字段不可作为维度/指标/时间字段或筛选条件。  
 「同步结构」会保留禁用状态。
+
+### 内置演示数据（Demo）
+
+`config/demo/` 自带一套「生鲜 B2B 销售明细」演示数据（表 `ads_sale_detail`，80 个字段，默认 **5000 行 / 覆盖 2 年 / 8 个虚拟客户**）。
+开启开关后，服务启动时会依次完成**建表 → 灌数 → 注册数据源与数据集 → 绑定到所有主题**，装完即可问数，不需要先接真实业务库。
+
+```yaml
+# yolo-conf.yaml
+bootstrapDatasource:
+  demo:
+    enabled: true
+```
+
+- **数据落在哪个库**：默认复用平台 MySQL 数据源 `platform_mysql`（需 `platformDatabase.backend: mysql`）；
+  也可以用 `bootstrapDatasource.demo.db` 的 `type/host/port/database/user/password` 指向任意 MySQL（8.0+）或 Doris 演示库。
+- **幂等**：表已存在且有数据时只补注册数据集，不会重复写入；需要追加时显式设 `demo.appendToExisting: true`。
+- **失败不阻断启动**：连不上库只在启动日志里留一行 `[demo]` 警告，服务照常可用。
+- **其它开关**：`demo.rows`（默认 5000）、`demo.startDate` / `demo.endDate`（默认 `2024-11-01 ~ 2026-10-20`）、
+  `demo.seed`（确定性种子，同参数必得同一批数据）、`demo.loadData: false`（只注册数据集，不灌数）。
+  对应的环境变量形式（`DEMO_DATA_*` / `DEMO_DB_*`）同样可用，见 `src/configFile.js` 的 `CONFIG_FILE_MAP`。
+
+不想开开关也可以导出数据文件手动导入：
+
+```bash
+npm run demo:export -- --rows 5000
+# -> data/demo/ads_sale_detail.{csv,mysql.sql,doris.sql,ddl.sql}
+```
+
+演示数据自带金额口径闭合关系（`sale_amt = sale_qty × sale_price`、`profit = sale_amt − sale_cost`、
+未税金额与税金按 `tax_rate` 折算），可直接用来验证时间趋势、维度下钻与平台的数字自洽校验。
 
 ## API 示例
 

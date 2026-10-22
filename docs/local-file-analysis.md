@@ -78,7 +78,7 @@
   - 需要确认的上下文预算：该处硬编码 `.slice(0, 12)`，上传文件会与查询结果竞争这 12 个名额，需约定"最新上传优先"或单独统计文件数。
   - 系统提示新增文件治理条款（见 §4.4）
   - `list_workspace_artifacts` 返回值带上 profile，让模型知道"有哪些列可用"
-- `src/config.js` + `.env.example`：`PYTHON_BIN=python3`、`UPLOAD_MAX_BYTES`、`UPLOAD_ALLOWED_EXTENSIONS`
+- `src/config.js` + `yolo-conf.yaml`（`codeExecution.pythonBin`）：`UPLOAD_MAX_BYTES`、`UPLOAD_ALLOWED_EXTENSIONS`
 
 **不新增 LLM 工具**（降低改动面）：文件清单/预览复用 `list_workspace_artifacts`，计算统一走 `execute_analysis_code`（其 `inputArtifactIds` 同时接受上传文件和查询结果产物）。
 

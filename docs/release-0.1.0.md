@@ -97,10 +97,11 @@ npm install
 npm run setup
 ```
 
-按需编辑 `.env`，至少配置模型服务：
+按需编辑 `yolo-conf.yaml`，至少配置模型服务：
 
-```env
-API_KEY=your-api-key
+```yaml
+models:
+  apiKey: your-api-key
 ```
 
 启动服务：

@@ -1,13 +1,13 @@
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveAuthMode } from './auth.js';
+import { applyConfigFile } from './configFile.js';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Python 沙箱解释器的兜底候选。Windows 装的是 `python`，macOS/Linux 上是 `python3`；
-// 必须和 .env.example 的 `PYTHON_BIN=python3` 及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
+// 必须和 yolo-conf.yaml 的 `codeExecution.pythonBin` 注释及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
 export const DEFAULT_PYTHON_BIN = process.platform === 'win32' ? 'python' : 'python3';
 
 function readInt(value, fallback) {
@@ -28,12 +28,9 @@ function parsePathList(value, fallback = []) {
 }
 
 export function loadConfig(env = process.env) {
-  const envFilePath = path.resolve(projectRoot, '.env');
-  if (env === process.env && fs.existsSync(envFilePath)) {
-    const existing = { ...process.env };
-    process.loadEnvFile(envFilePath);
-    Object.assign(process.env, existing);
-  }
+  // 配置面：yolo-conf.yaml 提供结构与默认值，真实环境变量覆盖；平台不读取 .env 文件。
+  // `env === process.env` 是「真实进程」守卫：测试传自定义 env 时不读工作区配置文件。
+  if (env === process.env) applyConfigFile({ projectRoot });
   const nodeEnv = String(env.NODE_ENV ?? '').trim().toLowerCase();
   const authMode = resolveAuthMode({ authMode: env.AUTH_MODE ?? '', nodeEnv });
   const host = String(env.HOST ?? '').trim() || (authMode === 'dev' ? '127.0.0.1' : '0.0.0.0');
@@ -161,6 +158,24 @@ export function loadConfig(env = process.env) {
       database: String(env.DORIS_BOOTSTRAP_DATABASE ?? '').trim(),
       salesTable: String(env.DORIS_BOOTSTRAP_SALES_TABLE ?? '').trim(),
       goodsTable: String(env.DORIS_BOOTSTRAP_GOODS_TABLE ?? '').trim(),
+      // 内置演示数据（config/demo/*）：开启后启动即建表、灌演示行并注册数据集。
+      demo: {
+        enabled: String(env.DEMO_DATA_ENABLED ?? '').toLowerCase() === 'true',
+        loadData: String(env.DEMO_DATA_LOAD ?? 'true').toLowerCase() !== 'false',
+        appendToExisting: String(env.DEMO_DATA_APPEND ?? '').toLowerCase() === 'true',
+        rows: readInt(env.DEMO_DATA_ROWS, 5000),
+        seed: readInt(env.DEMO_DATA_SEED, 20261022),
+        startDate: String(env.DEMO_DATA_START ?? '2024-11-01').trim(),
+        endDate: String(env.DEMO_DATA_END ?? '2026-10-20').trim(),
+        // 默认复用平台 MySQL 数据源（后端为 mysql 时由 ensurePlatformMysqlDatasource 自动创建）。
+        datasourceCode: String(env.DEMO_DATA_DATASOURCE ?? 'platform_mysql').trim(),
+        dbType: String(env.DEMO_DB_TYPE ?? 'MYSQL').trim().toUpperCase(),
+        host: String(env.DEMO_DB_HOST ?? '').trim(),
+        port: readInt(env.DEMO_DB_PORT, 3306),
+        schemaName: String(env.DEMO_DB_DATABASE ?? env.PLATFORM_DB_NAME ?? '').trim(),
+        username: String(env.DEMO_DB_USER ?? '').trim(),
+        password: String(env.DEMO_DB_PASSWORD ?? ''),
+      },
     },
   };
 }
