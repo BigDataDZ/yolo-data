@@ -5,7 +5,7 @@ import {
   resolveChartPreference,
   selectReusableSnapshot,
 } from './chartIntent.js';
-import { validateAnalysisOutputs } from './analysisArtifact.js';
+import { validateAnalysisOutputsAsync } from './analysisArtifact.js';
 import { ANALYSIS_RESULT_FILE, buildAnalysisContractPrompt } from './analysisContract.js';
 import { buildArtifactTitle, buildSessionFileName } from './fileName.js';
 import { rankIndicators, sortIndicators } from './indicatorSearch.js';
@@ -50,8 +50,8 @@ import { buildSemanticTaxonomyPrompt } from './analysisSemantics.js';
 import { buildSemanticPolicyPrompt } from './semanticPolicy.js';
 import { resolveQueryLimit } from './queryLimit.js';
 import { createProgressiveAnswerEmitter } from './answerStream.js';
-import { createProcessArtifactRecorder } from './processArtifacts.js';
-import { appendUserQuestionWithAttachments } from './chatAttachments.js';
+import { createProcessArtifactRecorderAsync } from './processArtifacts.js';
+import { appendUserQuestionWithAttachmentsAsync } from './chatAttachments.js';
 import { tokenBudgetError } from './tokenBudget.js';
 import { buildMetricResolverPrompt } from './metricResolver.js';
 import { USER_MEMORY_TOOLS, createUserMemoryToolHandler } from './userMemoryTools.js';
@@ -101,7 +101,7 @@ import { datasetExecution } from './datasetExecution.js';
 import { LOCAL_FILE_GUIDANCE } from './localFileGuidance.js';
 import { buildResultAnalysisText } from './resultAnalyst.js';
 import { prepareBoundDatasetExecution } from './scopedMetrics.js';
-import { resolveThemeBusinessDatasets } from './themeDatasets.js';
+import { resolveThemeBusinessDatasets, resolveThemeBusinessDatasetsAsync } from './themeDatasets.js';
 import {
   buildAnswerEvidence,
   looksLikeDataClaim,
@@ -1732,6 +1732,11 @@ export class MetricAgentService {
     return this.memory.createSession({ userId, themeId, title, modelId });
   }
 
+  async createSessionAsync({ userId, themeId, title, modelId = null }) {
+    await this.resolveContextAsync(userId, themeId);
+    return this.memory.createSessionAsync({ userId, themeId, title, modelId });
+  }
+
   listSessions(userId) {
     const allowedThemeIds = new Set(
       this.getThemesForUser(userId).map((theme) => Number(theme.id)),
@@ -1741,15 +1746,35 @@ export class MetricAgentService {
     );
   }
 
+  async listSessionsAsync(userId) {
+    const [themes, sessions] = await Promise.all([
+      this.getThemesForUserAsync(userId),
+      this.memory.listSessionsAsync(userId),
+    ]);
+    const allowedThemeIds = new Set(themes.map((theme) => Number(theme.id)));
+    return sessions.filter((session) => allowedThemeIds.has(Number(session.themeId)));
+  }
+
   listMessages(sessionId, userId) {
     const session = this.memory.getSession(sessionId, userId);
     this.resolveContext(userId, session.themeId);
     return this.memory.listMessages(session.id, userId, 200);
   }
 
+  async listMessagesAsync(sessionId, userId) {
+    const session = await this.memory.getSessionAsync(sessionId, userId);
+    await this.resolveContextAsync(userId, session.themeId);
+    return this.memory.listMessagesAsync(session.id, userId, 200);
+  }
+
   deleteSession(sessionId, userId) {
     this.memory.getSession(sessionId, userId);
     return this.memory.deleteSession(sessionId, userId);
+  }
+
+  async deleteSessionAsync(sessionId, userId) {
+    await this.memory.getSessionAsync(sessionId, userId);
+    return this.memory.deleteSessionAsync(sessionId, userId);
   }
 
   getThemesForUser(userId) {
@@ -1776,8 +1801,63 @@ export class MetricAgentService {
       .filter(Boolean);
   }
 
+  async getThemesForUserAsync(userId) {
+    const user = this.database.userRepository?.getUserAsync
+      ? await this.database.userRepository.getUserAsync(userId)
+      : this.database.getUser?.(userId);
+    if (!user) return [];
+    const [profile, themes] = await Promise.all([
+      this.database.permissionRepository?.getProfile
+        ? this.database.permissionRepository.getProfile(user.id)
+        : this.database.getPermissionProfile?.(user.id),
+      this.database.themeRepository?.listThemesAsync
+        ? this.database.themeRepository.listThemesAsync()
+        : this.database.listThemes?.() ?? [],
+    ]);
+    const result = [];
+    for (const theme of themes) {
+      if (Number(theme.status) !== 1) continue;
+      const scope = resolveAccessScope({ user, theme, permissionProfile: profile });
+      if (!scope.allowed) continue;
+      const skills = this.skillRegistry.listForThemeAsync
+        ? await this.skillRegistry.listForThemeAsync(theme)
+        : this.skillRegistry.listForTheme(theme);
+      result.push({
+        ...theme,
+        skills: skills.map(({ code, name, kind }) => ({ code, name, kind })),
+        canManage: scope.canManage,
+      });
+    }
+    return result;
+  }
+
+  async resolveContextAsync(userId, themeId) {
+    const user = this.database.userRepository?.getUserAsync
+      ? await this.database.userRepository.getUserAsync(userId)
+      : this.database.getUser?.(userId);
+    if (!user) throw new Error('user not found');
+    const theme = this.database.themeRepository?.getThemeAsync
+      ? await this.database.themeRepository.getThemeAsync(themeId)
+      : this.database.getTheme?.(themeId);
+    if (!theme) throw new Error('theme not found');
+    const profile = this.database.permissionRepository?.getProfile
+      ? await this.database.permissionRepository.getProfile(user.id)
+      : this.database.getPermissionProfile?.(user.id);
+    const scope = resolveAccessScope({ user, theme, permissionProfile: profile });
+    if (!scope.allowed) {
+      throw Object.assign(new Error(scope.reason || 'theme permission denied'), { statusCode: 403 });
+    }
+    const skills = this.skillRegistry.listForThemeAsync
+      ? await this.skillRegistry.listForThemeAsync(theme)
+      : this.skillRegistry.listForTheme(theme);
+    const { businessDatasets, primaryBusinessDatasetId } = await resolveThemeBusinessDatasetsAsync({
+      database: this.database, businessDatasets: this.businessDatasets, user, theme, scope,
+    });
+    return { user, theme, scope, skills, businessDatasets, primaryBusinessDatasetId };
+  }
+
   async getIndicatorsForUser(userId, themeId, filters = {}) {
-    const { user, theme, scope } = this.resolveContext(userId, themeId);
+    const { user, theme, scope } = await this.resolveContextAsync(userId, themeId);
     const keyword = filters.keyword ?? '';
     const typeId = filters.typeId ?? '';
     const limit = Math.max(1, Math.min(Number(filters.limit) || 500, 500));
@@ -1788,7 +1868,7 @@ export class MetricAgentService {
       const snapshot = resolveSupersonicEnabled(this)
         ? this.database.listIndicators({ keyword, typeId, limit })
         : {
-          items: this.database.localIndicators?.list({ keyword, typeId, limit, enabledOnly: true }) ?? [],
+          items: await this.database.localIndicators?.listAsync({ keyword, typeId, limit, enabledOnly: true }) ?? [],
           source: 'LOCAL',
           freshAt: null,
         };
@@ -1829,7 +1909,9 @@ export class MetricAgentService {
   async listSemanticValueFields(themeId, overrides = null) {
     const normalizedThemeId = Number(themeId);
     const storedTheme = Number.isFinite(normalizedThemeId) && normalizedThemeId > 0
-      ? this.database.getTheme(normalizedThemeId)
+      ? await (this.database.getThemeAsync
+        ? this.database.getThemeAsync(normalizedThemeId)
+        : this.database.getTheme(normalizedThemeId))
       : null;
     if (normalizedThemeId > 0 && !storedTheme) {
       throw new Error('theme not found');
@@ -1857,22 +1939,16 @@ export class MetricAgentService {
     const config = normalizeSemanticValueConfig(theme.semanticValueConfig);
     const records = new Map();
     const warnings = [];
-    const addDomains = (record) => {
+    const addDomains = async (record) => {
       const domains = theme.id
-        ? this.database.listSemanticValueDomains({
-          themeId: theme.id,
-          sourceType: record.sourceType,
-          sourceId: record.sourceId,
-          fieldName: record.fieldName,
-        })
+        ? await (this.database.listSemanticValueDomainsAsync
+          ? this.database.listSemanticValueDomainsAsync({ themeId: theme.id, sourceType: record.sourceType, sourceId: record.sourceId, fieldName: record.fieldName })
+          : this.database.listSemanticValueDomains({ themeId: theme.id, sourceType: record.sourceType, sourceId: record.sourceId, fieldName: record.fieldName }))
         : [];
       const snapshot = theme.id
-        ? this.database.getActiveSemanticValueSnapshot({
-          themeId: theme.id,
-          sourceType: record.sourceType,
-          sourceId: record.sourceId,
-          fieldName: record.fieldName,
-        })
+        ? await (this.database.getActiveSemanticValueSnapshotAsync
+          ? this.database.getActiveSemanticValueSnapshotAsync({ themeId: theme.id, sourceType: record.sourceType, sourceId: record.sourceId, fieldName: record.fieldName })
+          : this.database.getActiveSemanticValueSnapshot({ themeId: theme.id, sourceType: record.sourceType, sourceId: record.sourceId, fieldName: record.fieldName }))
         : null;
       const key = semanticValueFieldKey(
         record.sourceType,
@@ -1904,12 +1980,12 @@ export class MetricAgentService {
     };
 
     for (const datasetId of theme.businessDatasetIds ?? []) {
-      const dataset = this.database.getBusinessDataset(Number(datasetId));
+      const dataset = await this.database.getBusinessDatasetAsync(Number(datasetId));
       if (!dataset) {
         continue;
       }
-      for (const field of this.database.listDatasetFields(dataset.id, { enabledOnly: true })) {
-        addDomains({
+      for (const field of await this.database.listDatasetFieldsAsync(dataset.id, { enabledOnly: true })) {
+        await addDomains({
           sourceType: 'DATASET',
           sourceId: String(dataset.id),
           sourceName: dataset.name,
@@ -1929,7 +2005,7 @@ export class MetricAgentService {
       if (!sourceType || !sourceId || !fieldName) {
         continue;
       }
-      addDomains({
+      await addDomains({
         sourceType,
         sourceId,
         sourceName: sourceId,
@@ -1953,20 +2029,22 @@ export class MetricAgentService {
   }
 
   async refreshSemanticValueFields(themeId) {
-    const theme = this.database.getTheme(Number(themeId));
+    const theme = await (this.database.getThemeAsync
+      ? this.database.getThemeAsync(Number(themeId))
+      : this.database.getTheme(Number(themeId)));
     if (!theme) {
       throw new Error('theme not found');
     }
     const warnings = [];
     for (const datasetId of theme.businessDatasetIds ?? []) {
-      const dataset = this.database.getBusinessDataset(Number(datasetId));
+      const dataset = await this.database.getBusinessDatasetAsync(Number(datasetId));
       if (!dataset) {
         continue;
       }
       try {
         await this.semanticValues?.initializeDataset(
           dataset,
-          this.businessDatasets.getDatasetFields(dataset.id, true),
+          this.businessDatasets.getDatasetFieldsAsync(dataset.id, true),
           theme.systemPrompt,
           (field) => this.businessDatasets.listDistinctFieldValues(
             dataset.id,
@@ -1997,7 +2075,9 @@ export class MetricAgentService {
     sourceId,
     fieldName,
   }) {
-    const theme = this.database.getTheme(Number(themeId));
+    const theme = await (this.database.getThemeAsync
+      ? this.database.getThemeAsync(Number(themeId))
+      : this.database.getTheme(Number(themeId)));
     if (!theme) {
       throw new Error('theme not found');
     }
@@ -2005,23 +2085,29 @@ export class MetricAgentService {
     if (normalizedSourceType !== 'DATASET') {
       throw new Error('当前值域治理只支持业务数据集字段');
     }
-    const dataset = this.database.getBusinessDataset(Number(sourceId));
+    const dataset = await this.database.getBusinessDatasetAsync(Number(sourceId));
     if (!dataset || !(theme.businessDatasetIds ?? []).map(Number).includes(Number(sourceId))) {
       throw new Error('business dataset permission denied');
     }
-    const field = this.businessDatasets.getDatasetFields(dataset.id, true)
+    const field = (await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true))
       .find((item) => item.fieldName === fieldName);
     if (!field) {
       throw new Error('dataset field not found');
     }
-    const jobId = this.database.createSemanticValueRefreshJob({
+    const jobInput = {
       themeId: theme.id,
       sourceType: normalizedSourceType,
       sourceId: String(sourceId),
       fieldName: String(fieldName),
       trigger: 'MANUAL',
-    });
-    this.database.updateSemanticValueRefreshJob(jobId, {
+    };
+    const jobId = this.database.createSemanticValueRefreshJobAsync
+      ? await this.database.createSemanticValueRefreshJobAsync(jobInput)
+      : this.database.createSemanticValueRefreshJob(jobInput);
+    const updateJob = (update) => this.database.updateSemanticValueRefreshJobAsync
+      ? this.database.updateSemanticValueRefreshJobAsync(jobId, update)
+      : Promise.resolve(this.database.updateSemanticValueRefreshJob(jobId, update));
+    await updateJob({
       status: 'RUNNING',
       startedAt: new Date().toISOString(),
     });
@@ -2041,13 +2127,16 @@ export class MetricAgentService {
         theme.semanticPolicy,
         {},
       );
-      const snapshot = this.database.getActiveSemanticValueSnapshot({
+      const snapshotInput = {
         themeId: theme.id,
         sourceType: normalizedSourceType,
         sourceId: String(sourceId),
         fieldName: String(fieldName),
-      });
-      this.database.updateSemanticValueRefreshJob(jobId, {
+      };
+      const snapshot = this.database.getActiveSemanticValueSnapshotAsync
+        ? await this.database.getActiveSemanticValueSnapshotAsync(snapshotInput)
+        : this.database.getActiveSemanticValueSnapshot(snapshotInput);
+      await updateJob({
         status: 'SUCCESS',
         scannedCount: snapshot?.sampleSize ?? snapshot?.valueCount ?? 0,
         changedCount: snapshot?.valueCount ?? 0,
@@ -2056,7 +2145,7 @@ export class MetricAgentService {
       this.runtimeCache?.semanticContexts?.invalidate('semantic-context');
       return snapshot;
     } catch (error) {
-      this.database.updateSemanticValueRefreshJob(jobId, {
+      await updateJob({
         status: 'FAILED',
         error: { message: error.message },
         finishedAt: new Date().toISOString(),
@@ -2066,7 +2155,9 @@ export class MetricAgentService {
   }
 
   async saveSemanticValueOverride(payload = {}) {
-    const theme = this.database.getTheme(Number(payload.themeId));
+    const theme = await (this.database.getThemeAsync
+      ? this.database.getThemeAsync(Number(payload.themeId))
+      : this.database.getTheme(Number(payload.themeId)));
     if (!theme) {
       throw new Error('theme not found');
     }
@@ -2074,16 +2165,16 @@ export class MetricAgentService {
     if (normalizedSourceType !== 'DATASET') {
       throw new Error('当前值域治理只支持业务数据集字段');
     }
-    const dataset = this.database.getBusinessDataset(Number(payload.sourceId));
+    const dataset = await this.database.getBusinessDatasetAsync(Number(payload.sourceId));
     if (!dataset || !(theme.businessDatasetIds ?? []).map(Number).includes(Number(payload.sourceId))) {
       throw new Error('business dataset permission denied');
     }
-    const field = this.businessDatasets.getDatasetFields(dataset.id, true)
+    const field = (await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true))
       .find((item) => item.fieldName === payload.fieldName);
     if (!field) {
       throw new Error('dataset field not found');
     }
-    const result = this.database.saveSemanticValueOverride({
+    const overrideInput = {
       themeId: theme.id,
       sourceType: normalizedSourceType,
       sourceId: String(payload.sourceId),
@@ -2097,7 +2188,10 @@ export class MetricAgentService {
       allowUnverified: payload.allowUnverified === true,
       enabled: payload.enabled !== false,
       updatedBy: payload.updatedBy ?? null,
-    });
+    };
+    const result = this.database.saveSemanticValueOverrideAsync
+      ? await this.database.saveSemanticValueOverrideAsync(overrideInput)
+      : this.database.saveSemanticValueOverride(overrideInput);
     this.runtimeCache?.semanticContexts?.invalidate('semantic-context');
     return result;
   }
@@ -2112,27 +2206,31 @@ export class MetricAgentService {
     }
   }
 
-  getSessionDirectives(sessionId) {
-    const record = this.database.getPlatformSetting(
-      `chat_session_directives:${Number(sessionId)}`,
-      null,
-    );
+  async getSessionDirectives(sessionId) {
+    const record = this.database.getPlatformSettingAsync
+      ? await this.database.getPlatformSettingAsync(`chat_session_directives:${Number(sessionId)}`, null)
+      : this.database.getPlatformSetting(`chat_session_directives:${Number(sessionId)}`, null);
     return Array.isArray(record?.value?.directives) ? record.value.directives : [];
   }
 
-  saveSessionDirective(sessionId, userId, directive) {
+  async saveSessionDirective(sessionId, userId, directive) {
     if (!directive) {
       return this.getSessionDirectives(sessionId);
     }
     const key = `chat_session_directives:${Number(sessionId)}`;
-    const current = this.database.getPlatformSetting(key, null)?.value ?? {};
+    const setting = this.database.getPlatformSettingAsync
+      ? await this.database.getPlatformSettingAsync(key, null)
+      : this.database.getPlatformSetting(key, null);
+    const current = setting?.value ?? {};
     const directives = mergeSessionDirectives(current.directives ?? [], directive);
-    this.database.savePlatformSetting(key, {
+    const value = {
       sessionId: Number(sessionId),
       userId: Number(userId),
       directives,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    if (this.database.savePlatformSettingAsync) await this.database.savePlatformSettingAsync(key, value);
+    else this.database.savePlatformSetting(key, value);
     return directives;
   }
 
@@ -2166,6 +2264,18 @@ export class MetricAgentService {
       businessDatasets,
       primaryBusinessDatasetId,
     };
+  }
+
+  async setSessionDirectiveAsync(sessionId, userId, directive) {
+    const key = `chat_session_directives:${Number(sessionId)}`;
+    const setting = this.database.getPlatformSettingAsync
+      ? await this.database.getPlatformSettingAsync(key, null)
+      : this.database.getPlatformSetting(key, null);
+    const directives = mergeSessionDirectives(setting?.value?.directives ?? [], directive);
+    const value = { sessionId: Number(sessionId), userId: Number(userId), directives, updatedAt: new Date().toISOString() };
+    if (this.database.savePlatformSettingAsync) await this.database.savePlatformSettingAsync(key, value);
+    else this.database.savePlatformSetting(key, value);
+    return directives;
   }
 
   async answer(options = {}) {
@@ -2236,7 +2346,7 @@ export class MetricAgentService {
       if (!Number.isFinite(requestedThemeId) || requestedThemeId <= 0) {
         throw new Error('themeId is required when creating a chat session');
       }
-      const preflight = this.resolveContext(userId, requestedThemeId);
+      const preflight = await this.resolveContextAsync(userId, requestedThemeId);
       this.requireEnabledTheme(preflight.theme);
       const requestedModelId = modelId
         ? Number(modelId)
@@ -2296,14 +2406,20 @@ export class MetricAgentService {
       skills,
       businessDatasets,
       primaryBusinessDatasetId,
-    } = this.resolveContext(userId, session.themeId);
+    } = await this.resolveContextAsync(userId, session.themeId);
     // P0-4：问数入口的 Token 成本预算闸门。未配置预算（limit=0）时自动放行。
     if (this.tokenBudget) {
-      const budgetResult = this.tokenBudget.check({
+      const budgetResult = await (this.tokenBudget.checkAsync
+        ? this.tokenBudget.checkAsync({
         userId: user.id,
         themeId: theme.id,
         themeLimit: Number(theme.budgetTokens ?? theme.llmConfig?.budgetTokens ?? 0) || 0,
-      });
+        })
+        : this.tokenBudget.check({
+          userId: user.id,
+          themeId: theme.id,
+          themeLimit: Number(theme.budgetTokens ?? theme.llmConfig?.budgetTokens ?? 0) || 0,
+        }));
       if (budgetResult.enforced && !budgetResult.ok) {
         throw tokenBudgetError(budgetResult.used, budgetResult.limit);
       }
@@ -2318,7 +2434,7 @@ export class MetricAgentService {
         ),
       )
       : this.harness;
-    const memoryPreInject = resolveMemoryPreInject({
+    const memoryPreInject = await resolveMemoryPreInject({
       config: this.config,
       userMemories: this.userMemories,
       userId: user.id,
@@ -2342,7 +2458,7 @@ export class MetricAgentService {
       memoryTexts: [memoryPreInject],
     });
     const resolvedQuestion = conversationContext.question;
-    const existingSessionDirectives = this.getSessionDirectives(session.id);
+    const existingSessionDirectives = await this.getSessionDirectives(session.id);
     const conversationDirective = conversationContext.conversationDirective
       ?? (conversationContext.turnType === TURN_TYPES.INSTRUCTION
         ? parseConversationDirective(conversationContext.originalQuestion)
@@ -2456,7 +2572,9 @@ export class MetricAgentService {
       freshAt: indicatorSourceState.freshAt,
       snapshotCount: indicatorSourceState.snapshotCount,
     });
-    const feedbackHints = this.feedback?.promptHints(theme.id, 8) ?? [];
+    const feedbackHints = this.feedback
+      ? await (this.feedback.promptHintsAsync?.(theme.id, 8) ?? this.feedback.promptHints(theme.id, 8))
+      : [];
     const workflow = new DataAgentWorkflow({
       question: normalizedQuestion,
       user,
@@ -2464,7 +2582,7 @@ export class MetricAgentService {
       onEvent: emit,
     });
     if (!suppressUserMessage) {
-      appendUserQuestionWithAttachments({
+      await appendUserQuestionWithAttachmentsAsync({
         memory: this.memory,
         workspace: this.workspace,
         session,
@@ -2494,8 +2612,11 @@ export class MetricAgentService {
     const processSteps = [];
     const generatedCodeArtifacts = [];
     const generatedWorkspaceArtifactIds = [];
+    const saveQueryPlan = (input) => this.database.saveQueryPlanAsync
+      ? this.database.saveQueryPlanAsync(input)
+      : Promise.resolve(this.database.saveQueryPlan(input));
     // 每个产生数据的工具环节都会落一份过程文件，便于用户按步骤追踪核查。
-    const recordProcessArtifact = createProcessArtifactRecorder({
+    const recordProcessArtifact = createProcessArtifactRecorderAsync({
       service: this.workspace,
       workspaceId: workspace?.id ?? null,
       userId: user.id,
@@ -2538,7 +2659,7 @@ export class MetricAgentService {
       }
       return workflow.fail(code, error);
     };
-    const persistQueryArtifact = ({
+    const persistQueryArtifact = async ({
       sourceType,
       source,
       indicator = null,
@@ -2555,7 +2676,8 @@ export class MetricAgentService {
       if (!workspace || !this.workspace) {
         return null;
       }
-      const artifact = this.workspace.createResultArtifact({
+      const artifact = this.workspace.createResultArtifactAsync
+        ? await this.workspace.createResultArtifactAsync({
         workspaceId: workspace.id,
         userId: user.id,
         sessionId: session.id,
@@ -2578,7 +2700,18 @@ export class MetricAgentService {
           queryFingerprint,
           dataHash,
         },
-      });
+        })
+        : this.workspace.createResultArtifact({
+          workspaceId: workspace.id,
+          userId: user.id,
+          sessionId: session.id,
+          messageId: null,
+          conversationId: null,
+          artifactType: 'QUERY_RESULT',
+          inputArtifactIds,
+          source: { type: sourceType, ...source },
+          answer: { indicator, dataset, data, chart, semanticParse, question, resolvedQuestion, queryFingerprint, dataHash },
+        });
       generatedWorkspaceArtifactIds.push(artifact.id);
       return artifact;
     };
@@ -2968,7 +3101,7 @@ export class MetricAgentService {
             issues: validation.issues,
           },
         });
-        this.database.saveQueryPlan({
+        await saveQueryPlan({
           id: compiledPlan.id,
           userId: user.id,
           themeId: theme.id,
@@ -3070,7 +3203,7 @@ export class MetricAgentService {
           }));
         }
       } catch (error) {
-        this.database.saveQueryPlan({
+        await saveQueryPlan({
           id: effectivePlan.id,
           userId: user.id,
           themeId: theme.id,
@@ -3401,7 +3534,7 @@ export class MetricAgentService {
         deterministic: true,
         resultLocked: true,
       };
-      const queryArtifact = persistQueryArtifact({
+      const queryArtifact = await persistQueryArtifact({
         sourceType: 'INDICATOR',
         source: {
           id: String(indicator.id),
@@ -3423,7 +3556,7 @@ export class MetricAgentService {
         queryFingerprint: fingerprint,
         dataHash: stableResult.dataHash,
       });
-      this.database.saveQueryPlan({
+      await saveQueryPlan({
         id: effectivePlan.id,
         userId: user.id,
         themeId: theme.id,
@@ -3495,7 +3628,7 @@ export class MetricAgentService {
       if (!dataset) {
         throw new Error('business dataset permission denied');
       }
-      const rawFields = this.businessDatasets.getDatasetFields(dataset.id, true);
+      const rawFields = await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true);
       const schemaFingerprint = buildCacheKey(
         rawFields.map((field) => ({
           fieldName: field.fieldName,
@@ -3612,7 +3745,7 @@ export class MetricAgentService {
       }
       const fields = confirmationState.datasetDefinitions.get(
         String(dataset.id),
-      )?.fields ?? this.businessDatasets.getDatasetFields(dataset.id, true);
+      )?.fields ?? await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true);
       const boundContract = args.__contract ?? null;
       const boundExecution = boundContract
         ? prepareBoundDatasetExecution(boundContract)
@@ -3769,7 +3902,7 @@ export class MetricAgentService {
         );
       }
       if (!validation.valid) {
-        this.database.saveQueryPlan({
+        await saveQueryPlan({
           id: plan.id,
           userId: user.id,
           themeId: theme.id,
@@ -3913,7 +4046,7 @@ export class MetricAgentService {
           }));
         }
       } catch (error) {
-        this.database.saveQueryPlan({
+        await saveQueryPlan({
           id: effectivePlan.id,
           userId: user.id,
           themeId: theme.id,
@@ -4346,7 +4479,7 @@ export class MetricAgentService {
           limit: result.limit ?? effectivePlan.limit,
         },
       };
-      const queryArtifact = persistQueryArtifact({
+      const queryArtifact = await persistQueryArtifact({
         sourceType: 'BUSINESS_DATASET',
         source: {
           id: String(dataset.id),
@@ -4369,7 +4502,7 @@ export class MetricAgentService {
         queryFingerprint: fingerprint,
         dataHash: stableResult.dataHash,
       });
-      this.database.saveQueryPlan({
+      await saveQueryPlan({
         id: effectivePlan.id,
         userId: user.id,
         themeId: theme.id,
@@ -4502,7 +4635,7 @@ export class MetricAgentService {
           throw new Error('business dataset permission denied');
         }
         const fields = confirmed?.fields
-          ?? this.businessDatasets.getDatasetFields(dataset.id, true);
+          ?? await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true);
         result = this.queryContractCompiler.compile({
           question: resolvedQuestion,
           sourceType,
@@ -4529,7 +4662,7 @@ export class MetricAgentService {
           sessionId: session.id,
         });
       }
-      this.database.saveQueryPlan({
+      await saveQueryPlan({
         id: result.contract.id,
         userId: user.id,
         themeId: theme.id,
@@ -4758,7 +4891,7 @@ export class MetricAgentService {
             detail: businessDatasets.map((dataset) => dataset.name).join('、'),
           });
           return {
-            datasets: businessDatasets.map((dataset) => ({
+            datasets: await Promise.all(businessDatasets.map(async (dataset) => ({
               id: dataset.id,
               code: dataset.code,
               name: dataset.name,
@@ -4766,7 +4899,7 @@ export class MetricAgentService {
               schemaName: dataset.schemaName,
               tableName: dataset.primaryTable,
               fieldCount: dataset.fieldCount,
-              fields: this.businessDatasets.getDatasetFields(dataset.id, true)
+              fields: (await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true))
                 .map((field) => ({
                   name: field.fieldName,
                   displayName: field.displayName,
@@ -4775,7 +4908,7 @@ export class MetricAgentService {
                   aggregator: field.aggregator,
                   description: field.description,
                 })),
-            })),
+            }))),
           };
         case 'get_business_dataset_definition':
           return getBusinessDatasetDefinition(args);
@@ -4785,16 +4918,17 @@ export class MetricAgentService {
           if (!workspace || !this.workspace) {
             return { artifacts: [] };
           }
-          return {
+          {
+            const artifacts = this.workspace.listArtifactsAsync
+              ? await this.workspace.listArtifactsAsync({ workspaceId: workspace.id, userId: user.id })
+              : this.workspace.listArtifacts({ workspaceId: workspace.id, userId: user.id });
+            const visible = artifacts.filter((artifact) => artifact.artifactType !== 'PROCESS_STEP');
+            return {
             workspace,
-            artifacts: this.workspace.listArtifacts({
-              workspaceId: workspace.id,
-              userId: user.id,
-            }).filter((artifact) => artifact.artifactType !== 'PROCESS_STEP').map((artifact) => {
-              const full = this.workspace.getArtifact({
-                artifactId: artifact.id,
-                userId: user.id,
-              });
+            artifacts: await Promise.all(visible.map(async (artifact) => {
+              const full = this.workspace.getArtifactAsync
+                ? await this.workspace.getArtifactAsync({ artifactId: artifact.id, userId: user.id })
+                : this.workspace.getArtifact({ artifactId: artifact.id, userId: user.id });
               return {
                 ...artifact,
                 columns: full?.payload?.data?.columns?.map((column) => ({
@@ -4806,18 +4940,21 @@ export class MetricAgentService {
                 sampleRows: full?.payload?.data?.rows?.slice(0, 5) ?? [],
                 format: full?.metadata?.format ?? full?.payload?.format ?? null,
               };
-            }),
-          };
+            })),
+            };
+          }
         case 'transform_workspace_artifact': {
           if (!this.workspace) {
             throw new Error('workspace service is not configured');
           }
-          const artifact = this.workspace.transformArtifact({
+          const artifact = this.workspace.transformArtifactAsync
+            ? await this.workspace.transformArtifactAsync({
             artifactId: args.artifactId,
             userId: user.id,
             operation: args.operation,
             params: args.params ?? {},
-          });
+            })
+            : this.workspace.transformArtifact({ artifactId: args.artifactId, userId: user.id, operation: args.operation, params: args.params ?? {} });
           emit({
             type: 'workspace_updated',
             workspaceId: artifact.workspaceId,
@@ -4868,7 +5005,7 @@ export class MetricAgentService {
               artifactId: output.artifactId,
             });
           }
-          const analysis = validateAnalysisOutputs({
+          const analysis = await validateAnalysisOutputsAsync({
             workspace,
             outputs: result.outputs,
           });
@@ -4937,7 +5074,7 @@ export class MetricAgentService {
           resultSummary: description.detail,
           review: buildToolReview(name, args, result),
         });
-        const stepArtifact = recordProcessArtifact({
+        const stepArtifact = await recordProcessArtifact({
           tool: name,
           result,
           step: { ...step, sequence: processSteps.length },
@@ -4990,7 +5127,7 @@ export class MetricAgentService {
           error: error.message,
           review: buildToolReview(name, args, {}),
         });
-        const failedArtifact = recordProcessArtifact({
+        const failedArtifact = await recordProcessArtifact({
           tool: name,
           error,
           step: { ...step, sequence: processSteps.length },
@@ -5014,15 +5151,16 @@ export class MetricAgentService {
       }
     };
 
-    const workspaceArtifacts = workspace && this.workspace
-      ? this.workspace.listArtifacts({
-        workspaceId: workspace.id,
-        userId: user.id,
-      }).filter((artifact) => artifact.artifactType !== 'PROCESS_STEP').slice(0, 12).map((artifact) => {
-        const full = this.workspace.getArtifact({
-          artifactId: artifact.id,
-          userId: user.id,
-        });
+    const workspaceArtifactList = workspace && this.workspace
+      ? (this.workspace.listArtifactsAsync
+        ? await this.workspace.listArtifactsAsync({ workspaceId: workspace.id, userId: user.id })
+        : this.workspace.listArtifacts({ workspaceId: workspace.id, userId: user.id }))
+      : [];
+    const workspaceArtifacts = await Promise.all(
+      workspaceArtifactList.filter((artifact) => artifact.artifactType !== 'PROCESS_STEP').slice(0, 12).map(async (artifact) => {
+        const full = this.workspace.getArtifactAsync
+          ? await this.workspace.getArtifactAsync({ artifactId: artifact.id, userId: user.id })
+          : this.workspace.getArtifact({ artifactId: artifact.id, userId: user.id });
         const columns = full?.payload?.data?.columns ?? [];
         return {
           ...artifact,
@@ -5050,8 +5188,8 @@ export class MetricAgentService {
               dataHash: full?.metadata?.dataHash,
             }),
         };
-      })
-      : [];
+      }),
+    );
     const artifactReusePolicy = resolveArtifactReusePolicy(
       normalizedQuestion,
       conversationContext,
@@ -5279,7 +5417,9 @@ export class MetricAgentService {
     if (restyleChartType && this.workspace && workspace) {
       const snapshotRef = selectReusableSnapshot(workspaceArtifacts);
       const snapshot = snapshotRef
-        ? this.workspace.getArtifact({ artifactId: snapshotRef.id, userId: user.id })
+        ? (this.workspace.getArtifactAsync
+          ? await this.workspace.getArtifactAsync({ artifactId: snapshotRef.id, userId: user.id })
+          : this.workspace.getArtifact({ artifactId: snapshotRef.id, userId: user.id }))
         : null;
       const snapshotColumns = snapshot?.payload?.data?.columns ?? [];
       const snapshotRows = snapshot?.payload?.data?.rows ?? [];
@@ -5331,7 +5471,7 @@ export class MetricAgentService {
       if (conversationContext.turnType === TURN_TYPES.INSTRUCTION) {
         const confirmation = conversationDirective?.confirmation
           ?? '收到，本会话会按你的要求处理；这条消息不触发数据查询。';
-        this.saveSessionDirective(session.id, user.id, conversationDirective);
+        await this.saveSessionDirective(session.id, user.id, conversationDirective);
         appendProcessStep({
           id: `step-${processSteps.length + 1}`,
           type: 'directive',
@@ -5499,9 +5639,9 @@ export class MetricAgentService {
       && canRunDeterministicFallback
       && businessDatasets.length > 0
     ) {
-      const candidates = businessDatasets
-        .map((dataset) => {
-          const fields = this.businessDatasets.getDatasetFields(dataset.id, true);
+      const candidates = (await Promise.all(businessDatasets
+        .map(async (dataset) => {
+          const fields = await this.businessDatasets.getDatasetFieldsAsync(dataset.id, true);
           const inferred = inferDatasetQuerySpec({
             question: resolvedQuestion,
             fields,
@@ -5524,7 +5664,7 @@ export class MetricAgentService {
             ),
           );
           return { dataset, fields, inferred, dateRange };
-        })
+        })))
         .filter((candidate) => candidate.inferred.metrics.length > 0)
         .filter((candidate) => (
           candidate.dataset.config?.requireDateRange === false
@@ -5982,13 +6122,13 @@ export class MetricAgentService {
       answer,
     );
     const queryArtifact = lastLockedExecution?.queryArtifactId
-      ? this.workspace?.getArtifact({
+      ? (this.workspace?.getArtifactAsync ? await this.workspace.getArtifactAsync({
         artifactId: lastLockedExecution.queryArtifactId,
         userId: user.id,
-      })
+      }) : this.workspace?.getArtifact({ artifactId: lastLockedExecution.queryArtifactId, userId: user.id }))
       : null;
     const fallbackResultArtifact = !queryArtifact && workspace && answer.data?.columns?.length
-      ? this.workspace.createResultArtifact({
+      ? (this.workspace.createResultArtifactAsync ? await this.workspace.createResultArtifactAsync({
         workspaceId: workspace.id,
         userId: user.id,
         sessionId: session.id,
@@ -6005,25 +6145,30 @@ export class MetricAgentService {
           id: lastIndicator?.id ?? lastBusinessDataset?.id ?? null,
           name: lastIndicator?.name ?? lastBusinessDataset?.name ?? null,
         },
-      })
+      }) : this.workspace.createResultArtifact({
+        workspaceId: workspace.id, userId: user.id, sessionId: session.id,
+        messageId: assistantMessage.id, conversationId: null, answer,
+        artifactType: 'QUERY_RESULT',
+        source: { type: lastIndicator ? 'INDICATOR' : lastBusinessDataset ? 'BUSINESS_DATASET' : 'UNKNOWN', id: lastIndicator?.id ?? lastBusinessDataset?.id ?? null, name: lastIndicator?.name ?? lastBusinessDataset?.name ?? null },
+      }))
       : null;
     if (fallbackResultArtifact?.id) {
       generatedWorkspaceArtifactIds.push(fallbackResultArtifact.id);
     }
     const primaryOutputArtifact = !queryArtifact && !fallbackResultArtifact
       && generatedCodeArtifacts.length > 0
-      ? this.workspace?.getArtifact({
+      ? (this.workspace?.getArtifactAsync ? await this.workspace.getArtifactAsync({
         artifactId: generatedCodeArtifacts[0].artifactId,
         userId: user.id,
-      })
+      }) : this.workspace?.getArtifact({ artifactId: generatedCodeArtifacts[0].artifactId, userId: user.id }))
       : null;
     const linkedArtifact = queryArtifact ?? fallbackResultArtifact ?? primaryOutputArtifact;
     if (workspace && generatedWorkspaceArtifactIds.length > 0) {
-      this.workspace.bindArtifactsToMessage({
+      await (this.workspace.bindArtifactsToMessageAsync ? this.workspace.bindArtifactsToMessageAsync({
         artifactIds: generatedWorkspaceArtifactIds,
         userId: user.id,
         messageId: assistantMessage.id,
-      });
+      }) : this.workspace.bindArtifactsToMessage({ artifactIds: generatedWorkspaceArtifactIds, userId: user.id, messageId: assistantMessage.id }));
     }
     const savedAnswer = {
       ...answer,
@@ -6040,7 +6185,7 @@ export class MetricAgentService {
       question: normalizedQuestion,
       answer: savedAnswer,
     });
-    this.database.addAuditLog({
+    await this.database.addAuditLogAsync({
       userId: user.id,
       themeId: theme.id,
       action: 'AGENT_QUERY',

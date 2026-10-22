@@ -9,7 +9,7 @@ export function registerSystemRoutes(table) {
     summary: '运行健康与指标来源状态',
     handler: async (ctx) => {
       const { response, application, sendJson } = ctx;
-      sendJson(response, 200, application.currentHealth());
+      sendJson(response, 200, await application.currentHealth());
     },
   });
 
@@ -23,16 +23,16 @@ export function registerSystemRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, config, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const health = application.currentHealth();
+      const health = await application.currentHealth();
       sendJson(response, 200, {
         supersonic: {
           enabled: application.getSupersonicEnabled(),
           localIndicatorManagement: !application.getSupersonicEnabled(),
-          localIndicatorCount: database.localIndicators.count(),
+          localIndicatorCount: await database.localIndicators.countAsync(),
           configured: Boolean(config.supersonic.baseUrl),
           baseUrl: config.supersonic.baseUrl || null,
           mode: health.source.mode,
@@ -54,14 +54,14 @@ export function registerSystemRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
       const enabled = body.enabled !== false;
       const result = await application.applySupersonicSetting(enabled);
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SUPERSONIC_SETTING_UPDATE',
         detail: { enabled },
@@ -70,12 +70,12 @@ export function registerSystemRoutes(table) {
         supersonic: {
           enabled,
           localIndicatorManagement: !enabled,
-          localIndicatorCount: database.localIndicators.count(),
+          localIndicatorCount: await database.localIndicators.countAsync(),
           sourceMode: result.sourceMode,
           sync: result.sync ?? null,
           syncError: result.syncError ?? null,
         },
-        health: application.currentHealth(),
+        health: await application.currentHealth(),
       });
     },
   });
@@ -125,7 +125,7 @@ export function registerSystemRoutes(table) {
     handler: async (ctx) => {
       const { response, database, params, getRequestUser, sendJson, request } = ctx;
       const traceRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const evidence = database.getTraceEvidence(traceRoute[0]);
       if (!evidence || evidence.counts.queryPlans + evidence.counts.audit
         + evidence.counts.llmCalls + evidence.counts.datasetQueries === 0) {

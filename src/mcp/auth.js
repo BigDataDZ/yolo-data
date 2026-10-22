@@ -17,6 +17,16 @@ export function validateApiKey(database, rawKey) {
   return { keyId: info.keyId, tenantId: info.tenantId, scopes: info.scopes };
 }
 
+export async function validateApiKeyAsync(database, rawKey) {
+  const trimmed = String(rawKey ?? '').trim();
+  if (!trimmed || !trimmed.startsWith('mcp_')) return null;
+  const info = database.getMcpApiKeyByHashAsync
+    ? await database.getMcpApiKeyByHashAsync(hashApiKey(trimmed))
+    : database.getMcpApiKeyByHash(hashApiKey(trimmed));
+  if (!info) return null;
+  return { keyId: info.keyId, tenantId: info.tenantId, scopes: info.scopes };
+}
+
 export function generateApiKey(database, { name, tenantId, createdBy } = {}) {
   return database.createMcpApiKey({ name, tenantId, createdBy });
 }

@@ -898,7 +898,7 @@ async function loadBootstrap(userId) {
     state.allUsers = await api('/api/users');
   }
   if (state.allUsers.length === 0) {
-    state.allUsers = state.bootstrap.users;
+    state.allUsers = state.bootstrap.users ?? [state.currentUser];
   }
   renderRuntime(state.bootstrap.health);
   renderUserSelect(state.currentUser);

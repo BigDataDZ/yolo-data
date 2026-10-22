@@ -1,4 +1,8 @@
-import { deleteUserSessions, setDefaultUserPassword, setUserPassword } from '../../auth.js';
+import {
+  deleteUserSessionsAsync,
+  setDefaultUserPasswordAsync,
+  setUserPasswordAsync,
+} from '../../auth.js';
 import { assertRowPoliciesSupported } from '../../permissions.js';
 
 export function registerUserRoutes(table) {
@@ -12,11 +16,11 @@ export function registerUserRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listUsers());
+      sendJson(response, 200, await database.userRepository.listUsersAsync());
     },
   });
 
@@ -30,19 +34,19 @@ export function registerUserRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const saved = database.saveUser(body);
+      const saved = await database.userRepository.saveUserAsync(body);
       const password = String(body.password ?? '');
       if (password) {
-        setUserPassword(database, saved.id, password);
+        await setUserPasswordAsync(database, saved.id, password);
       } else {
-        setDefaultUserPassword(database, saved.id);
+        await setDefaultUserPasswordAsync(database, saved.id);
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'USER_CREATE',
         detail: { targetUserId: saved.id, username: saved.username },
@@ -62,16 +66,16 @@ export function registerUserRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, readJson, sendJson } = ctx;
       const userRoute = params;
-      const current = getRequestUser(request, database);
+      const current = await getRequestUser(request, database);
       if (current.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const saved = database.saveUser(body, Number(userRoute[0]));
+      const saved = await database.userRepository.saveUserAsync(body, Number(userRoute[0]));
       if (Number(saved.status ?? 1) === 0) {
-        deleteUserSessions(database, saved.id);
+        await deleteUserSessionsAsync(database, saved.id);
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: current.id,
         action: 'USER_UPDATE',
         detail: { targetUserId: saved.id, username: saved.username },
@@ -90,21 +94,21 @@ export function registerUserRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, readJson, sendJson } = ctx;
-      const current = getRequestUser(request, database);
+      const current = await getRequestUser(request, database);
       const targetId = Number(params[0]);
-      const target = database.getUser(targetId);
+      const target = await database.userRepository.getUserAsync(targetId);
       if (!target) {
         throw Object.assign(new Error('user not found'), { statusCode: 404 });
       }
       const body = await readJson(request);
       const password = String(body.password ?? '');
       if (password) {
-        setUserPassword(database, targetId, password);
+        await setUserPasswordAsync(database, targetId, password);
       } else {
-        setDefaultUserPassword(database, targetId);
+        await setDefaultUserPasswordAsync(database, targetId);
       }
-      deleteUserSessions(database, targetId);
-      database.addAuditLog({
+      await deleteUserSessionsAsync(database, targetId);
+      await database.addAuditLogAsync({
         userId: current.id,
         action: 'USER_PASSWORD_RESET',
         detail: { targetUserId: targetId, usedDefault: !password },
@@ -123,11 +127,11 @@ export function registerUserRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, sendJson } = ctx;
       const permissionRoute = params;
-      const current = getRequestUser(request, database);
+      const current = await getRequestUser(request, database);
       if (current.role !== 'ADMIN' && Number(permissionRoute[0]) !== current.id) {
         throw Object.assign(new Error('permission denied'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.getPermissionProfile(Number(permissionRoute[0])));
+      sendJson(response, 200, await database.permissionRepository.getProfile(Number(permissionRoute[0])));
     },
   });
 
@@ -142,14 +146,14 @@ export function registerUserRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, readJson, sendJson } = ctx;
       const permissionSaveRoute = params;
-      const current = getRequestUser(request, database);
+      const current = await getRequestUser(request, database);
       if (current.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
       assertRowPoliciesSupported(body.rowPolicies);
-      const profile = database.replacePermissionProfile(Number(permissionSaveRoute[0]), body);
-      database.addAuditLog({
+      const profile = await database.permissionRepository.replaceProfile(Number(permissionSaveRoute[0]), body);
+      await database.addAuditLogAsync({
         userId: current.id,
         action: 'PERMISSION_UPDATE',
         detail: {
@@ -173,32 +177,41 @@ export function registerUserRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, application, agent, indicatorClient, getRequestUser, sendJson, toPublicTheme, toPublicModel, supersonicAvailable } = ctx;
-      const user = getRequestUser(request, database);
-      const themes = agent.getThemesForUser(user.id);
+      const user = await getRequestUser(request, database);
       const canManage = user.role === 'ADMIN';
-      const indicatorTypes = !canManage
-        ? []
-        : !application.getSupersonicEnabled()
-          ? database.localIndicators.listTypes()
-          : !supersonicAvailable()
-            ? []
-            : await indicatorClient.listTypes().catch(() => []);
+      const [themes, preferences, managedThemes, skills, datasetOptions, businessDatasets,
+        dataSources, models, health, indicatorTypes] = await Promise.all([
+        agent.getThemesForUserAsync(user.id),
+        database.isAsyncPlatformStore
+          ? database.getUserPreferencesAsync(user.id) : database.getUserPreferences(user.id),
+        canManage
+          ? (database.isAsyncPlatformStore ? database.listThemesAsync() : database.listThemes())
+          : Promise.resolve([]),
+        database.isAsyncPlatformStore ? database.listSkillsAsync() : Promise.resolve(database.listSkills()),
+        database.isAsyncPlatformStore
+          ? database.listDatasetOptionsAsync() : Promise.resolve(database.listDatasetOptions()),
+        database.listBusinessDatasetsAsync(canManage ? { includeDisabled: true } : { userId: user.id }),
+        user.role === 'ADMIN' ? database.dataSourceRepository.listDataSourcesAsync() : Promise.resolve([]),
+        user.role === 'ADMIN' ? database.modelRepository.listModelsAsync() : Promise.resolve([]),
+        application.currentHealth(),
+        !canManage ? Promise.resolve([])
+          : !application.getSupersonicEnabled() ? database.localIndicators.listTypesAsync()
+            : !supersonicAvailable() ? Promise.resolve([])
+              : indicatorClient.listTypes().catch(() => []),
+      ]);
       sendJson(response, 200, {
         currentUser: user,
-        preferences: database.getUserPreferences(user.id),
-        users: canManage ? database.listUsers() : [user],
+        preferences,
         themes: themes.map(toPublicTheme),
-        managedThemes: canManage ? database.listThemes().map(toPublicTheme) : [],
-        skills: database.listSkills(),
-        datasetOptions: database.listDatasetOptions().items,
+        managedThemes: managedThemes.map(toPublicTheme),
+        skills,
+        datasetOptions: datasetOptions.items,
         indicatorSource: application.resolveIndicatorSource(),
-        businessDatasets: canManage
-          ? database.listBusinessDatasets({ includeDisabled: true })
-          : database.listBusinessDatasets({ userId: user.id }),
-        dataSources: user.role === 'ADMIN' ? database.listDataSources() : [],
-        models: user.role === 'ADMIN' ? database.listModels().map(toPublicModel) : [],
+        businessDatasets,
+        dataSources,
+        models: models.map(toPublicModel),
         indicatorTypes,
-        health: application.currentHealth(),
+        health,
       });
     },
   });
@@ -212,7 +225,7 @@ export function registerUserRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
       const allowedKeys = new Set([
         'selectedThemeId',
@@ -238,7 +251,9 @@ export function registerUserRoutes(table) {
           patch[key] = String(value);
         }
       }
-      const preferences = database.saveUserPreferences(user.id, patch);
+      const preferences = database.isAsyncPlatformStore
+        ? await database.saveUserPreferencesAsync(user.id, patch)
+        : database.saveUserPreferences(user.id, patch);
       sendJson(response, 200, { preferences });
     },
   });

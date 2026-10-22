@@ -35,13 +35,13 @@ export function startMemoryMaintenance({
 
   async function sweep() {
     const store = distiller?.store;
-    if (!store || typeof store.listMaintenanceTargets !== 'function') {
+    if (!store || typeof store.listMaintenanceTargetsAsync !== 'function') {
       return { processed: 0, changed: 0, skipped: true };
     }
     const compactThreshold = typeof distiller.compactThreshold === 'function'
       ? distiller.compactThreshold({ contentBudget: store.contentBudget })
       : 0;
-    const targets = store.listMaintenanceTargets({ compactThreshold, limit: batchSize });
+    const targets = await store.listMaintenanceTargetsAsync({ compactThreshold, limit: batchSize });
     let processed = 0;
     let changed = 0;
     const reasons = [];

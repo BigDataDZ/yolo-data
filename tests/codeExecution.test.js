@@ -126,7 +126,7 @@ print('total', int(summary.iloc[0]['total']))
       result.outputs.map((item) => item.artifactId).sort(),
     );
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 

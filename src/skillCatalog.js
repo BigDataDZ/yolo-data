@@ -45,20 +45,20 @@ export class SkillCatalog {
     this.database = database;
   }
 
-  list() {
-    const usageRows = this.database.db.prepare(`
+  async list() {
+    const usageRows = await this.database.query(`
       SELECT skill_code AS code, COUNT(*) AS count
       FROM theme_skills
       GROUP BY skill_code
-    `).all();
+    `);
     const usage = new Map(usageRows.map((row) => [row.code, row.count]));
 
-    const referenceRows = this.database.db.prepare(`
+    const referenceRows = await this.database.query(`
       SELECT ts.skill_code AS code, t.name AS themeName
       FROM theme_skills ts
       JOIN themes t ON t.id = ts.theme_id
       ORDER BY t.name
-    `).all();
+    `);
     const referencedBy = new Map();
     for (const row of referenceRows) {
       const names = referencedBy.get(row.code) ?? [];
@@ -66,13 +66,13 @@ export class SkillCatalog {
       referencedBy.set(row.code, names);
     }
 
-    const skills = this.database.db.prepare(`
+    const skills = (await this.database.query(`
       SELECT code, name, description, category, kind, tool_name AS toolName,
              instruction, status, source, source_path AS sourcePath,
              metadata_json AS metadataJson, phase_tags_json AS phaseTagsJson
       FROM skills
       ORDER BY source, category, code
-    `).all().map((row) => {
+    `)).map((row) => {
       const source = row.source || 'BUILTIN';
       return {
         code: row.code,
@@ -102,26 +102,22 @@ export class SkillCatalog {
     };
   }
 
-  setStatus(code, status) {
+  async setStatus(code, status) {
     const target = normalizeSkillCode(code);
-    const row = this.database.db.prepare(
-      'SELECT code FROM skills WHERE code = ?',
-    ).get(target);
+    const [row] = await this.database.query('SELECT code FROM skills WHERE code = ?', [target]);
     if (!row) {
       throw fail('skill not found', 404);
     }
     const next = normalizeSkillStatus(status);
-    this.database.db.prepare(
+    await this.database.execute(
       'UPDATE skills SET status = ?, updated_at = ? WHERE code = ?',
-    ).run(next, new Date().toISOString(), target);
+      [next, new Date().toISOString(), target]);
     return { code: target, status: next };
   }
 
-  remove(code) {
+  async remove(code) {
     const target = normalizeSkillCode(code);
-    const row = this.database.db.prepare(
-      'SELECT code, source FROM skills WHERE code = ?',
-    ).get(target);
+    const [row] = await this.database.query('SELECT code, source FROM skills WHERE code = ?', [target]);
     if (!row) {
       throw fail('skill not found', 404);
     }
@@ -129,25 +125,23 @@ export class SkillCatalog {
     if (!REMOVABLE_SOURCES.has(source)) {
       throw fail('内置 Skill 不支持删除，只能停用', 400);
     }
-    const referencedBy = this.database.db.prepare(`
+    const referencedBy = (await this.database.query(`
       SELECT t.name AS themeName
       FROM theme_skills ts
       JOIN themes t ON t.id = ts.theme_id
       WHERE ts.skill_code = ?
       ORDER BY t.name
-    `).all(target).map((item) => item.themeName);
+    `, [target])).map((item) => item.themeName);
     // theme_skills 声明了 ON DELETE CASCADE，引用行会随之清理。
-    this.database.db.prepare('DELETE FROM skills WHERE code = ?').run(target);
+    await this.database.execute('DELETE FROM skills WHERE code = ?', [target]);
     return { code: target, deleted: 1, referencedBy };
   }
 
-  saveUpload({ content, fileName } = {}) {
+  async saveUpload({ content, fileName } = {}) {
     const parsed = parseSkillUpload({ content, fileName });
     const slug = String(parsed.code).replace(/^external:/, '') || 'unnamed-skill';
     const code = `${UPLOAD_PREFIX}${slug}`;
-    const existing = this.database.db.prepare(
-      'SELECT code, source FROM skills WHERE code = ?',
-    ).get(code);
+    const [existing] = await this.database.query('SELECT code, source FROM skills WHERE code = ?', [code]);
     if (existing && (existing.source || 'BUILTIN') !== UPLOAD_SOURCE) {
       throw fail(
         `已存在同名 Skill（来源 ${existing.source || 'BUILTIN'}），请改名或先删除原条目`,
@@ -156,7 +150,7 @@ export class SkillCatalog {
     }
     const timestamp = new Date().toISOString();
     const contentHash = parsed.contentHash;
-    this.database.db.prepare(`
+    await this.database.execute(`
       INSERT INTO skills
         (code, name, description, category, kind, tool_name, instruction,
          default_enabled, status, source, source_path, metadata_json,
@@ -171,7 +165,7 @@ export class SkillCatalog {
         content = excluded.content,
         content_hash = excluded.content_hash,
         updated_at = excluded.updated_at
-    `).run(
+    `, [
       code,
       parsed.name,
       parsed.description,
@@ -183,7 +177,7 @@ export class SkillCatalog {
       contentHash,
       timestamp,
       timestamp,
-    );
+    ]);
     return {
       code,
       name: parsed.name,

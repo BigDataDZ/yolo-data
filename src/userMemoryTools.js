@@ -52,7 +52,7 @@ export function createUserMemoryToolHandler({ store, user, themeId = null }) {
     const scope = String(args.scope ?? 'all');
     const query = String(args.query ?? '').trim();
     const limit = Number(args.limit) || 8;
-    const documents = store.listDocuments({ userId: user.id, status: 1 });
+    const documents = await store.listDocumentsAsync({ userId: user.id, status: 1 });
     const scoped = documents.filter((document) => {
       if (scope === 'global') {
         return document.scopeKey === memoryScopeKey(null);
@@ -85,7 +85,7 @@ export function createUserMemoryToolHandler({ store, user, themeId = null }) {
         hint: '用 query 检索正文获取具体口径；摘要仅供参考，细节以检索结果为准。',
       };
     }
-    const results = store.search(user.id, themeId, query, limit);
+    const results = await store.searchAsync(user.id, themeId, query, limit);
     return {
       available: true,
       scope,

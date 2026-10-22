@@ -38,6 +38,9 @@ export function loadConfig(env = process.env) {
   const authMode = resolveAuthMode({ authMode: env.AUTH_MODE ?? '', nodeEnv });
   const host = String(env.HOST ?? '').trim() || (authMode === 'dev' ? '127.0.0.1' : '0.0.0.0');
   const dbPath = String(env.PLATFORM_DB_PATH ?? './data/platform.db').trim();
+  const platformDbBackend = String(
+    env.PLATFORM_DB_BACKEND ?? env.DATABASE_BACKEND ?? 'sqlite',
+  ).trim().toLowerCase() || 'sqlite';
   const skillDirectories = parsePathList(
     env.AGENT_SKILL_DIRECTORIES,
     [
@@ -58,6 +61,24 @@ export function loadConfig(env = process.env) {
     port: readInt(env.PORT, 8088),
     host,
     dbPath: path.isAbsolute(dbPath) ? dbPath : path.resolve(projectRoot, dbPath),
+    platformDatabase: {
+      backend: platformDbBackend,
+      path: path.isAbsolute(dbPath) ? dbPath : path.resolve(projectRoot, dbPath),
+      // Programmatic/test configs stay isolated by default; the real process
+      // config enables install-package resources unless explicitly disabled.
+      seedResources: env === process.env
+        && String(env.PLATFORM_BOOTSTRAP_RESOURCES ?? 'true').toLowerCase() !== 'false',
+      mysql: {
+        host: String(env.PLATFORM_DB_HOST ?? '').trim(),
+        port: readInt(env.PLATFORM_DB_PORT, 3306),
+        database: String(env.PLATFORM_DB_NAME ?? 'yolo_platform').trim(),
+        user: String(env.PLATFORM_DB_USER ?? 'yolo').trim(),
+        password: String(env.PLATFORM_DB_PASSWORD ?? ''),
+        charset: String(env.PLATFORM_DB_CHARSET ?? 'utf8mb4').trim(),
+        initialize: String(env.PLATFORM_DB_INIT ?? 'true').toLowerCase() !== 'false',
+        initSqlPath: String(env.PLATFORM_DB_INIT_SQL ?? './config/platform/mysql-init.sql').trim(),
+      },
+    },
     supersonic: {
       baseUrl: normalizeBaseUrl(env.SUPERSONIC_BASE_URL),
       token: String(env.SUPERSONIC_TOKEN ?? '').trim(),

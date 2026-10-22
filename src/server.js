@@ -194,8 +194,8 @@ export async function startServer(configOverride, indicatorClientOverride = null
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   startServer()
-    .then(({ url, application }) => {
-      const health = application.currentHealth();
+    .then(async ({ url, application }) => {
+      const health = await application.currentHealth();
       console.log(`YOLO Data running at ${url}`);
       console.log(`Indicator source: ${health.source.mode}${health.source.error ? ` (${health.source.error})` : ''}`);
       console.log(`Agent runtime: ${health.llm.mode}`);

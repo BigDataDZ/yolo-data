@@ -36,7 +36,7 @@ export class TokenBudgetService {
     return limit > 0 ? limit : 0;
   }
 
-  // 同步校验（数据库为 SQLite / 同步驱动，故此处不引入异步）。
+  // 兼容旧嵌入调用；生产 Agent 使用 checkAsync。
   check({ userId, themeId = null, userLimit = 0, themeLimit = 0 } = {}) {
     const limit = this.resolveLimit({ userLimit, themeLimit });
     if (!limit) {
@@ -44,6 +44,28 @@ export class TokenBudgetService {
     }
     const sinceIso = new Date(this.now() - WINDOW_MS).toISOString();
     const used = this.database.sumTokenUsage({
+      userId: userId ?? null,
+      themeId: themeId ?? null,
+      sinceIso,
+    });
+    const remaining = limit - used;
+    return {
+      ok: remaining > 0,
+      limit,
+      used,
+      remaining: Math.max(0, remaining),
+      enforced: true,
+      window: 'daily',
+    };
+  }
+
+  async checkAsync({ userId, themeId = null, userLimit = 0, themeLimit = 0 } = {}) {
+    const limit = this.resolveLimit({ userLimit, themeLimit });
+    if (!limit) {
+      return { ok: true, limit: 0, used: 0, remaining: Infinity, enforced: false };
+    }
+    const sinceIso = new Date(this.now() - WINDOW_MS).toISOString();
+    const used = await this.database.sumTokenUsageAsync({
       userId: userId ?? null,
       themeId: themeId ?? null,
       sinceIso,

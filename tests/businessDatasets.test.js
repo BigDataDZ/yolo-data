@@ -463,7 +463,7 @@ test(`agent routes and labels the authorized ${dbType} dataset executor`, async 
   }).catch((error) => assert.match(error.message, /execution label fixture failure/));
   assert.ok(failures.some((gap) => gap.kind === 'DATASET_EXECUTION' && gap.source === `${dbType}_DATASET`));
   await application.businessDatasets.close();
-  application.database.close();
+  await application.database.closeAsync();
 });
 }
 

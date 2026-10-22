@@ -1,5 +1,5 @@
 import { DatasourceCrypto } from './datasourceCrypto.js';
-import { fallbackUnlessDisabled, getActivePool } from './datasourcePool.js';
+import { fallbackUnlessDisabled, getActivePool, getActivePoolAsync } from './datasourcePool.js';
 import { getDialect, normalizeDataSource } from './dialects/index.js';
 import { classifyColumnType as normalizeDataType } from './dialects/common.js';
 import {
@@ -83,8 +83,29 @@ export class BusinessDatasetService {
     return this.database.listDataSources();
   }
 
+  async listDataSourcesAsync() {
+    if (this.database.isInMemory) return this.database.listDataSources();
+    return this.database.dataSourceRepository.listDataSourcesAsync();
+  }
+
+  async getDataSourceAsync(sourceId) {
+    if (this.database.isInMemory) return this.database.getDataSource(sourceId);
+    return this.database.dataSourceRepository.getDataSourceAsync(sourceId);
+  }
+
+  async listDatasetsAsync({ userId = null, includeDisabled = false } = {}) {
+    if (this.database.isInMemory) return this.database.listBusinessDatasets({ userId, includeDisabled });
+    return this.database.listBusinessDatasetsAsync({ userId, includeDisabled });
+  }
+
   listDatasets({ userId = null, includeDisabled = false } = {}) {
     return this.database.listBusinessDatasets({ userId, includeDisabled });
+  }
+
+  async getDatasetAsync(datasetId) {
+    return (this.database.isInMemory ? false : this.database.getBusinessDatasetAsync)
+      ? this.database.getBusinessDatasetAsync(datasetId)
+      : this.database.getBusinessDataset(datasetId);
   }
 
   getDataset(datasetId) {
@@ -93,6 +114,12 @@ export class BusinessDatasetService {
 
   getDatasetFields(datasetId, enabledOnly = false) {
     return this.database.listDatasetFields(datasetId, { enabledOnly });
+  }
+
+  async getDatasetFieldsAsync(datasetId, enabledOnly = false) {
+    return (this.database.isInMemory ? false : this.database.listDatasetFieldsAsync)
+      ? this.database.listDatasetFieldsAsync(datasetId, { enabledOnly })
+      : this.database.listDatasetFields(datasetId, { enabledOnly });
   }
 
   // Enable/disable a single field. Disabled fields stay in the metadata table so
@@ -121,6 +148,15 @@ export class BusinessDatasetService {
     };
   }
 
+  async setFieldEnabledAsync(datasetId, fieldName, enabled) {
+    const dataset = await this.getDatasetAsync(datasetId);
+    if (!dataset) throw Object.assign(new Error('dataset not found'), { statusCode: 404 });
+    const field = await this.database.setDatasetFieldEnabledAsync(dataset.id, fieldName, enabled);
+    if (!field) throw Object.assign(new Error(`dataset field not found: ${fieldName}`), { statusCode: 404 });
+    const all = await this.getDatasetFieldsAsync(dataset.id);
+    return { datasetId: dataset.id, field, summary: { total: all.length, enabled: all.filter((item) => item.enabled !== false).length } };
+  }
+
   saveDataSource(payload, id = null) {
     const encryptedPassword = payload.password ? this.crypto.encrypt(payload.password) : payload.encryptedPassword;
     const current = id ? this.database.getDataSource(id) : null;
@@ -129,6 +165,33 @@ export class BusinessDatasetService {
     if (current && current.code !== source.code) this.closePool(current.code);
     this.closePool(source.code);
     return source;
+  }
+
+  async saveDataSourceAsync(payload, id = null) {
+    const encryptedPassword = payload.password
+      ? this.crypto.encrypt(payload.password)
+      : payload.encryptedPassword;
+    const current = id ? await this.getDataSourceAsync(id) : null;
+    const code = String(payload.code ?? '').trim() || current?.code
+      || await this.nextSourceCodeAsync(payload.name);
+    const source = await this.database.dataSourceRepository.saveDataSourceAsync(
+      normalizeDataSource({ ...payload, code, encryptedPassword }), id,
+    );
+    if (current && current.code !== source.code) this.closePool(current.code);
+    this.closePool(source.code);
+    return source;
+  }
+
+  async nextSourceCodeAsync(name) {
+    const slug = String(name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '_')
+      .slice(0, 40).replace(/^_+|_+$/g, '');
+    const codes = new Set((await this.listDataSourcesAsync())
+      .map((item) => item.code));
+    const base = slug || `ds_${Date.now().toString(36)}`;
+    if (!codes.has(base)) return base;
+    let suffix = 2;
+    while (codes.has(`${base}_${suffix}`)) suffix += 1;
+    return `${base}_${suffix}`;
   }
 
   nextSourceCode(name) {
@@ -170,6 +233,25 @@ export class BusinessDatasetService {
     }
   }
 
+  async testDataSourceAsync(sourceOrId) {
+    const source = typeof sourceOrId === 'object'
+      ? sourceOrId
+      : await this.getDataSourceAsync(sourceOrId);
+    if (!source) throw new Error('data source not found');
+    let pool;
+    try {
+      pool = this.createPool(source);
+      await pool.query('SELECT 1');
+      return await this.database.dataSourceRepository.updateDataSourceTestAsync(source.id,
+        { ok: true, message: '连接成功' }, source);
+    } catch (error) {
+      return this.database.dataSourceRepository.updateDataSourceTestAsync(source.id,
+        { ok: false, message: error.message }, source);
+    } finally {
+      await pool?.end().catch(() => {});
+    }
+  }
+
   createPool(source) {
     const password = source.encryptedPassword ? this.crypto.decrypt(source.encryptedPassword) : '';
     return getDialect(source.dbType).createPool(source, password);
@@ -177,6 +259,15 @@ export class BusinessDatasetService {
 
   getPool(source) {
     return getActivePool(this, source);
+  }
+
+  async getPoolAsync(source) {
+    // Test/integration adapters may provide a custom pool factory; preserve
+    // that seam while production uses the async platform repository path.
+    if (this.database.isInMemory || this.getPool !== BusinessDatasetService.prototype.getPool) {
+      return this.getPool(source);
+    }
+    return getActivePoolAsync(this, source);
   }
 
   closePool(code) {
@@ -188,14 +279,14 @@ export class BusinessDatasetService {
   }
 
   async listDatabases(sourceId) {
-    const source = this.database.getDataSource(sourceId);
-    const [rows] = await this.getPool(source).query(getDialect(source.dbType).metadataSql('schemas'));
+    const source = await this.getDataSourceAsync(sourceId);
+    const [rows] = await (await this.getPoolAsync(source)).query(getDialect(source.dbType).metadataSql('schemas'));
     return rows.map((row) => Object.values(row)[0]);
   }
 
   async listTables(sourceId, schemaName) {
-    const source = this.database.getDataSource(sourceId);
-    const [rows] = await this.getPool(source).query({
+    const source = await this.getDataSourceAsync(sourceId);
+    const [rows] = await (await this.getPoolAsync(source)).query({
       sql: getDialect(source.dbType).metadataSql('tables'),
       values: [schemaName],
     });
@@ -203,8 +294,8 @@ export class BusinessDatasetService {
   }
 
   async listColumns(sourceId, schemaName, tableName) {
-    const source = this.database.getDataSource(sourceId);
-    const [rows] = await this.getPool(source).query({
+    const source = await this.getDataSourceAsync(sourceId);
+    const [rows] = await (await this.getPoolAsync(source)).query({
       sql: getDialect(source.dbType).metadataSql('columns'),
       values: [schemaName, tableName],
     });
@@ -212,7 +303,7 @@ export class BusinessDatasetService {
   }
 
   async createDataset(payload) {
-    const source = this.database.getDataSource(payload.datasourceId);
+    const source = await this.getDataSourceAsync(payload.datasourceId);
     if (!source) {
       throw new Error('data source not found');
     }
@@ -224,14 +315,14 @@ export class BusinessDatasetService {
     if (columns.length === 0) {
       throw new Error('table has no columns or does not exist');
     }
-    const dataset = this.database.saveBusinessDataset(payload);
+    const dataset = await this.database.saveBusinessDatasetAsync(payload);
     const fields = columns.map(inferField);
-    this.database.replaceDatasetFields(dataset.id, fields);
-    return this.getDataset(dataset.id);
+    await this.database.replaceDatasetFieldsAsync(dataset.id, fields);
+    return this.getDatasetAsync(dataset.id);
   }
 
   async syncDatasetFields(datasetId) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw new Error('dataset not found');
     }
@@ -242,10 +333,10 @@ export class BusinessDatasetService {
     );
     // Keep explicit disables across a schema re-sync; new columns default to enabled.
     const previousEnabled = new Map(
-      this.database.listDatasetFields(dataset.id)
+      (await this.getDatasetFieldsAsync(dataset.id))
         .map((field) => [field.fieldName, field.enabled]),
     );
-    return this.database.replaceDatasetFields(
+    return this.database.replaceDatasetFieldsAsync(
       dataset.id,
       columns.map(inferField).map((field) => (
         previousEnabled.get(field.fieldName) === false
@@ -256,12 +347,12 @@ export class BusinessDatasetService {
   }
 
   async sampleDataset(datasetId, limit = 20) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw new Error('dataset not found');
     }
     const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
-    const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
+    const fields = await this.getDatasetFieldsAsync(dataset.id, true);
     const selected = fields.slice(0, 20);
     if (selected.length === 0) {
       throw new Error('dataset has no enabled fields');
@@ -269,7 +360,7 @@ export class BusinessDatasetService {
     const sql = `SELECT ${
       selected.map((field) => quoteIdentifier(field.fieldName)).join(', ')
     } FROM ${quoteIdentifier(dataset.schemaName)}.${quoteIdentifier(dataset.primaryTable)} LIMIT ?`;
-    const [rows, fieldPackets] = await this.getPoolById(dataset.datasourceId).query({
+    const [rows, fieldPackets] = await (await this.getPoolByIdAsync(dataset.datasourceId)).query({
       sql,
       values: [Math.max(1, Math.min(Number(limit) || 20, 100))],
       timeout: 15_000,
@@ -291,7 +382,7 @@ export class BusinessDatasetService {
     const sql = `SELECT ${
       selected.map((field) => quoteIdentifier(field.fieldName)).join(', ')
     } FROM ${quoteIdentifier(dataset.schemaName)}.${quoteIdentifier(dataset.primaryTable)} LIMIT ?`;
-    const [rows, fieldPackets] = await this.getPoolById(dataset.datasourceId).query({
+    const [rows, fieldPackets] = await (await this.getPoolByIdAsync(dataset.datasourceId)).query({
       sql,
       values: [Math.max(1, Math.min(Number(limit) || 50, 200))],
       timeout: 15_000,
@@ -317,7 +408,7 @@ export class BusinessDatasetService {
       `MIN(${quoteIdentifier(field.fieldName)}) AS min_${index}`,
       `MAX(${quoteIdentifier(field.fieldName)}) AS max_${index}`,
     ]);
-    const [rows] = await this.getPoolById(dataset.datasourceId).query({
+    const [rows] = await (await this.getPoolByIdAsync(dataset.datasourceId)).query({
       sql: `SELECT ${select.join(', ')} FROM ${
         quoteIdentifier(dataset.schemaName)
       }.${quoteIdentifier(dataset.primaryTable)}`,
@@ -336,11 +427,11 @@ export class BusinessDatasetService {
   // Standalone "intelligent recognition": analyze the dataset and return
   // suggestions only. Nothing is persisted until applyDatasetProfile is called.
   async profileDataset(datasetId, { sampleSize = 50 } = {}) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw Object.assign(new Error('dataset not found'), { statusCode: 404 });
     }
-    const fields = this.database.listDatasetFields(dataset.id);
+    const fields = await this.getDatasetFieldsAsync(dataset.id);
     if (fields.length === 0) {
       throw Object.assign(
         new Error('dataset has no fields; sync fields before profiling'),
@@ -383,12 +474,12 @@ export class BusinessDatasetService {
   // Persists the accepted subset into the config surfaces the existing
   // pipeline already reads: dataset_fields.role/aggregator and
   // business_datasets.config.autoLatestDateRange/autoRangeDays.
-  applyDatasetProfile(datasetId, payload = {}) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+  async applyDatasetProfile(datasetId, payload = {}) {
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw Object.assign(new Error('dataset not found'), { statusCode: 404 });
     }
-    const existing = this.database.listDatasetFields(dataset.id);
+    const existing = await this.getDatasetFieldsAsync(dataset.id);
     const selected = normalizeProfileSelection(payload);
     const existingNames = new Set(existing.map((field) => field.fieldName));
     const unknown = selected.fields
@@ -414,11 +505,11 @@ export class BusinessDatasetService {
         description: patch.description ?? field.description,
       };
     });
-    const fields = this.database.replaceDatasetFields(dataset.id, merged);
+    const fields = await this.database.replaceDatasetFieldsAsync(dataset.id, merged);
     let saved = dataset;
     const configPatch = selected.config ?? {};
     if (Object.keys(configPatch).length > 0) {
-      saved = this.database.saveBusinessDataset({
+      saved = await this.database.saveBusinessDatasetAsync({
         ...dataset,
         config: { ...(dataset.config ?? {}), ...configPatch },
       }, dataset.id);
@@ -434,13 +525,12 @@ export class BusinessDatasetService {
   }
 
   async listDistinctFieldValues(datasetId, fieldName, { limit = 200 } = {}) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw new Error('dataset not found');
     }
     const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
-    const field = this.database
-      .listDatasetFields(dataset.id, { enabledOnly: true })
+    const field = (await this.getDatasetFieldsAsync(dataset.id, true))
       .find((item) => item.fieldName === fieldName);
     if (!field) {
       throw new Error(`dataset field not found: ${fieldName}`);
@@ -449,7 +539,7 @@ export class BusinessDatasetService {
     const sql = `SELECT DISTINCT ${column} AS value FROM ${
       quoteIdentifier(dataset.schemaName)
     }.${quoteIdentifier(dataset.primaryTable)} WHERE ${column} IS NOT NULL LIMIT ?`;
-    const [rows] = await this.getPoolById(dataset.datasourceId).query({
+    const [rows] = await (await this.getPoolByIdAsync(dataset.datasourceId)).query({
       sql,
       values: [Math.max(1, Math.min(Number(limit) || 200, 500))],
       timeout: 20_000,
@@ -459,11 +549,20 @@ export class BusinessDatasetService {
       .filter(Boolean))];
   }
 
+  async getPoolByIdAsync(datasourceId) {
+    if (this.getPoolById !== BusinessDatasetService.prototype.getPoolById) {
+      return this.getPoolById(datasourceId);
+    }
+    const source = await this.getDataSourceAsync(datasourceId);
+    if (!source) throw new Error('data source not found');
+    return this.getPoolAsync(source);
+  }
+
+  // Compatibility seam for embedded callers; production query paths use the
+  // async variant above.
   getPoolById(datasourceId) {
     const source = this.database.getDataSource(datasourceId);
-    if (!source) {
-      throw new Error('data source not found');
-    }
+    if (!source) throw new Error('data source not found');
     return this.getPool(source);
   }
 
@@ -677,12 +776,12 @@ export class BusinessDatasetService {
     userId,
     sessionId,
   }) {
-    const dataset = this.database.getBusinessDataset(datasetId);
+    const dataset = await this.getDatasetAsync(datasetId);
     if (!dataset) {
       throw new Error('dataset not found');
     }
     const quoteIdentifier = getDialect(dataset.dbType).quoteIdentifier;
-    const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
+    const fields = await this.getDatasetFieldsAsync(dataset.id, true);
     const effectiveRequest = { ...request };
     if (
       !effectiveRequest.dateRange
@@ -690,7 +789,7 @@ export class BusinessDatasetService {
     ) {
       const timeField = fields.find((field) => field.role === 'TIME');
       if (timeField) {
-        const [rows] = await this.getPoolById(dataset.datasourceId).query({
+        const [rows] = await (await this.getPoolByIdAsync(dataset.datasourceId)).query({
           sql: `SELECT MAX(${quoteIdentifier(timeField.fieldName)}) AS ${quoteIdentifier('maxDate')} FROM ${
             quoteIdentifier(dataset.schemaName)
           }.${quoteIdentifier(dataset.primaryTable)}`,
@@ -724,7 +823,7 @@ export class BusinessDatasetService {
     const compiled = this.buildQuery(datasetId, effectiveRequest, { probeLimit: true });
     const startedAt = Date.now();
     try {
-      const [probeRows, fieldPackets] = await this.getPoolById(compiled.dataset.datasourceId).query({
+      const [probeRows, fieldPackets] = await (await this.getPoolByIdAsync(compiled.dataset.datasourceId)).query({
         sql: compiled.sql,
         values: compiled.values,
         timeout: 20_000,
@@ -732,7 +831,8 @@ export class BusinessDatasetService {
       const truncated = probeRows.length > publicLimit;
       const rows = truncated ? probeRows.slice(0, publicLimit) : probeRows;
       const latencyMs = Date.now() - startedAt;
-      this.database.logDatasetQuery({
+      await (this.database.logDatasetQueryAsync
+        ? this.database.logDatasetQueryAsync({
         userId,
         sessionId,
         datasetId: compiled.dataset.id,
@@ -740,7 +840,11 @@ export class BusinessDatasetService {
         rowCount: rows.length,
         latencyMs,
         success: true,
-      });
+          })
+        : this.database.logDatasetQuery({
+          userId, sessionId, datasetId: compiled.dataset.id, sqlText: compiled.sql,
+          rowCount: rows.length, latencyMs, success: true,
+        }));
       // 指标列可能被计划重命名为自定义别名（例如 sale_amt -> sale_amt_total），
       // 仅按物理列名回查定义会丢失 METRIC/TIME 语义，导致下游把指标列当成维度，
       // 趋势/对比问题因此退化成纯表格。这里同时按指标输出别名回查定义。
@@ -789,7 +893,8 @@ export class BusinessDatasetService {
         latencyMs,
       };
     } catch (error) {
-      this.database.logDatasetQuery({
+      await (this.database.logDatasetQueryAsync
+        ? this.database.logDatasetQueryAsync({
         userId,
         sessionId,
         datasetId: compiled.dataset.id,
@@ -798,7 +903,12 @@ export class BusinessDatasetService {
         latencyMs: Date.now() - startedAt,
         success: false,
         errorMessage: error.message,
-      });
+          })
+        : this.database.logDatasetQuery({
+          userId, sessionId, datasetId: compiled.dataset.id, sqlText: compiled.sql,
+          rowCount: 0, latencyMs: Date.now() - startedAt, success: false,
+          errorMessage: error.message,
+        }));
       throw error;
     }
   }
@@ -807,9 +917,9 @@ export class BusinessDatasetService {
     if (!config.enabled || !config.host || !config.username || !config.password) {
       return null;
     }
-    let source = this.database.getDataSourceByCode('doris_dev');
+    let source = await this.database.getDataSourceByCodeAsync('doris_dev');
     if (!source) {
-      source = this.saveDataSource({
+      source = await this.saveDataSourceAsync({
         code: 'doris_dev',
         name: 'Doris 开发测试库',
         dbType: 'DORIS',
@@ -847,7 +957,8 @@ export class BusinessDatasetService {
     ].filter((item) => item.table);
     const created = [];
     for (const definition of datasetDefinitions) {
-      let dataset = this.database.getBusinessDatasetByCode(definition.code);
+      let dataset = (await this.database.listBusinessDatasetsAsync({ includeDisabled: true }))
+        .find((item) => item.code === definition.code);
       if (!dataset) {
         dataset = await this.createDataset({
           code: definition.code,
@@ -863,12 +974,12 @@ export class BusinessDatasetService {
             requireDateRange: definition.requireDateRange,
             autoLatestDateRange: definition.autoLatestDateRange,
             autoRangeDays: definition.autoRangeDays,
-            policyFieldMap: dataset.config?.policyFieldMap ?? {},
-            policyValueMap: dataset.config?.policyValueMap ?? {},
+            policyFieldMap: definition.policyFieldMap ?? {},
+            policyValueMap: definition.policyValueMap ?? {},
           },
         });
       } else {
-        dataset = this.database.saveBusinessDataset({
+        dataset = await this.database.saveBusinessDatasetAsync({
           ...dataset,
           config: {
             ...dataset.config,

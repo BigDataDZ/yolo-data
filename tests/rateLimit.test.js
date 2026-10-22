@@ -66,6 +66,6 @@ test('P0-8 rateLimit:chat buckets per user and rejects with a 429 envelope', asy
     assert.equal(otherUser.status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });

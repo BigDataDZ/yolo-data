@@ -7,7 +7,7 @@ test('Skill HTTP management rejects anonymous, analysts and forged admin headers
     const admin = await login('admin');
     const analyst = await login('east_manager');
     const { data: uploaded } = await request('/api/skill-catalog/upload', { cookie: admin, method: 'POST', body: { content: skillDocument(), fileName: 'SKILL.md' } });
-    const before = application.skillCatalog.list();
+    const before = await application.skillCatalog.list();
     const actions = [
       ['/api/skill-catalog', 'GET'],
       ['/api/skill-catalog/upload', 'POST', { content: skillDocument('unauthorized') }],
@@ -20,7 +20,7 @@ test('Skill HTTP management rejects anonymous, analysts and forged admin headers
         assert.equal(result.response.status, expected, `${method} ${route}`);
       }
     }
-    assert.deepEqual(application.skillCatalog.list(), before);
+    assert.deepEqual(await application.skillCatalog.list(), before);
     assert.equal((await request('/api/skill-catalog', { cookie: admin })).response.status, 200);
   });
 });
@@ -54,7 +54,7 @@ test('uploaded Skill is active in phase guidance, pause/resume preserves binding
 test('invalid Skill uploads/status values are rejected with no partial catalog writes', async () => {
   await withSkillServer(async ({ application, request, login }) => {
     const cookie = await login('admin');
-    const before = application.skillCatalog.list();
+    const before = await application.skillCatalog.list();
     const uploads = [
       { content: { name: 'object' } }, { content: 123 }, { content: ['array'] },
       { content: skillDocument(), fileName: 'payload.exe' },
@@ -67,16 +67,16 @@ test('invalid Skill uploads/status values are rejected with no partial catalog w
     ];
     for (const body of uploads) {
       assert.equal((await request('/api/skill-catalog/upload', { cookie, method: 'POST', body })).response.status, 400);
-      assert.deepEqual(application.skillCatalog.list(), before);
+      assert.deepEqual(await application.skillCatalog.list(), before);
     }
     for (const status of [undefined, null, true, {}, '', 'bogus', 2, -1]) {
       assert.equal((await request('/api/skill-catalog/status', { cookie, method: 'POST', body: { code: 'trend_analysis', status } })).response.status, 400);
-      assert.deepEqual(application.skillCatalog.list(), before);
+      assert.deepEqual(await application.skillCatalog.list(), before);
     }
     for (const route of ['upload', 'status', 'delete']) {
       for (const body of [null, [], 'text', false, 123]) {
         assert.equal((await request(`/api/skill-catalog/${route}`, { cookie, method: 'POST', body })).response.status, 400);
-        assert.deepEqual(application.skillCatalog.list(), before);
+        assert.deepEqual(await application.skillCatalog.list(), before);
       }
     }
     for (const code of [null, {}, [], 123, '']) {
@@ -95,7 +95,7 @@ test('repeat uploads update content without duplicating, re-enabling or losing t
     const updated = await request('/api/skill-catalog/upload', { cookie, method: 'POST', body: { content: `${skillDocument('repeated-method')}\n新版本步骤` } });
     assert.equal(updated.response.status, 200);
     assert.equal(updated.data.code, first.data.code);
-    assert.equal(application.skillCatalog.list().skills.filter((skill) => skill.code === first.data.code).length, 1);
+    assert.equal((await application.skillCatalog.list()).skills.filter((skill) => skill.code === first.data.code).length, 1);
     assert.equal(application.database.getSkill(first.data.code).status, 0);
     assert.match(application.database.getSkill(first.data.code).content, /新版本步骤/);
     assert.ok(application.database.listThemeSkillCodes(theme.id).includes(first.data.code));

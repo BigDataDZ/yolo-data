@@ -246,7 +246,7 @@ test('xlsx files are parsed without pandas or other dependencies', () => {
   assert.deepEqual(readXlsxSheet(written).rows, [['渠道', '目标'], ['A', '10']]);
 });
 
-test('upload parses xlsx into a table artifact with sheet name and dates', () => {
+test('upload parses xlsx into a table artifact with sheet name and dates', async () => {
   const harness = createHarness();
   try {
     const result = harness.uploads.upload({
@@ -277,7 +277,7 @@ test('upload parses xlsx into a table artifact with sheet name and dates', () =>
     assert.equal(original.payload.format, 'xlsx');
     assert.equal(original.metadata.source.extension, 'xlsx');
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
@@ -297,7 +297,7 @@ test('column names are normalized and duplicated headers stay addressable', () =
   assert.equal(detectDelimiter('only-one-column\n1\n'), ',');
 });
 
-test('upload writes original file, parsed table and process artifacts', () => {
+test('upload writes original file, parsed table and process artifacts', async () => {
   const harness = createHarness();
   try {
     const result = harness.uploads.upload({
@@ -341,11 +341,11 @@ test('upload writes original file, parsed table and process artifacts', () => {
     const audit = harness.database.listAuditLogs(50);
     assert.ok(audit.some((entry) => entry.action === 'FILE_UPLOAD'));
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
-test('upload rejects unsupported, oversized, binary and session-less requests', () => {
+test('upload rejects unsupported, oversized, binary and session-less requests', async () => {
   const harness = createHarness({ maxBytes: 64, maxFilesPerSession: 1 });
   try {
     const base = { userId: harness.user.id, sessionId: harness.session.id };
@@ -398,7 +398,7 @@ test('upload rejects unsupported, oversized, binary and session-less requests', 
     const audit = harness.database.listAuditLogs(50);
     assert.ok(audit.some((entry) => entry.action === 'FILE_REJECTED'));
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
@@ -409,7 +409,7 @@ for (const rejected of [
   { name: 'empty.json', content: Buffer.from('[{}]'), message: /识别出列/ },
   { name: 'blank.xls', content: Buffer.from(' \n'), message: /识别出列/ },
 ]) {
-  test(`rejected ${rejected.name} leaves no artifacts or versions and preserves upload quota`, () => {
+  test(`rejected ${rejected.name} leaves no artifacts or versions and preserves upload quota`, async () => {
     const harness = createHarness({ maxFilesPerSession: 1, allowedExtensions: ['csv', 'xls', 'xlsx', 'json'] });
     try {
       const base = { userId: harness.user.id, sessionId: harness.session.id };
@@ -428,13 +428,13 @@ for (const rejected of [
       assert.equal(harness.database.countRows('workspace_artifacts'), 3);
       assert.equal(harness.database.countRows('artifact_versions'), 3);
     } finally {
-      harness.database.close();
+      await harness.database.closeAsync();
       fs.rmSync(harness.directory, { recursive: true, force: true });
     }
   });
 }
 
-test('upload enforces the per-session quota', () => {
+test('upload enforces the per-session quota', async () => {
   const harness = createHarness({ maxFilesPerSession: 1 });
   try {
     const base = { userId: harness.user.id, sessionId: harness.session.id };
@@ -444,7 +444,7 @@ test('upload enforces the per-session quota', () => {
       /最多上传 1 个文件/,
     );
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
@@ -502,7 +502,7 @@ print('total', int(total))
     });
     assert.match(exported.content, /350/);
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
@@ -558,7 +558,7 @@ probe('os.open', lambda: os.open(target, os.O_RDONLY))
     assert.match(run.stdout, /os\.open BLOCKED/);
     assert.doesNotMatch(run.stdout, /LEAKED/);
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
@@ -603,7 +603,7 @@ test('upload route requires login in session mode and returns artifacts in dev m
     assert.equal((await denied.json()).message, '请先登录');
   } finally {
     await new Promise((resolve) => strict.server.close(resolve));
-    strict.application.database.close();
+    await strict.application.database.closeAsync();
   }
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-upload-http-'));
@@ -657,11 +657,11 @@ test('upload route requires login in session mode and returns artifacts in dev m
     assert.ok(application.uploads);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
-test('legacy binary xls is stored and flagged instead of being guessed', () => {
+test('legacy binary xls is stored and flagged instead of being guessed', async () => {
   const harness = createHarness();
   try {
     // 旧版 xls 的 OLE 容器签名
@@ -702,11 +702,11 @@ test('legacy binary xls is stored and flagged instead of being guessed', () => {
     assert.equal(htmlXls.table, null);
     assert.match(htmlXls.warnings[0], /HTML 表格/);
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
-test('question attachments bind only own session files and are stored on the user message', () => {
+test('question attachments bind only own session files and are stored on the user message', async () => {
   const harness = createHarness();
   try {
     const uploaded = harness.uploads.upload({
@@ -769,12 +769,12 @@ test('question attachments bind only own session files and are stored on the use
     const bound = harness.database.getWorkspaceArtifact(fileArtifactId, harness.user.id);
     assert.equal(Number(bound.messageId), appended.message.id);
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });
 
 
-test('uploaded mixed identifiers and blank amounts survive workspace XLSX export', () => {
+test('uploaded mixed identifiers and blank amounts survive workspace XLSX export', async () => {
   const harness = createHarness();
   try {
     const result = harness.uploads.upload({
@@ -801,6 +801,6 @@ test('uploaded mixed identifiers and blank amounts survive workspace XLSX export
     assert.equal(rows[2][1], '12.5');
     assert.equal(rows[3][1], '0');
   } finally {
-    harness.database.close();
+    await harness.database.closeAsync();
   }
 });

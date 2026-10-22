@@ -107,7 +107,7 @@ test('theme API stores model keys encrypted and never returns plaintext', async 
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -192,7 +192,7 @@ test('theme semantic value API persists field switches independently per agent',
     assert.equal(deniedResponse.status, 403);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -246,7 +246,7 @@ test('system settings can disable Supersonic and switch the agent to direct LLM 
     assert.equal(enabled.health.source.mode, 'supersonic');
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -337,7 +337,7 @@ test('model management persists multiple models and theme default selection', as
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -396,7 +396,7 @@ test('model management can test a saved model connection without exposing the ke
     assert.equal(application.database.getModel(created.id).hasApiKey, true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
@@ -434,7 +434,7 @@ test('model connection test turns an HTML upstream error into a readable message
     assert.equal(result.message.includes('<html>'), false);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
     await new Promise((resolve) => upstream.close(resolve));
   }
 });

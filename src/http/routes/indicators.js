@@ -31,6 +31,34 @@ function sendSnapshotIndicators({
 
 export function registerIndicatorRoutes(table) {
   table.add({
+    id: 'indicators.themes.replace',
+    method: 'PUT',
+    path: '/api/indicators/:indicatorId/themes',
+    tags: ['indicators'],
+    summary: '更新指标与主题的挂载关系（管理员）',
+    middleware: ['auth', 'admin'],
+    adminOnly: true,
+    handler: async (ctx) => {
+      const { request, response, database, params, getRequestUser, readJson, sendJson } = ctx;
+      const user = await getRequestUser(request, database);
+      if (user.role !== 'ADMIN') {
+        throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
+      }
+      const body = await readJson(request);
+      const relations = await database.themeRepository.replaceIndicatorThemesAsync(params[0], body.themeIds ?? []);
+      await database.addAuditLogAsync({
+        userId: user.id,
+        action: 'INDICATOR_THEME_RELATIONS_UPDATE',
+        detail: { indicatorId: String(params[0]), themeIds: relations.map((item) => item.themeId) },
+      });
+      sendJson(response, 200, {
+        indicatorId: String(params[0]),
+        themeIds: relations.map((item) => item.themeId),
+      });
+    },
+  });
+
+  table.add({
     id: 'indicators.types',
     method: 'GET',
     path: '/api/indicator-types',
@@ -46,7 +74,7 @@ export function registerIndicatorRoutes(table) {
         supersonicAvailable,
       } = ctx;
       const indicatorTypes = !application.getSupersonicEnabled()
-        ? database.localIndicators.listTypes()
+        ? await database.localIndicators.listTypesAsync()
         : !supersonicAvailable()
           ? []
           : await indicatorClient.listTypes().catch(() => []);
@@ -63,7 +91,7 @@ export function registerIndicatorRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, url, database, application, agent, indicatorClient, getRequestUser, sendJson, parseIntParam, supersonicAvailable } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const localMode = !application.getSupersonicEnabled();
       const keyword = url.searchParams.get('keyword') ?? '';
       const typeId = url.searchParams.get('typeId') ?? '';
@@ -93,7 +121,7 @@ export function registerIndicatorRoutes(table) {
         if (user.role !== 'ADMIN') {
           throw Object.assign(new Error('themeId is required'), { statusCode: 400 });
         }
-        const items = database.localIndicators.list({ keyword, typeId, limit });
+        const items = await database.localIndicators.listAsync({ keyword, typeId, limit });
         sendJson(response, 200, {
           items,
           total: items.length,
@@ -171,7 +199,7 @@ export function registerIndicatorRoutes(table) {
     handler: async (ctx) => {
       const { request, response, url, database, application, agent, indicatorClient, params, getRequestUser, sendJson, parseIntParam, supersonicAvailable } = ctx;
       const indicatorDetailRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const localMode = !application.getSupersonicEnabled();
       const themeId = parseIntParam(url.searchParams.get('themeId'), null);
       const indicatorId = indicatorDetailRoute[0];
@@ -196,7 +224,7 @@ export function registerIndicatorRoutes(table) {
         if (user.role !== 'ADMIN') {
           throw Object.assign(new Error('themeId is required'), { statusCode: 400 });
         }
-        const localIndicator = database.localIndicators.get(indicatorId);
+        const localIndicator = await database.localIndicators.getAsync(indicatorId);
         if (!localIndicator) {
           throw Object.assign(new Error('indicator not found'), { statusCode: 404 });
         }
@@ -269,13 +297,13 @@ export function registerIndicatorRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson, supersonicAvailable } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       if (!application.getSupersonicEnabled()) {
-        const localCount = database.localIndicators.count();
-        database.addAuditLog({
+        const localCount = await database.localIndicators.countAsync();
+        await database.addAuditLogAsync({
           userId: user.id,
           action: 'INDICATOR_LOCAL_MODE_CONFIRMED',
           detail: { localCount },
@@ -286,7 +314,7 @@ export function registerIndicatorRoutes(table) {
           persisted: false,
           message: '本地指标管理已启用',
           source: application.resolveIndicatorSource(),
-          health: application.currentHealth(),
+          health: await application.currentHealth(),
         });
         return;
       }
@@ -294,7 +322,7 @@ export function registerIndicatorRoutes(table) {
       // optional dependency, and any existing local snapshot stays usable.
       if (application.getSupersonicEnabled() && !supersonicAvailable()) {
         const source = application.resolveIndicatorSource();
-        database.addAuditLog({
+        await database.addAuditLogAsync({
           userId: user.id,
           action: 'INDICATOR_CONNECT',
           detail: { skipped: true, reason: 'SUPERSONIC_NOT_CONFIGURED', snapshot: source },
@@ -307,12 +335,12 @@ export function registerIndicatorRoutes(table) {
           persisted: false,
           message: '指标平台未接入，已跳过同步；已有的本地指标快照仍然可用',
           source,
-          health: application.currentHealth(),
+          health: await application.currentHealth(),
         });
         return;
       }
       const result = await application.syncIndicators({ persist: true });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'INDICATOR_CONNECT',
         detail: {
@@ -320,7 +348,7 @@ export function registerIndicatorRoutes(table) {
           snapshot: application.resolveIndicatorSource(),
         },
       });
-      sendJson(response, 200, { ...result, health: application.currentHealth() });
+      sendJson(response, 200, { ...result, health: await application.currentHealth() });
     },
   });
 
@@ -334,7 +362,7 @@ export function registerIndicatorRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -345,8 +373,8 @@ export function registerIndicatorRoutes(table) {
         );
       }
       const body = await readJson(request);
-      const indicator = database.localIndicators.save(body);
-      database.addAuditLog({
+      const indicator = await database.localIndicators.save(body);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'INDICATOR_LOCAL_CREATE',
         detail: { indicatorId: indicator.id, name: indicator.name },
@@ -365,7 +393,7 @@ export function registerIndicatorRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -376,12 +404,12 @@ export function registerIndicatorRoutes(table) {
         );
       }
       const indicatorId = decodeURIComponent(String(params[0]));
-      if (!database.localIndicators.get(indicatorId)) {
+      if (!await database.localIndicators.getAsync(indicatorId)) {
         throw Object.assign(new Error('local indicator not found'), { statusCode: 404 });
       }
       const body = await readJson(request);
-      const indicator = database.localIndicators.save(body, indicatorId);
-      database.addAuditLog({
+      const indicator = await database.localIndicators.save(body, indicatorId);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'INDICATOR_LOCAL_UPDATE',
         detail: { indicatorId, name: indicator.name },
@@ -400,7 +428,7 @@ export function registerIndicatorRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -411,10 +439,10 @@ export function registerIndicatorRoutes(table) {
         );
       }
       const indicatorId = decodeURIComponent(String(params[0]));
-      if (!database.localIndicators.delete(indicatorId)) {
+      if (!await database.localIndicators.deleteAsync(indicatorId)) {
         throw Object.assign(new Error('local indicator not found'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'INDICATOR_LOCAL_DELETE',
         detail: { indicatorId },

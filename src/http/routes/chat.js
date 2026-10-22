@@ -10,7 +10,7 @@ export function registerChatRoutes(table) {
     middleware: ['auth', 'rateLimit:chat'],
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, readJson, startNdjsonStream } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
       const writeEvent = startNdjsonStream(response);
       const abortController = new AbortController();
@@ -59,7 +59,7 @@ export function registerChatRoutes(table) {
     middleware: ['auth', 'rateLimit:chat', 'timeout:180s'],
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
       const result = await agent.answer({
         userId: user.id,
@@ -86,7 +86,7 @@ export function registerChatRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, workspace, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const sessionId = request.url.includes('?')
         ? Number(new URL(request.url, 'http://localhost').searchParams.get('sessionId'))
         : null;
@@ -107,11 +107,11 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, workspace, params, getRequestUser, sendJson } = ctx;
       const workspaceArtifactsRoute = params;
-      const user = getRequestUser(request, database);
-      sendJson(response, 200, workspace.listArtifacts({
+      const user = await getRequestUser(request, database);
+      sendJson(response, 200, await (workspace.listArtifactsAsync ? workspace.listArtifactsAsync({
         workspaceId: Number(workspaceArtifactsRoute[0]),
         userId: user.id,
-      }));
+      }) : workspace.listArtifacts({ workspaceId: Number(workspaceArtifactsRoute[0]), userId: user.id })));
     },
   });
 
@@ -125,11 +125,11 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, workspace, params, getRequestUser, sendJson } = ctx;
       const artifactRoute = params;
-      const user = getRequestUser(request, database);
-      sendJson(response, 200, workspace.getArtifact({
+      const user = await getRequestUser(request, database);
+      sendJson(response, 200, await (workspace.getArtifactAsync ? workspace.getArtifactAsync({
         artifactId: decodeURIComponent(artifactRoute[0]),
         userId: user.id,
-      }));
+      }) : workspace.getArtifact({ artifactId: decodeURIComponent(artifactRoute[0]), userId: user.id })));
     },
   });
 
@@ -143,15 +143,18 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, workspace, params, getRequestUser, readJson, sendJson } = ctx;
       const artifactTransformRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
-      const result = workspace.transformArtifact({
+      const input = {
         artifactId: decodeURIComponent(artifactTransformRoute[0]),
         userId: user.id,
         operation: body.operation,
         params: body.params ?? {},
-      });
-      database.addAuditLog({
+      };
+      const result = workspace.transformArtifactAsync
+        ? await workspace.transformArtifactAsync(input)
+        : workspace.transformArtifact(input);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'WORKSPACE_ARTIFACT_TRANSFORM',
         detail: {
@@ -174,13 +177,16 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, workspace, params, getRequestUser } = ctx;
       const artifactDownloadRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const url = new URL(request.url, 'http://localhost');
-      const exported = workspace.exportArtifact({
+      const exportInput = {
         artifactId: decodeURIComponent(artifactDownloadRoute[0]),
         userId: user.id,
         format: url.searchParams.get('format') ?? 'csv',
-      });
+      };
+      const exported = workspace.exportArtifactAsync
+        ? await workspace.exportArtifactAsync(exportInput)
+        : workspace.exportArtifact(exportInput);
       response.writeHead(200, {
         'Content-Type': exported.contentType,
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(exported.filename)}`,
@@ -199,8 +205,8 @@ export function registerChatRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
-      sendJson(response, 200, agent.listSessions(user.id));
+      const user = await getRequestUser(request, database);
+      sendJson(response, 200, await agent.listSessionsAsync(user.id));
     },
   });
 
@@ -213,15 +219,15 @@ export function registerChatRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
-      const session = agent.createSession({
+      const session = await agent.createSessionAsync({
         userId: user.id,
         themeId: Number(body.themeId),
         title: body.title,
         modelId: body.modelId ? Number(body.modelId) : null,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: session.themeId,
         action: 'CHAT_SESSION_CREATE',
@@ -245,8 +251,8 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, agent, params, getRequestUser, sendJson } = ctx;
       const sessionMessagesRoute = params;
-      const user = getRequestUser(request, database);
-      const messages = agent.listMessages(Number(sessionMessagesRoute[0]), user.id);
+      const user = await getRequestUser(request, database);
+      const messages = await agent.listMessagesAsync(Number(sessionMessagesRoute[0]), user.id);
       sendJson(response, 200, messages);
     },
   });
@@ -261,9 +267,9 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, agent, params, getRequestUser, sendJson } = ctx;
       const sessionDeleteRoute = params;
-      const user = getRequestUser(request, database);
-      const deleted = agent.deleteSession(Number(sessionDeleteRoute[0]), user.id);
-      database.addAuditLog({
+      const user = await getRequestUser(request, database);
+      const deleted = await agent.deleteSessionAsync(Number(sessionDeleteRoute[0]), user.id);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'CHAT_SESSION_DELETE',
         detail: { sessionId: Number(sessionDeleteRoute[0]), deleted },
@@ -281,9 +287,9 @@ export function registerChatRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const body = await readJson(request);
-      const result = application.feedback.submit({
+      const result = await application.feedback.submitAsync({
         userId: user.id,
         themeId: body.themeId ? Number(body.themeId) : null,
         sessionId: body.sessionId ? Number(body.sessionId) : null,
@@ -293,7 +299,7 @@ export function registerChatRoutes(table) {
         comment: body.comment,
         corrected: body.corrected ?? {},
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: body.themeId ? Number(body.themeId) : null,
         action: 'QA_FEEDBACK',
@@ -317,11 +323,11 @@ export function registerChatRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, application, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, application.feedback.list({
+      sendJson(response, 200, await application.feedback.listAsync({
         themeId: url.searchParams.get('themeId'),
         correct: url.searchParams.has('correct')
           ? url.searchParams.get('correct') === 'true'
@@ -341,11 +347,11 @@ export function registerChatRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, application, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, application.growth.list({
+      sendJson(response, 200, await application.growth.listAsync({
         includeClosed: url.searchParams.get('includeClosed') === 'true',
         limit: parseIntParam(url.searchParams.get('limit'), 200),
       }));
@@ -364,18 +370,18 @@ export function registerChatRoutes(table) {
       handler: async (ctx) => {
         const { request, response, database, application, params, getRequestUser, readJson, sendJson } = ctx;
         const id = Number(params[0]);
-        const user = getRequestUser(request, database);
+        const user = await getRequestUser(request, database);
         if (user.role !== 'ADMIN') {
           throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
         }
         const body = await readJson(request);
         const resolution = body.resolution ?? { note: body.note ?? '' };
-        const gap = action === 'dismiss'
-          ? application.growth.dismiss(id, resolution)
+        const gap = await application.growth.updateAsync(id, action === 'dismiss'
+          ? { dismissed: true, resolution }
           : action === 'resolve'
-            ? application.growth.resolve(id, resolution)
-            : application.growth.reopen(id);
-        database.addAuditLog({
+            ? { resolved: true, resolution }
+            : { dismissed: false, resolved: false, resolution: {} });
+        await database.addAuditLogAsync({
           userId: user.id,
           action: 'KNOWLEDGE_GAP_UPDATE',
           detail: { gapId: id, action, resolution },
@@ -395,7 +401,7 @@ export function registerChatRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, sendJson } = ctx;
       const queryPlanRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const plan = database.getQueryPlan(
         queryPlanRoute[0],
         user.role === 'ADMIN' ? null : user.id,
@@ -417,13 +423,13 @@ export function registerChatRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, application, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       sendJson(response, 200, {
-        stats: application.llmAudit.stats(),
-        items: application.llmAudit.list(parseIntParam(url.searchParams.get('limit'), 200)),
+        stats: await application.llmAudit.stats(),
+        items: await application.llmAudit.list(parseIntParam(url.searchParams.get('limit'), 200)),
       });
     },
   });
@@ -438,11 +444,11 @@ export function registerChatRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listAuditLogs(
+      sendJson(response, 200, await database.listAuditLogsAsync(
         parseIntParam(url.searchParams.get('limit'), 100),
       ));
     },

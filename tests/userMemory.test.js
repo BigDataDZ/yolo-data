@@ -167,7 +167,7 @@ test('memory search returns located hits for the handbook body', () => {
   assert.ok(userMemories.stats(admin.id).documentsWithContent >= 1);
 });
 
-test('legacy row memories migrate into notes exactly once', () => {
+test('legacy row memories migrate into notes exactly once', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-memory-legacy-'));
   const database = new PlatformDatabase(path.join(directory, 'test.db'));
   const admin = database.getUserByUsername('admin');
@@ -194,7 +194,7 @@ test('legacy row memories migrate into notes exactly once', () => {
   assert.equal(migrated[0].kind, 'TERM');
 
   assert.equal(new UserMemoryStore(database).listNotes({ userId: admin.id }).length, 1, '不重复迁移');
-  database.close();
+  await database.closeAsync();
 });
 
 test('distiller extracts explicit remembers without a model', async () => {
@@ -494,7 +494,7 @@ test('long-term memory api scopes普通用户到本人、管理员到全部用�
     assert.equal(await application.userMemories.getDocument(ownerDocument.id), null);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 

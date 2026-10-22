@@ -12,11 +12,11 @@ export function registerSkillRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, application.skillCatalog.list());
+      sendJson(response, 200, await application.skillCatalog.list());
     },
   });
 
@@ -30,21 +30,21 @@ export function registerSkillRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = skillCatalogPayload(await readJson(request));
-      const skill = application.skillCatalog.saveUpload({
+      const skill = await application.skillCatalog.saveUpload({
         content: body.content,
         fileName: body.fileName,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SKILL_UPLOAD',
         detail: { code: skill.code, name: skill.name },
       });
-      sendJson(response, 200, { ...skill, catalog: application.skillCatalog.list() });
+      sendJson(response, 200, { ...skill, catalog: await application.skillCatalog.list() });
     },
   });
 
@@ -58,14 +58,14 @@ export function registerSkillRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = skillCatalogPayload(await readJson(request));
       const status = body.status;
-      const result = application.skillCatalog.setStatus(body.code, status);
-      database.addAuditLog({
+      const result = await application.skillCatalog.setStatus(body.code, status);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SKILL_STATUS_UPDATE',
         detail: { code: result.code, status: result.status },
@@ -84,13 +84,13 @@ export function registerSkillRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = skillCatalogPayload(await readJson(request));
-      const result = application.skillCatalog.remove(body.code);
-      database.addAuditLog({
+      const result = await application.skillCatalog.remove(body.code);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SKILL_DELETE',
         detail: { code: result.code, referencedBy: result.referencedBy },

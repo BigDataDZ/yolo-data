@@ -44,12 +44,15 @@ export class SkillRegistry {
     this.coreResolvers = coreResolvers ?? createCoreSkillResolverRegistry();
   }
 
-  refreshExternalSkills() {
+  async refreshExternalSkills() {
     const discovered = this.adapter.discover();
     if (discovered.roots.length === 0) {
+      const persisted = this.database.isAsyncPlatformStore
+        ? await this.database.listSkillsAsync()
+        : this.listSkills();
       this.lastSync = {
         syncedAt: new Date().toISOString(),
-        count: this.listSkills().filter((skill) => skill.source === 'SKILL_MD').length,
+        count: persisted.filter((skill) => skill.source === 'SKILL_MD').length,
         roots: [],
         configuredRoots: discovered.configuredRoots,
         warnings: discovered.warnings,
@@ -57,7 +60,9 @@ export class SkillRegistry {
       };
       return this.lastSync;
     }
-    const count = this.database.syncExternalSkills(discovered.skills);
+    const count = this.database.isAsyncPlatformStore
+      ? await this.database.skillRepository.syncExternalSkills(discovered.skills)
+      : await this.database.syncExternalSkills(discovered.skills);
     this.lastSync = {
       syncedAt: new Date().toISOString(),
       count,
@@ -84,6 +89,21 @@ export class SkillRegistry {
         })),
       ...persisted,
     ];
+  }
+
+  async listSkillsAsync() {
+    const persisted = await this.database.listSkillsAsync();
+    const known = new Set(persisted.map((skill) => skill.code));
+    return [
+      ...CORE_SKILL_DEFINITIONS.filter((skill) => !known.has(skill.code)).map((skill) => ({
+        ...skill, source: 'BUILTIN', status: 1,
+      })),
+      ...persisted,
+    ];
+  }
+
+  async listForThemeAsync(theme) {
+    return normalizeSkillCodes(theme?.skillCodes ?? [], await this.listSkillsAsync());
   }
 
   listForTheme(theme) {

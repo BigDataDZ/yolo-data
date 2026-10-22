@@ -133,6 +133,58 @@
       ]
     }
   ],
+  "models": [
+    {
+      "name": "DeepSeek 默认模型",
+      "provider": "deepseek",
+      "modelName": "deepseek-chat",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "apiKeyEnv": "API_KEY",
+      "temperature": 0,
+      "maxTokens": 0,
+      "timeoutMs": 60000,
+      "maxToolRounds": 12,
+      "isDefault": true,
+      "status": 1
+    }
+  ],
+  "dataSources": [
+    {
+      "code": "bootstrap_business_doris",
+      "name": "业务 Doris 数据源（待配置）",
+      "dbType": "DORIS",
+      "host": "",
+      "port": 9030,
+      "databaseName": "",
+      "username": "",
+      "options": {
+        "readonly": true,
+        "maxRows": 1000,
+        "queryTimeoutMs": 20000
+      },
+      "status": 0
+    }
+  ],
+  "businessDatasets": [
+    {
+      "code": "bootstrap_sales_performance_template",
+      "name": "销售明细数据集（待配置）",
+      "description": "安装包预置的数据集模板。请先配置业务 Doris 数据源和实际表名，再启用此数据集。",
+      "datasourceCode": "bootstrap_business_doris",
+      "schemaName": "your_database",
+      "primaryTable": "your_sales_table",
+      "config": {
+        "readonly": true,
+        "maxRows": 1000,
+        "queryTimeoutMs": 20000,
+        "requireDateRange": true,
+        "autoLatestDateRange": true,
+        "autoRangeDays": 30
+      },
+      "status": 0,
+      "fields": []
+    }
+  ],
   "businessLexicon": {
     "version": 1,
     "metricTerms": [

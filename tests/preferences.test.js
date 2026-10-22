@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { PlatformDatabase } from '../src/database.js';
 
-test('user interface preferences persist in the platform database', () => {
+test('user interface preferences persist in the platform database', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-preferences-'));
   const database = new PlatformDatabase(path.join(directory, 'test.db'));
   const user = database.getUserByUsername('admin');
@@ -25,6 +25,6 @@ test('user interface preferences persist in the platform database', () => {
   database.saveUserPreferences(user.id, { selectedThemeId: 2 });
   assert.equal(database.getUserPreferences(user.id).selectedThemeId, 2);
   assert.equal(database.getUserPreferences(user.id).chatDensity, 'compact');
-  database.close();
+  await database.closeAsync();
 });
 

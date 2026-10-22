@@ -400,7 +400,7 @@ export class SemanticValueRegistry {
     const enumLike = isPotentialEnumField(field);
     const schemaHash = schemaFingerprint([field]);
     const currentScopeSignature = scopeSignature(scope);
-    const activeSnapshot = this.database.getActiveSemanticValueSnapshot({
+    const activeSnapshot = await (this.database.getActiveSemanticValueSnapshotAsync ?? this.database.getActiveSemanticValueSnapshot).call(this.database, {
       themeId,
       sourceType: normalizedSourceType,
       sourceId: String(sourceId),
@@ -483,7 +483,7 @@ export class SemanticValueRegistry {
       }
     }
 
-    const overrideRows = this.database.listSemanticValueOverrides({
+    const overrideRows = await (this.database.listSemanticValueOverridesAsync ?? this.database.listSemanticValueOverrides).call(this.database, {
       themeId,
       sourceType: normalizedSourceType,
       sourceId: String(sourceId),
@@ -568,7 +568,7 @@ export class SemanticValueRegistry {
     let snapshot = activeSnapshot;
     if (snapshotChanged) {
       const previousChecksum = activeSnapshot?.checksum ?? '';
-      snapshot = this.database.saveSemanticValueSnapshot({
+      snapshot = await (this.database.saveSemanticValueSnapshotAsync ?? this.database.saveSemanticValueSnapshot).call(this.database, {
         themeId,
         sourceType: normalizedSourceType,
         sourceId: String(sourceId),
@@ -583,7 +583,7 @@ export class SemanticValueRegistry {
         errorMessage: sourceError,
         expiresAt,
       });
-      this.database.createSemanticValueAuditLog({
+      await (this.database.createSemanticValueAuditLogAsync ?? this.database.createSemanticValueAuditLog).call(this.database, {
         themeId,
         sourceType: normalizedSourceType,
         sourceId: String(sourceId),
@@ -592,7 +592,7 @@ export class SemanticValueRegistry {
         beforeChecksum: previousChecksum,
         afterChecksum: snapshot.checksum,
       });
-      this.database.replaceSemanticValueDomains({
+      await (this.database.replaceSemanticValueDomainsAsync ?? this.database.replaceSemanticValueDomains).call(this.database, {
         themeId,
         sourceType: normalizedSourceType,
         sourceId: String(sourceId),

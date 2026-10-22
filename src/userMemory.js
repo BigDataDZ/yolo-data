@@ -79,66 +79,6 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-export function ensureUserMemorySchema(database) {
-  database.db.exec(`
-    CREATE TABLE IF NOT EXISTS user_memory_documents (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      theme_id INTEGER,
-      scope_key TEXT NOT NULL,
-      scope_label TEXT NOT NULL DEFAULT '',
-      summary TEXT NOT NULL DEFAULT '',
-      content TEXT NOT NULL DEFAULT '',
-      version INTEGER NOT NULL DEFAULT 0,
-      status INTEGER NOT NULL DEFAULT 1,
-      summary_budget INTEGER NOT NULL DEFAULT ${SUMMARY_BUDGET},
-      content_budget INTEGER NOT NULL DEFAULT ${CONTENT_BUDGET},
-      last_consolidated_at TEXT,
-      injected_count INTEGER NOT NULL DEFAULT 0,
-      last_injected_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (user_id, scope_key)
-    );
-
-    CREATE TABLE IF NOT EXISTS user_memory_notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      theme_id INTEGER,
-      scope_key TEXT NOT NULL,
-      kind TEXT NOT NULL DEFAULT 'BUSINESS_KNOWLEDGE',
-      source TEXT NOT NULL DEFAULT 'DISTILLED',
-      state TEXT NOT NULL DEFAULT 'PENDING',
-      content TEXT NOT NULL,
-      dedupe_key TEXT NOT NULL,
-      session_id INTEGER,
-      merged_version INTEGER,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      UNIQUE (user_id, scope_key, dedupe_key)
-    );
-
-    CREATE TABLE IF NOT EXISTS user_memory_versions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      document_id INTEGER NOT NULL,
-      version INTEGER NOT NULL,
-      summary TEXT NOT NULL DEFAULT '',
-      content TEXT NOT NULL DEFAULT '',
-      note_count INTEGER NOT NULL DEFAULT 0,
-      change_reason TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      UNIQUE (document_id, version)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_user_memory_documents_user
-      ON user_memory_documents(user_id, status, updated_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_user_memory_notes_scope
-      ON user_memory_notes(user_id, scope_key, state, id DESC);
-    CREATE INDEX IF NOT EXISTS idx_user_memory_versions_doc
-      ON user_memory_versions(document_id, version DESC);
-  `);
-}
-
 function mapDocument(row) {
   if (!row) {
     return null;
@@ -215,12 +155,16 @@ export class UserMemoryStore {
     this.summaryBudget = summaryBudget;
     this.contentBudget = contentBudget;
     this.maxPendingNotes = maxPendingNotes;
-    ensureUserMemorySchema(database);
     this.migrateLegacyMemories();
   }
 
   // 旧的行式记忆（user_memories）按原样保留在库中，只把内容迁移成笔记，避免语义丢失。
   migrateLegacyMemories() {
+    // Legacy row memories are a SQLite-era compatibility table. MySQL uses
+    // the async schema and must not touch the synchronous driver during boot.
+    if (!this.database?.db?.prepare) {
+      return 0;
+    }
     const migrated = this.database.getPlatformSetting?.(LEGACY_MIGRATION_KEY, null)?.value;
     if (migrated) {
       return 0;
@@ -283,6 +227,34 @@ export class UserMemoryStore {
     `).all(...params, Math.max(1, Math.min(Number(limit) || 50, 200))).map(mapDocument);
   }
 
+  async listDocumentsAsync({
+    userId = null, themeId = null, status = null, limit = 50,
+  } = {}) {
+    const conditions = [];
+    const params = [];
+    if (userId !== null && userId !== undefined) {
+      conditions.push('d.user_id = ?');
+      params.push(Number(userId));
+    }
+    if (themeId) {
+      conditions.push('(d.theme_id = ? OR d.theme_id IS NULL)');
+      params.push(Number(themeId));
+    }
+    if (status === 0 || status === 1) {
+      conditions.push('d.status = ?');
+      params.push(Number(status));
+    }
+    const rows = await this.database.query(`
+      SELECT ${DOCUMENT_COLUMNS}
+      FROM user_memory_documents d
+      LEFT JOIN themes t ON t.id = d.theme_id
+      ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+      ORDER BY d.theme_id IS NULL, d.updated_at DESC, d.id DESC
+      LIMIT ?
+    `, [...params, Math.max(1, Math.min(Number(limit) || 50, 200))]);
+    return rows.map(mapDocument);
+  }
+
   // 自动维护的工作清单：有待合并笔记，或正文已经长到需要压缩的作用域。
   listMaintenanceTargets({ compactThreshold = 0, limit = 100 } = {}) {
     const targets = new Map();
@@ -324,6 +296,35 @@ export class UserMemoryStore {
       .slice(0, Math.max(1, Math.min(Number(limit) || 100, 500)));
   }
 
+  async listMaintenanceTargetsAsync({ compactThreshold = 0, limit = 100 } = {}) {
+    const targets = new Map();
+    const targetKey = (userId, scopeKey) => `${userId}:${scopeKey}`;
+    const pendingRows = await this.database.query(`
+      SELECT user_id AS userId, theme_id AS themeId, scope_key AS scopeKey, COUNT(*) AS pending
+      FROM user_memory_notes WHERE state = 'PENDING'
+      GROUP BY user_id, scope_key
+    `);
+    for (const row of pendingRows) {
+      targets.set(targetKey(row.userId, row.scopeKey), {
+        userId: row.userId, themeId: row.themeId ?? null, scopeKey: row.scopeKey,
+        pendingNotes: Number(row.pending) || 0, contentLength: 0,
+      });
+    }
+    for (const document of await this.listDocumentsAsync({ limit: 500 })) {
+      const key = targetKey(document.userId, document.scopeKey);
+      const entry = targets.get(key) ?? {
+        userId: document.userId, themeId: document.themeId ?? null,
+        scopeKey: document.scopeKey, pendingNotes: 0, contentLength: 0,
+      };
+      entry.contentLength = String(document.content ?? '').length;
+      if (entry.contentLength > 0 || entry.pendingNotes > 0) targets.set(key, entry);
+    }
+    return [...targets.values()]
+      .filter((item) => item.pendingNotes > 0 || (compactThreshold > 0 && item.contentLength >= compactThreshold))
+      .sort((left, right) => right.pendingNotes - left.pendingNotes || right.contentLength - left.contentLength)
+      .slice(0, Math.max(1, Math.min(Number(limit) || 100, 500)));
+  }
+
   getDocument(id) {
     return mapDocument(this.database.db.prepare(`
       SELECT ${DOCUMENT_COLUMNS}
@@ -333,6 +334,16 @@ export class UserMemoryStore {
     `).get(Number(id)));
   }
 
+  async getDocumentAsync(id) {
+    const [row] = await this.database.query(`
+      SELECT ${DOCUMENT_COLUMNS}
+      FROM user_memory_documents d
+      LEFT JOIN themes t ON t.id = d.theme_id
+      WHERE d.id = ?
+    `, [Number(id)]);
+    return mapDocument(row);
+  }
+
   getDocumentByScope(userId, themeId) {
     return mapDocument(this.database.db.prepare(`
       SELECT ${DOCUMENT_COLUMNS}
@@ -340,6 +351,37 @@ export class UserMemoryStore {
       LEFT JOIN themes t ON t.id = d.theme_id
       WHERE d.user_id = ? AND d.scope_key = ?
     `).get(Number(userId), memoryScopeKey(themeId)));
+  }
+
+  async getDocumentByScopeAsync(userId, themeId) {
+    const [row] = await this.database.query(`
+      SELECT ${DOCUMENT_COLUMNS}
+      FROM user_memory_documents d
+      LEFT JOIN themes t ON t.id = d.theme_id
+      WHERE d.user_id = ? AND d.scope_key = ?
+    `, [Number(userId), memoryScopeKey(themeId)]);
+    return mapDocument(row);
+  }
+
+  async ensureDocumentAsync(userId, themeId = null) {
+    const existing = await this.getDocumentByScopeAsync(userId, themeId);
+    if (existing) return existing;
+    const timestamp = nowIso();
+    const values = [Number(userId), themeId ? Number(themeId) : null, memoryScopeKey(themeId),
+      this.summaryBudget, this.contentBudget, timestamp, timestamp];
+    await this.database.transaction(async (tx) => {
+      const [current] = await tx.query(
+        'SELECT id FROM user_memory_documents WHERE user_id = ? AND scope_key = ?',
+        [Number(userId), memoryScopeKey(themeId)],
+      );
+      if (!current) {
+        await tx.execute(`INSERT INTO user_memory_documents
+          (user_id, theme_id, scope_key, scope_label, summary, content, version, status,
+           summary_budget, content_budget, created_at, updated_at)
+          VALUES (?, ?, ?, '', '', '', 0, 1, ?, ?, ?, ?)`, values);
+      }
+    });
+    return this.getDocumentByScopeAsync(userId, themeId);
   }
 
   ensureDocument(userId, themeId = null) {
@@ -400,6 +442,24 @@ export class UserMemoryStore {
     return this.getDocument(id);
   }
 
+  async updateDocumentAsync(id, { summary, content, status, scopeLabel } = {}) {
+    const current = await this.getDocumentAsync(id);
+    if (!current) return null;
+    const nextSummary = summary === undefined ? current.summary : clampText(summary, current.summaryBudget);
+    const nextContent = content === undefined ? current.content : clampText(content, current.contentBudget);
+    if (nextSummary !== current.summary || nextContent !== current.content) {
+      await this.saveConsolidatedAsync(id, {
+        summary: nextSummary, content: nextContent, changeReason: '人工编辑',
+      });
+    }
+    await this.database.execute(`UPDATE user_memory_documents
+      SET status = ?, scope_label = ?, updated_at = ? WHERE id = ?`, [
+      status === undefined ? current.status : (Number(status) ? 1 : 0),
+      scopeLabel === undefined ? current.scopeLabel : String(scopeLabel), nowIso(), Number(id),
+    ]);
+    return this.getDocumentAsync(id);
+  }
+
   // 合并落库：写入新版本快照并整体替换正文与摘要，版本号自增。
   saveConsolidated(id, {
     summary, content, changeReason = '', noteCount = 0,
@@ -433,6 +493,27 @@ export class UserMemoryStore {
     return this.getDocument(current.id);
   }
 
+  async saveConsolidatedAsync(id, {
+    summary, content, changeReason = '', noteCount = 0,
+  }) {
+    const current = await this.getDocumentAsync(id);
+    if (!current) return null;
+    const nextVersion = Number(current.version) + 1;
+    const nextSummary = clampText(summary ?? current.summary, current.summaryBudget);
+    const nextContent = clampText(content ?? current.content, current.contentBudget);
+    const timestamp = nowIso();
+    await this.database.transaction(async (tx) => {
+      await tx.execute(`INSERT INTO user_memory_versions
+        (document_id, version, summary, content, note_count, change_reason, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`, [current.id, nextVersion, nextSummary, nextContent,
+        Number(noteCount) || 0, String(changeReason ?? ''), timestamp]);
+      await tx.execute(`UPDATE user_memory_documents
+        SET summary = ?, content = ?, version = ?, last_consolidated_at = ?, updated_at = ?
+        WHERE id = ?`, [nextSummary, nextContent, nextVersion, timestamp, timestamp, current.id]);
+    });
+    return this.getDocumentAsync(current.id);
+  }
+
   listVersions(documentId, limit = 20) {
     return this.database.db.prepare(`
       SELECT id, document_id AS documentId, version, summary, content,
@@ -442,6 +523,17 @@ export class UserMemoryStore {
       ORDER BY version DESC
       LIMIT ?
     `).all(Number(documentId), Math.max(1, Math.min(Number(limit) || 20, 100)));
+  }
+
+  async listVersionsAsync(documentId, limit = 20) {
+    return this.database.query(`
+      SELECT id, document_id AS documentId, version, summary, content,
+             note_count AS noteCount, change_reason AS changeReason, created_at AS createdAt
+      FROM user_memory_versions
+      WHERE document_id = ?
+      ORDER BY version DESC
+      LIMIT ?
+    `, [Number(documentId), Math.max(1, Math.min(Number(limit) || 20, 100))]);
   }
 
   rollback(documentId, version) {
@@ -459,6 +551,17 @@ export class UserMemoryStore {
     });
   }
 
+  async rollbackAsync(documentId, version) {
+    const [snapshot] = await this.database.query(
+      'SELECT summary, content FROM user_memory_versions WHERE document_id = ? AND version = ?',
+      [Number(documentId), Number(version)],
+    );
+    if (!snapshot) return null;
+    return this.saveConsolidatedAsync(documentId, {
+      summary: snapshot.summary, content: snapshot.content, changeReason: `回滚至 v${Number(version)}`,
+    });
+  }
+
   removeDocument(id) {
     const current = this.getDocument(id);
     if (!current) {
@@ -470,6 +573,17 @@ export class UserMemoryStore {
       .run(current.id);
     this.database.db.prepare('DELETE FROM user_memory_documents WHERE id = ?').run(current.id);
     return true;
+  }
+
+  async removeDocumentAsync(id) {
+    const current = await this.getDocumentAsync(id);
+    if (!current) return false;
+    return this.database.transaction(async (tx) => {
+      await tx.execute('DELETE FROM user_memory_notes WHERE user_id = ? AND scope_key = ?', [current.userId, current.scopeKey]);
+      await tx.execute('DELETE FROM user_memory_versions WHERE document_id = ?', [current.id]);
+      const result = await tx.execute('DELETE FROM user_memory_documents WHERE id = ?', [current.id]);
+      return Number(result.affectedRows) > 0;
+    });
   }
 
   listNotes({
@@ -506,6 +620,41 @@ export class UserMemoryStore {
     `).all(...params, Math.max(1, Math.min(Number(limit) || 200, 500))).map(mapNote);
   }
 
+  async listNotesAsync({
+    userId, themeId = null, scopeKey = '', state = '', kind = '', keyword = '', limit = 200,
+  } = {}) {
+    const conditions = ['n.user_id = ?'];
+    const params = [Number(userId)];
+    if (scopeKey) {
+      conditions.push('n.scope_key = ?');
+      params.push(String(scopeKey));
+    } else if (themeId) {
+      conditions.push('(n.theme_id = ? OR n.theme_id IS NULL)');
+      params.push(Number(themeId));
+    }
+    if (NOTE_STATES[String(state ?? '').toUpperCase()]) {
+      conditions.push('n.state = ?');
+      params.push(String(state).toUpperCase());
+    }
+    if (KIND_SET.has(String(kind ?? '').toUpperCase())) {
+      conditions.push('n.kind = ?');
+      params.push(String(kind).toUpperCase());
+    }
+    if (String(keyword ?? '').trim()) {
+      conditions.push('n.content LIKE ?');
+      params.push(`%${String(keyword).trim()}%`);
+    }
+    const rows = await this.database.query(`
+      SELECT ${NOTE_COLUMNS}
+      FROM user_memory_notes n
+      LEFT JOIN themes t ON t.id = n.theme_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY n.state = 'PENDING' DESC, n.id DESC
+      LIMIT ?
+    `, [...params, Math.max(1, Math.min(Number(limit) || 200, 500))]);
+    return rows.map(mapNote);
+  }
+
   getNote(id) {
     return mapNote(this.database.db.prepare(`
       SELECT ${NOTE_COLUMNS}
@@ -515,6 +664,12 @@ export class UserMemoryStore {
     `).get(Number(id)));
   }
 
+  async getNoteAsync(id) {
+    const [row] = await this.database.query(`SELECT ${NOTE_COLUMNS}
+      FROM user_memory_notes n LEFT JOIN themes t ON t.id = n.theme_id WHERE n.id = ?`, [Number(id)]);
+    return mapNote(row);
+  }
+
   pendingNotes(userId, themeId = null, limit = MAX_PENDING_NOTES) {
     return this.listNotes({
       userId,
@@ -522,6 +677,10 @@ export class UserMemoryStore {
       state: 'PENDING',
       limit,
     });
+  }
+
+  async pendingNotesAsync(userId, themeId = null, limit = MAX_PENDING_NOTES) {
+    return this.listNotesAsync({ userId, themeId, state: 'PENDING', limit });
   }
 
   // 笔记只追加：同一作用域内内容重复时只刷新时间与来源，不新增条目，也不覆盖已有类型，
@@ -571,6 +730,40 @@ export class UserMemoryStore {
     return { ...this.getNote(Number(result.lastInsertRowid)), deduped: false };
   }
 
+  async createNoteAsync({
+    userId, themeId = null, kind, content, source = 'DISTILLED', state = 'PENDING',
+    sessionId = null, createdAt = null,
+  }) {
+    const text = normalizeNoteContent(content);
+    if (text.length < MIN_NOTE_LENGTH || text.length > MAX_NOTE_LENGTH) return null;
+    const scopeKey = memoryScopeKey(themeId);
+    const key = noteKey(text);
+    const timestamp = nowIso();
+    let id;
+    let deduped = false;
+    await this.database.transaction(async (tx) => {
+      const [existing] = await tx.query(`SELECT id FROM user_memory_notes
+        WHERE user_id = ? AND scope_key = ? AND dedupe_key = ?`, [Number(userId), scopeKey, key]);
+      if (existing) {
+        id = Number(existing.id);
+        deduped = true;
+        await tx.execute(`UPDATE user_memory_notes SET content = ?, updated_at = ?,
+          state = CASE WHEN state = 'ARCHIVED' THEN 'PENDING' ELSE state END WHERE id = ?`, [text, timestamp, id]);
+        return;
+      }
+      const result = await tx.execute(`INSERT INTO user_memory_notes
+        (user_id, theme_id, scope_key, kind, source, state, content, dedupe_key,
+         session_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        Number(userId), themeId ? Number(themeId) : null, scopeKey, normalizeKind(kind),
+        NOTE_SOURCES[String(source ?? '').toUpperCase()] ? String(source).toUpperCase() : 'DISTILLED',
+        NOTE_STATES[String(state ?? '').toUpperCase()] ? String(state).toUpperCase() : 'PENDING',
+        text, key, sessionId ? Number(sessionId) : null, createdAt ?? timestamp, timestamp,
+      ]);
+      id = Number(result.insertId);
+    });
+    return { ...(await this.getNoteAsync(id)), deduped };
+  }
+
   updateNote(id, { content, kind, state } = {}) {
     const current = this.getNote(id);
     if (!current) {
@@ -597,9 +790,27 @@ export class UserMemoryStore {
     return this.getNote(id);
   }
 
+  async updateNoteAsync(id, { content, kind, state } = {}) {
+    const current = await this.getNoteAsync(id);
+    if (!current) return null;
+    const text = content === undefined ? current.content : normalizeNoteContent(content);
+    if (text.length < MIN_NOTE_LENGTH || text.length > MAX_NOTE_LENGTH) return null;
+    await this.database.execute(`UPDATE user_memory_notes SET content = ?, kind = ?, state = ?,
+      dedupe_key = ?, updated_at = ? WHERE id = ?`, [text,
+      kind === undefined ? current.kind : normalizeKind(kind),
+      state === undefined ? current.state : (NOTE_STATES[String(state).toUpperCase()] ? String(state).toUpperCase() : current.state),
+      noteKey(text), nowIso(), Number(id)]);
+    return this.getNoteAsync(id);
+  }
+
   removeNote(id) {
     return this.database.db.prepare('DELETE FROM user_memory_notes WHERE id = ?')
       .run(Number(id)).changes > 0;
+  }
+
+  async removeNoteAsync(id) {
+    const result = await this.database.execute('DELETE FROM user_memory_notes WHERE id = ?', [Number(id)]);
+    return Number(result.affectedRows) > 0;
   }
 
   markNotesMerged(ids, version) {
@@ -613,6 +824,16 @@ export class UserMemoryStore {
       SET state = 'MERGED', merged_version = ?, updated_at = ?
       WHERE id IN (${placeholders})
     `).run(Number(version) || null, nowIso(), ...list).changes;
+  }
+
+  async markNotesMergedAsync(ids, version) {
+    const list = (ids ?? []).map(Number).filter(Number.isFinite);
+    if (!list.length) return 0;
+    const placeholders = list.map(() => '?').join(',');
+    const result = await this.database.execute(`UPDATE user_memory_notes
+      SET state = 'MERGED', merged_version = ?, updated_at = ?
+      WHERE id IN (${placeholders})`, [Number(version) || null, nowIso(), ...list]);
+    return Number(result.affectedRows) || 0;
   }
 
   markDocumentUsed(ids) {
@@ -651,6 +872,30 @@ export class UserMemoryStore {
       '用户长期记忆：以下是该用户在本平台历史协作中沉淀的业务知识与偏好，只注入摘要。',
       '用途：补全用户未明说的默认口径与术语映射，减少重复澄清。',
       '与本轮问题直接相关的记忆细节已在本轮问数前前置注入；仍可用 search_user_memory 工具按需检索完整记忆正文。',
+        '当本轮默认口径、时间范围或术语取自记忆时，在口径说明里一句话注明“沿用你的历史偏好”，不要展开记忆原文。',
+        '约束：与主题提示词、平台规则或本轮用户明确指令冲突时，一律以后者为准；不得据此编造数据或替代正式数据来源。',
+        retrievalText,
+      ].join('\n'),
+    };
+  }
+
+  async buildContextMessageAsync(userId, themeId = null) {
+    const documents = (await this.listDocumentsAsync({ userId, themeId, status: 1, limit: 200 }))
+      .filter((document) => document.summary || document.content);
+    if (documents.length === 0) return null;
+    const lines = documents.map((document) => {
+      const body = document.summary || clampText(document.content, document.summaryBudget);
+      return `[${document.scopeLabel}]（v${document.version}）\n${body}`;
+    });
+    const retrievalText = lines.join('\n\n');
+    await this.markDocumentUsedAsync(documents.map((document) => document.id));
+    return {
+      role: 'system',
+      retrievalText,
+      content: [
+        '用户长期记忆：以下是该用户在本平台历史协作中沉淀的业务知识与偏好，只注入摘要。',
+        '用途：补全用户未明说的默认口径与术语映射，减少重复澄清。',
+        '与本轮问题直接相关的记忆细节已在本轮问数前前置注入；仍可用 search_user_memory 工具按需检索完整记忆正文。',
         '当本轮默认口径、时间范围或术语取自记忆时，在口径说明里一句话注明“沿用你的历史偏好”，不要展开记忆原文。',
         '约束：与主题提示词、平台规则或本轮用户明确指令冲突时，一律以后者为准；不得据此编造数据或替代正式数据来源。',
         retrievalText,
@@ -701,6 +946,56 @@ export class UserMemoryStore {
       .slice(0, Math.max(1, Math.min(Number(limit) || 8, 30)));
   }
 
+  async searchAsync(userId, themeId, query, limit = 8) {
+    const keyword = String(query ?? '').trim().toLowerCase();
+    const documents = (await this.listDocumentsAsync({ userId, themeId, status: 1, limit: 500 }))
+      .filter((document) => document.summary || document.content);
+    const results = [];
+    for (const document of documents) {
+      const lines = String(document.content ?? '').split('\n');
+      lines.forEach((line, index) => {
+        const text = line.trim();
+        if (!text) return;
+        const score = keyword
+          ? (text.toLowerCase().includes(keyword) ? 2 : 0)
+            + keyword.split(/\s+/).filter((token) => token && text.toLowerCase().includes(token)).length
+          : 0;
+        if (score > 0) {
+          results.push({
+            documentId: document.id,
+            scopeLabel: document.scopeLabel,
+            version: document.version,
+            location: `${document.scopeKey}#L${index + 1}`,
+            excerpt: lines.slice(index, index + 3).join('\n').trim().slice(0, 400),
+            score,
+          });
+        }
+      });
+      if (!keyword && document.summary) {
+        results.push({
+          documentId: document.id,
+          scopeLabel: document.scopeLabel,
+          version: document.version,
+          location: `${document.scopeKey}#summary`,
+          excerpt: document.summary.slice(0, 400),
+          score: 1,
+        });
+      }
+    }
+    return results
+      .sort((left, right) => right.score - left.score || right.version - left.version)
+      .slice(0, Math.max(1, Math.min(Number(limit) || 8, 30)));
+  }
+
+  async markDocumentUsedAsync(ids) {
+    const list = (ids ?? []).map(Number).filter(Number.isFinite);
+    if (!list.length) return;
+    const placeholders = list.map(() => '?').join(',');
+    await this.database.execute(`UPDATE user_memory_documents
+      SET injected_count = injected_count + 1, last_injected_at = ?
+      WHERE id IN (${placeholders})`, [nowIso(), ...list]);
+  }
+
   stats(userId) {
     const documents = this.listDocuments({ userId, limit: 200 });
     const notes = this.listNotes({ userId, limit: 500 });
@@ -712,6 +1007,26 @@ export class UserMemoryStore {
       archivedNotes: notes.filter((note) => note.state === 'ARCHIVED').length,
       lastUpdatedAt: [...documents, ...notes]
         .reduce((latest, item) => (item.updatedAt > latest ? item.updatedAt : latest), '') || null,
+    };
+  }
+
+  async statsAsync(userId) {
+    const [row] = await this.database.query(`
+      SELECT
+        COUNT(*) AS notes,
+        SUM(CASE WHEN state = 'PENDING' THEN 1 ELSE 0 END) AS pendingNotes
+      FROM user_memory_notes WHERE user_id = ?
+    `, [Number(userId)]);
+    const [documentStats] = await this.database.query(`
+      SELECT COUNT(*) AS documents,
+        SUM(CASE WHEN TRIM(content) <> '' THEN 1 ELSE 0 END) AS documentsWithContent
+      FROM user_memory_documents WHERE user_id = ?
+    `, [Number(userId)]);
+    return {
+      documents: Number(documentStats?.documents ?? 0),
+      documentsWithContent: Number(documentStats?.documentsWithContent ?? 0),
+      notes: Number(row?.notes ?? 0),
+      pendingNotes: Number(row?.pendingNotes ?? 0),
     };
   }
 }

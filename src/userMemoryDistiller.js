@@ -188,16 +188,16 @@ export class UserMemoryDistiller {
     return Math.max(1, Math.floor(budget * this.compactRatio));
   }
 
-  modelHarness(themeId) {
+  async modelHarness(themeId) {
     if (!this.resolveHarness) {
       return null;
     }
-    const harness = this.resolveHarness(themeId);
+    const harness = await this.resolveHarness(themeId);
     return typeof harness?.chat === 'function' ? harness : null;
   }
 
   // 会话结束后的旁路写入：只落笔记，攒够阈值再合并。失败不影响问数主流程。
-  ingest({
+  async ingest({
     userId, themeId, sessionId, question, answer,
   }) {
     try {
@@ -206,7 +206,7 @@ export class UserMemoryDistiller {
         return null;
       }
       this.lastRunAt.set(key, Date.now());
-      const harness = this.modelHarness(themeId);
+      const harness = await this.modelHarness(themeId);
       if (!harness) {
         return this.storeExplicit({ userId, themeId, sessionId, question });
       }
@@ -220,12 +220,12 @@ export class UserMemoryDistiller {
     }
   }
 
-  storeExplicit({
+  async storeExplicit({
     userId, themeId, sessionId, question,
   }) {
     const notes = [];
     for (const candidate of extractExplicitNotes(question)) {
-      const note = this.store.createNote({
+      const note = await this.store.createNoteAsync({
         userId,
         themeId,
         kind: candidate.kind,
@@ -243,7 +243,7 @@ export class UserMemoryDistiller {
   async extractNotes({
     harness, userId, themeId, sessionId, question, answer,
   }) {
-    const explicit = this.storeExplicit({ userId, themeId, sessionId, question });
+    const explicit = await this.storeExplicit({ userId, themeId, sessionId, question });
     if (!harness) {
       return explicit;
     }
@@ -268,7 +268,7 @@ export class UserMemoryDistiller {
     for (const candidate of parseJsonArray(payload)
       .map(normalizeMemoryCandidate)
       .filter((item) => item && item.confidence >= this.minConfidence)) {
-      const note = this.store.createNote({
+      const note = await this.store.createNoteAsync({
         userId,
         themeId,
         kind: candidate.kind,
@@ -287,7 +287,7 @@ export class UserMemoryDistiller {
   async distillConversation({
     userId, themeId, sessionId, question, answer, useModel = true,
   }) {
-    const harness = useModel ? this.modelHarness(themeId) : null;
+    const harness = useModel ? await this.modelHarness(themeId) : null;
     if (!harness) {
       return this.storeExplicit({ userId, themeId, sessionId, question });
     }
@@ -300,12 +300,12 @@ export class UserMemoryDistiller {
   async consolidate({
     userId, themeId = null, auto = false, minPending = this.autoConsolidateAt,
   }) {
-    const document = this.store.ensureDocument(userId, themeId);
-    const notes = this.store.pendingNotes(userId, themeId);
+    const document = await this.store.ensureDocumentAsync(userId, themeId);
+    const notes = await this.store.pendingNotesAsync(userId, themeId);
     if (notes.length === 0) {
       return { changed: false, reason: 'NO_PENDING_NOTES', document, merged: 0 };
     }
-    const harness = this.modelHarness(themeId);
+    const harness = await this.modelHarness(themeId);
     // 自动合并要同时满足“攒够一批”和“不在冷却期”，避免每轮问答都调模型；
     // 手动合并（auto=false）不受阈值和冷却限制。
     if (auto) {
@@ -338,16 +338,16 @@ export class UserMemoryDistiller {
       return { changed: false, reason: 'EMPTY_RESULT', document, merged: 0 };
     }
     if (nextContent === document.content && nextSummary === document.summary) {
-      this.store.markNotesMerged(notes.map((note) => note.id), document.version);
+      await this.store.markNotesMergedAsync(notes.map((note) => note.id), document.version);
       return { changed: false, reason: 'IDENTICAL_CONTENT', document, merged: notes.length };
     }
-    const saved = this.store.saveConsolidated(document.id, {
+    const saved = await this.store.saveConsolidatedAsync(document.id, {
       summary: nextSummary || document.summary,
       content: nextContent || document.content,
       changeReason: harness ? `合并 ${notes.length} 条笔记` : `追加合并 ${notes.length} 条笔记`,
       noteCount: notes.length,
     });
-    this.store.markNotesMerged(notes.map((note) => note.id), saved.version);
+    await this.store.markNotesMergedAsync(notes.map((note) => note.id), saved.version);
     return {
       changed: true,
       reason: 'CONSOLIDATED',
@@ -360,7 +360,7 @@ export class UserMemoryDistiller {
   // 自动压缩：正文长到阈值后，用模型去重、合并近义条目并丢弃被取代的旧表述，生成新版本。
   // 压缩永远不编造：没有模型时不压缩，超过安全比例（丢太多）时判定为异常并放弃。
   async compact({ userId, themeId = null, auto = false }) {
-    const document = this.store.ensureDocument(userId, themeId);
+    const document = await this.store.ensureDocumentAsync(userId, themeId);
     const content = String(document.content ?? '').trim();
     const threshold = this.compactThreshold(document);
     if (!content) {
@@ -369,7 +369,7 @@ export class UserMemoryDistiller {
     if (auto && content.length < threshold) {
       return { changed: false, reason: 'NOT_NEEDED', document, threshold };
     }
-    const harness = this.modelHarness(themeId);
+    const harness = await this.modelHarness(themeId);
     if (!harness) {
       return { changed: false, reason: 'MODEL_REQUIRED', document, threshold };
     }
@@ -395,7 +395,7 @@ export class UserMemoryDistiller {
       // 压缩掉超过 65% 通常是模型误删，宁可保留原文也不交付有丢失风险的版本。
       return { changed: false, reason: 'OVER_COMPRESSED', document, threshold };
     }
-    const saved = this.store.saveConsolidated(document.id, {
+    const saved = await this.store.saveConsolidatedAsync(document.id, {
       summary: planned.summary || document.summary,
       content: next,
       changeReason: `自动压缩 ${content.length}→${next.length} 字`,

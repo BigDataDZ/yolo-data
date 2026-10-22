@@ -47,6 +47,19 @@ function readArtifactText(workspace, artifactId) {
   return content === null || content === undefined ? null : String(content);
 }
 
+async function readArtifactTextAsync(workspace, artifactId) {
+  if (!workspace || !artifactId) return null;
+  try {
+    const artifact = workspace.getArtifactAsync
+      ? await workspace.getArtifactAsync({ artifactId })
+      : workspace.getArtifact({ artifactId });
+    const content = artifact?.payload?.content ?? artifact?.content ?? null;
+    return content === null || content === undefined ? null : String(content);
+  } catch {
+    return null;
+  }
+}
+
 // outputs 里没有契约产物时返回 null：表示"本轮没有可校验的分析结果"，
 // 与"有产物但校验不通过"是两回事，调用方据此区分是否要告警。
 export function validateAnalysisOutputs({ workspace, outputs }) {
@@ -78,4 +91,19 @@ export function validateAnalysisOutputs({ workspace, outputs }) {
     claims: validation.claims,
     summary: validation.valid ? summarizeAnalysisResult(validation) : '',
   };
+}
+
+export async function validateAnalysisOutputsAsync({ workspace, outputs }) {
+  const target = findAnalysisOutput(outputs);
+  if (!target) return null;
+  const content = await readArtifactTextAsync(workspace, target.artifactId);
+  if (!content) return fail('ANALYSIS-UNREADABLE', `无法读取 ${ANALYSIS_RESULT_FILE} 内容，无法完成契约校验。`);
+  let payload;
+  try {
+    payload = JSON.parse(content);
+  } catch (error) {
+    return fail('ANALYSIS-INVALID-JSON', `${ANALYSIS_RESULT_FILE} 不是合法 JSON：${error.message}`);
+  }
+  const validation = validateAnalysisResult(payload);
+  return { file: ANALYSIS_RESULT_FILE, valid: validation.valid, issues: validation.issues, claims: validation.claims, summary: validation.valid ? summarizeAnalysisResult(validation) : '' };
 }

@@ -1,6 +1,7 @@
 // 帮助中心页面模块：搜索 + 分类卡 + 文章视图（内容来自 public/docs/help/*.md）。
 import * as core from '../core/runtime.js';
 import { HELP_TABS, bindSectionTabs, sectionTabsMarkup } from '../components/sectionTabs.js';
+import { starBannerMarkup } from '../components/helpBanner.js';
 
 const {
   ICONS,
@@ -135,6 +136,8 @@ export async function renderHelpPage(root) {
   root.innerHTML = `
     <div class="onboarding-page help-page">
       ${sectionTabsMarkup(HELP_TABS, 'help', '使用引导与帮助中心')}
+
+      ${starBannerMarkup()}
 
       <div class="help-search-wrap">
         <span class="help-search-icon">${pageIcon('search')}</span>
@@ -283,6 +286,7 @@ export async function renderHelpArticle(root, articleId) {
               <span class="feedback-state" id="articleFeedbackState" hidden>感谢反馈</span>
             </span>
           </div>
+          ${starBannerMarkup('compact')}
         </article>
       </div>
     </div>

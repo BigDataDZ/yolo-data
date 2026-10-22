@@ -224,12 +224,27 @@ export class WorkspaceService {
     });
   }
 
+  async ensureForSessionAsync(args) {
+    if (!this.database.ensureWorkspaceAsync) return this.ensureForSession(args);
+    const existing = await this.database.getWorkspaceBySessionAsync(args.sessionId, args.userId);
+    if (existing && args.name && existing.name !== String(args.name).trim()) return this.database.updateWorkspaceAsync(existing.id, args.userId, { name: args.name });
+    return this.database.ensureWorkspaceAsync(args);
+  }
+
   listForUser({ userId, sessionId = null }) {
     if (sessionId) {
       const workspace = this.database.getWorkspaceBySession(sessionId, userId);
       return workspace ? [workspace] : [];
     }
     return [];
+  }
+
+  async listForUserAsync({ userId, sessionId = null }) {
+    if (!sessionId) return [];
+    const workspace = this.database.getWorkspaceBySessionAsync
+      ? await this.database.getWorkspaceBySessionAsync(sessionId, userId)
+      : this.database.getWorkspaceBySession(sessionId, userId);
+    return workspace ? [workspace] : [];
   }
 
   listArtifacts({ workspaceId, userId }) {
@@ -240,12 +255,41 @@ export class WorkspaceService {
     return this.database.listWorkspaceArtifacts(workspace.id, userId);
   }
 
+  async listArtifactsAsync({ workspaceId, userId }) {
+    if (!this.database.getWorkspaceAsync || !this.database.listWorkspaceArtifactsAsync) {
+      return this.listArtifacts({ workspaceId, userId });
+    }
+    const workspace = await this.database.getWorkspaceAsync(workspaceId, userId);
+    if (!workspace) throw new Error('workspace not found');
+    return this.database.listWorkspaceArtifactsAsync(workspace.id, userId);
+  }
+
   getArtifact({ artifactId, userId }) {
     const artifact = this.database.getWorkspaceArtifact(artifactId, userId);
     if (!artifact) {
       throw new Error('workspace artifact not found');
     }
     return artifact;
+  }
+
+  async getArtifactAsync({ artifactId, userId }) {
+    if (!this.database.getWorkspaceArtifactAsync) return this.getArtifact({ artifactId, userId });
+    const artifact = await this.database.getWorkspaceArtifactAsync(artifactId, userId);
+    if (!artifact) throw new Error('workspace artifact not found');
+    return artifact;
+  }
+
+  async createResultArtifactAsync(params) {
+    if (!this.database.createWorkspaceArtifactAsync) return this.createResultArtifact(params);
+    const result = this.createResultArtifactPayload(params);
+    return this.database.createWorkspaceArtifactAsync(result);
+  }
+
+  createResultArtifactPayload({ workspaceId, userId, sessionId, messageId, conversationId, answer, artifactType = 'QUERY_RESULT', inputArtifactIds = [], runId = null, source = null }) {
+    const fallbackSubject = answer.indicator?.name ?? answer.dataset?.name ?? answer.chart?.title ?? '问数结果';
+    const subject = buildArtifactTitle(answer.resolvedQuestion ?? answer.question, { fallback: fallbackSubject });
+    const metadata = { question: answer.question, resolvedQuestion: answer.resolvedQuestion ?? answer.question, rowCount: answer.data?.rows?.length ?? 0, columnCount: answer.data?.columns?.length ?? 0, chartType: answer.chart?.type ?? 'table', queryFingerprint: answer.queryFingerprint ?? null, dataHash: answer.dataHash ?? null, timeGrain: answer.semanticParse?.timeGrain ?? null, columns: answer.data?.columns ?? [], source, inputArtifactIds, parentArtifactIds: inputArtifactIds, runId, lineageQuestion: answer.resolvedQuestion ?? answer.question ?? '', capabilities: buildArtifactCapabilities({ sourceType: source?.type, source, data: answer.data, semanticParse: answer.semanticParse, queryFingerprint: answer.queryFingerprint, dataHash: answer.dataHash }) };
+    return { workspaceId, userId, sessionId, messageId, conversationId, artifactType, title: subject, metadata, payload: { data: answer.data ?? { columns: [], rows: [] }, chart: answer.chart ?? null, semanticParse: answer.semanticParse ?? null, runtime: answer.runtime ?? null, question: answer.question, resolvedQuestion: answer.resolvedQuestion ?? answer.question } };
   }
 
   createResultArtifact({
@@ -336,6 +380,11 @@ export class WorkspaceService {
     });
   }
 
+  async createProcessArtifactAsync(input) {
+    if (!this.database.createWorkspaceArtifactAsync) return this.createProcessArtifact(input);
+    return this.database.createWorkspaceArtifactAsync({ ...input, artifactType: 'PROCESS_STEP' });
+  }
+
   createFileArtifact({
     workspaceId,
     userId,
@@ -378,9 +427,21 @@ export class WorkspaceService {
     });
   }
 
+  async createFileArtifactAsync(input) {
+    if (!this.database.createWorkspaceArtifactAsync) return this.createFileArtifact(input);
+    const { workspaceId, userId, sessionId, messageId = null, title, content, encoding = 'utf8', format, mimeType, purpose = '', runId = null, inputArtifactIds = [], size = 0, source = null } = input;
+    return this.database.createWorkspaceArtifactAsync({ workspaceId, userId, sessionId, messageId, artifactType: 'FILE', title, metadata: { format, mimeType, size, purpose, source, runId, inputArtifactIds, parentArtifactIds: inputArtifactIds }, payload: { encoding, content, format, mimeType } });
+  }
+
   // 通用表格产物写入：用于本地上传解析等非查询来源的表格数据。
   createTableArtifact({ artifactType = 'TABLE', ...params }) {
     return this.database.createWorkspaceArtifact({ artifactType, ...params });
+  }
+
+  async createTableArtifactAsync({ artifactType = 'TABLE', ...params }) {
+    return this.database.createWorkspaceArtifactAsync
+      ? this.database.createWorkspaceArtifactAsync({ artifactType, ...params })
+      : this.createTableArtifact({ artifactType, ...params });
   }
 
   createCodeArtifact({
@@ -424,12 +485,40 @@ export class WorkspaceService {
     });
   }
 
+  async createCodeArtifactAsync(input) {
+    if (!this.database.createWorkspaceArtifactAsync) return this.createCodeArtifact(input);
+    const { workspaceId, userId, sessionId, messageId = null, title, code, stdout = '', stderr = '', success = true, durationMs = 0, runId, inputArtifacts = [], outputs = [], purpose = '' } = input;
+    return this.database.createWorkspaceArtifactAsync({ workspaceId, userId, sessionId, messageId, artifactType: 'CODE', title, metadata: { runId, purpose, success, durationMs, inputArtifactIds: inputArtifacts.map((item) => item.artifactId), outputArtifactIds: outputs.map((item) => item.artifactId), inputArtifacts, outputs }, payload: { code: String(code ?? ''), stdout: String(stdout ?? ''), stderr: String(stderr ?? '') } });
+  }
+
   bindArtifactsToMessage({ artifactIds, userId, messageId }) {
     return this.database.bindWorkspaceArtifactsToMessage({
       artifactIds,
       userId,
       messageId,
     });
+  }
+
+  async bindArtifactsToMessageAsync(args) {
+    return this.database.bindWorkspaceArtifactsToMessageAsync
+      ? this.database.bindWorkspaceArtifactsToMessageAsync(args)
+      : this.bindArtifactsToMessage(args);
+  }
+
+  async transformArtifactAsync({ artifactId, userId, operation, params = {} }) {
+    if (!this.database.createWorkspaceArtifactAsync) {
+      return this.transformArtifact({ artifactId, userId, operation, params });
+    }
+    const artifact = await this.getArtifactAsync({ artifactId, userId });
+    const handler = OPERATIONS[String(operation)];
+    if (!handler) throw new Error(`unsupported artifact operation: ${operation}`);
+    const payload = clonePayload(artifact.payload);
+    handler(payload, params);
+    const metadata = { ...artifact.metadata, rowCount: payload.data?.rows?.length ?? 0, columnCount: payload.data?.columns?.length ?? 0, parentArtifactIds: [artifact.id], derivedFromArtifactId: artifact.id, operation, operationParams: params };
+    const input = { workspaceId: artifact.workspaceId, userId, sessionId: artifact.sessionId, messageId: artifact.messageId, conversationId: artifact.conversationId, artifactType: 'DERIVED_RESULT', title: `${artifact.title} · ${ARTIFACT_OPERATION_LABELS[operation] ?? operation}`, metadata, payload };
+    return this.database.createWorkspaceArtifactAsync
+      ? this.database.createWorkspaceArtifactAsync(input)
+      : this.database.createWorkspaceArtifact(input);
   }
 
   transformArtifact({
@@ -469,6 +558,18 @@ export class WorkspaceService {
 
   exportArtifact({ artifactId, userId, format = 'json' }) {
     const artifact = this.getArtifact({ artifactId, userId });
+    const workspace = this.database.getWorkspace(artifact.workspaceId, userId);
+    return this.exportArtifactRecord(artifact, workspace, format);
+  }
+
+  async exportArtifactAsync({ artifactId, userId, format = 'json' }) {
+    if (!this.database.getWorkspaceAsync) return this.exportArtifact({ artifactId, userId, format });
+    const artifact = await this.getArtifactAsync({ artifactId, userId });
+    const workspace = await this.database.getWorkspaceAsync(artifact.workspaceId, userId);
+    return this.exportArtifactRecord(artifact, workspace, format);
+  }
+
+  exportArtifactRecord(artifact, workspace, format) {
     const normalizedFormat = String(format).toLowerCase();
     if (
       artifact.artifactType === 'FILE'
@@ -496,7 +597,6 @@ export class WorkspaceService {
       };
     }
     if (normalizedFormat === 'json') {
-      const workspace = this.database.getWorkspace(artifact.workspaceId, userId);
       return {
         filename: buildArtifactFileName({
           workspaceName: workspace?.name,
@@ -514,7 +614,6 @@ export class WorkspaceService {
       throw new Error('该产物不含表格数据，请改用 JSON 格式导出');
     }
     if (normalizedFormat === 'csv') {
-      const workspace = this.database.getWorkspace(artifact.workspaceId, userId);
       const columns = artifact.payload?.data?.columns ?? [];
       const rows = artifact.payload?.data?.rows ?? [];
       const lines = [
@@ -541,7 +640,6 @@ export class WorkspaceService {
       };
     }
     if (normalizedFormat === 'xlsx' || normalizedFormat === 'excel') {
-      const workspace = this.database.getWorkspace(artifact.workspaceId, userId);
       const columns = artifact.payload?.data?.columns ?? [];
       const rows = artifact.payload?.data?.rows ?? [];
       return {

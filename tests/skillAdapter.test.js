@@ -46,13 +46,13 @@ test('standard SKILL.md metadata and phase guidance are parsed', () => {
   assert.match(skill.phaseGuides.POST_EXECUTE, /Recompute/);
 });
 
-test('skill registry syncs SKILL.md files and binds them per theme', () => {
+test('skill registry syncs SKILL.md files and binds them per theme', async () => {
   const root = createSkillDirectory();
   const database = new PlatformDatabase(
     path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-db-')), 'test.db'),
   );
   const registry = new SkillRegistry(database, { skillDirectories: [root] });
-  const sync = registry.refreshExternalSkills();
+  const sync = await registry.refreshExternalSkills();
   const skill = registry.listSkills().find(
     (item) => item.code === 'external:data-audit',
   );
@@ -94,7 +94,7 @@ test('skill registry syncs SKILL.md files and binds them per theme', () => {
   assert.ok(validation.checks.some((check) => check.sourceSkill === skill.code));
 });
 
-test('missing frontmatter falls back to the skill directory name', () => {
+test('missing frontmatter falls back to the skill directory name', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-skills-bad-'));
   const skillRoot = path.join(root, 'broken');
   fs.mkdirSync(skillRoot, { recursive: true });
@@ -103,7 +103,7 @@ test('missing frontmatter falls back to the skill directory name', () => {
     path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-db-bad-')), 'test.db'),
   );
   const registry = new SkillRegistry(database, { skillDirectories: [root] });
-  const sync = registry.refreshExternalSkills();
+  const sync = await registry.refreshExternalSkills();
 
   assert.equal(sync.count, 1);
   assert.ok(registry.listSkills().some(

@@ -311,7 +311,7 @@ test('unconfigured Supersonic defaults to the same local mode in health and agen
     await application.init();
     assert.equal(application.getSupersonicEnabled(), false);
     assert.equal(application.agent.isSupersonicEnabled(), false);
-    assert.equal(application.currentHealth().source.mode, 'direct-llm');
+    assert.equal((await application.currentHealth()).source.mode, 'direct-llm');
     const user = application.database.getUserByUsername('east_manager');
     const theme = application.database.listThemes().find((item) => item.name === '经营总览');
     const events = [];
@@ -324,7 +324,7 @@ test('unconfigured Supersonic defaults to the same local mode in health and agen
     assert.ok(!events.some((event) => event.code === 'SUPERSONIC_NOT_CONFIGURED'));
     assert.equal(application.database.getPlatformSetting('supersonic.enabled', null), null);
   } finally {
-    application.database.close();
+    await application.database.closeAsync();
     fs.rmSync(path.dirname(config.dbPath), { recursive: true, force: true });
   }
 });
@@ -344,7 +344,7 @@ test('explicitly enabled Supersonic requires a configured indicator source', asy
   });
   assert.match(answer.message, /指标平台尚未配置/);
   assert.equal(answer.runtime.executionAdapter, 'unconfigured-indicator');
-  assert.equal(application.currentHealth().source.mode, 'unconfigured');
+  assert.equal((await application.currentHealth()).source.mode, 'unconfigured');
 });
 
 test('agent reuses identical snapshots but preserves distinct query results', async () => {

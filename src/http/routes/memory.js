@@ -3,9 +3,9 @@
 // 这里只做鉴权、范围收敛和审计，不包含任何业务口径。
 import { MEMORY_KINDS, NOTE_SOURCES, NOTE_STATES } from '../../userMemory.js';
 
-function requireUser(ctx) {
+async function requireUser(ctx) {
   const { request, database, getRequestUser } = ctx;
-  const user = getRequestUser(request, database);
+  const user = await getRequestUser(request, database);
   if (!user) {
     throw Object.assign(new Error('authentication required'), { statusCode: 401 });
   }
@@ -27,9 +27,10 @@ function resolveScope({ database, user, requestedUserId = 0 }) {
   return { isAdmin, userId: null, scope: 'all' };
 }
 
-function buildUserOptions(database, store) {
-  return database.listUsers().map((item) => {
-    const stats = store.stats(item.id);
+async function buildUserOptions(database, store) {
+  const users = await database.userRepository.listUsersAsync();
+  return (await Promise.all(users.map(async (item) => {
+    const stats = await store.statsAsync(item.id);
     return {
       id: item.id,
       name: userLabel(item),
@@ -38,20 +39,20 @@ function buildUserOptions(database, store) {
       memoryCount: stats.notes + stats.documentsWithContent,
       pendingNotes: stats.pendingNotes,
     };
-  });
+  }))).filter(Boolean);
 }
 
-function loadOwnedNote({ database, user, id }) {
-  const row = database.db.prepare(
-    'SELECT id, user_id AS userId FROM user_memory_notes WHERE id = ?',
-  ).get(Number(id));
+async function loadOwnedNote({ database, user, id }) {
+  const row = (await database.query(
+    'SELECT id, user_id AS userId FROM user_memory_notes WHERE id = ?', [Number(id)],
+  ))[0];
   return assertOwnership({ row, user, label: '笔记' });
 }
 
-function loadOwnedDocument({ database, user, id }) {
-  const row = database.db.prepare(
-    'SELECT id, user_id AS userId FROM user_memory_documents WHERE id = ?',
-  ).get(Number(id));
+async function loadOwnedDocument({ database, user, id }) {
+  const row = (await database.query(
+    'SELECT id, user_id AS userId FROM user_memory_documents WHERE id = ?', [Number(id)],
+  ))[0];
   return assertOwnership({ row, user, label: '记忆文档' });
 }
 
@@ -75,7 +76,7 @@ export function registerMemoryRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { response, url, database, application, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const store = application.userMemories;
       const scope = resolveScope({
         database,
@@ -92,22 +93,27 @@ export function registerMemoryRoutes(table) {
         scopeKey: url.searchParams.get('scopeKey') ?? '',
         limit,
       };
+      const users = scope.isAdmin ? await database.userRepository.listUsersAsync() : [];
       const targets = scope.userId
         ? [scope.userId]
-        : database.listUsers().map((item) => Number(item.id));
+        : users.map((item) => Number(item.id));
       const labelOf = new Map(
-        database.listUsers().map((item) => [Number(item.id), userLabel(item)]),
+        users.map((item) => [Number(item.id), userLabel(item)]),
       );
       const decorate = (item) => ({ ...item, userName: labelOf.get(Number(item.userId)) ?? '-' });
-      const documents = targets
-        .flatMap((targetId) => store.listDocuments({ userId: targetId, themeId, limit })
-          .map(decorate))
+      const documentGroups = await Promise.all(targets.map((targetId) => store.listDocumentsAsync({
+        userId: targetId, themeId, limit,
+      })));
+      const noteGroups = await Promise.all(targets.map((targetId) => store.listNotesAsync({
+        userId: targetId, ...noteFilter,
+      })));
+      const documents = documentGroups
+        .flatMap((items) => items.map(decorate))
         .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))
           || right.id - left.id)
         .slice(0, limit);
-      const notes = targets
-        .flatMap((targetId) => store.listNotes({ userId: targetId, ...noteFilter })
-          .map(decorate))
+      const notes = noteGroups
+        .flatMap((items) => items.map(decorate))
         .sort((left, right) => (left.state === 'PENDING' ? 0 : 1) - (right.state === 'PENDING' ? 0 : 1)
           || right.id - left.id)
         .slice(0, limit);
@@ -118,14 +124,14 @@ export function registerMemoryRoutes(table) {
         kinds: MEMORY_KINDS,
         sources: Object.keys(NOTE_SOURCES).map((code) => ({ code, label: NOTE_SOURCES[code] })),
         states: Object.keys(NOTE_STATES).map((code) => ({ code, label: NOTE_STATES[code] })),
-        users: scope.isAdmin ? buildUserOptions(database, store) : [],
+        users: scope.isAdmin ? await buildUserOptions(database, store) : [],
         maintenance: {
           ...(application.memoryMaintenance?.stats?.() ?? { enabled: false, intervalMs: 0 }),
           compactRatio: application.userMemoryDistiller?.compactRatio ?? null,
           autoConsolidateAt: application.userMemoryDistiller?.autoConsolidateAt ?? null,
         },
         stats: scope.userId
-          ? store.stats(scope.userId)
+          ? await store.statsAsync(scope.userId)
           : {
             documents: documents.length,
             documentsWithContent: documents.filter((item) => item.content.trim()).length,
@@ -145,7 +151,7 @@ export function registerMemoryRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { response, url, database, application, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const scope = resolveScope({
         database,
         user,
@@ -158,7 +164,7 @@ export function registerMemoryRoutes(table) {
         sendJson(response, 200, { query: '', hits: [], total: 0 });
         return;
       }
-      const hits = application.userMemories.search(scope.userId, themeId, query, limit);
+      const hits = await application.userMemories.searchAsync(scope.userId, themeId, query, limit);
       sendJson(response, 200, {
         query,
         hits,
@@ -177,14 +183,14 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, readJson, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const body = await readJson(ctx.request);
       const scope = resolveScope({
         database,
         user,
         requestedUserId: parseIntParam(body.userId, 0),
       });
-      const note = application.userMemories.createNote({
+      const note = await application.userMemories.createNoteAsync({
         userId: scope.userId ?? user.id,
         themeId: parseIntParam(body.themeId, 0) || null,
         kind: body.kind,
@@ -194,7 +200,7 @@ export function registerMemoryRoutes(table) {
       if (!note) {
         throw Object.assign(new Error('笔记内容长度需在 4-400 字之间'), { statusCode: 400 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: note.themeId ?? null,
         action: 'USER_MEMORY_NOTE_CREATE',
@@ -219,10 +225,10 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, params, readJson, sendJson } = ctx;
-      const user = requireUser(ctx);
-      const note = loadOwnedNote({ database, user, id: params?.[0] });
+      const user = await requireUser(ctx);
+      const note = await loadOwnedNote({ database, user, id: params?.[0] });
       const body = await readJson(ctx.request);
-      const updated = application.userMemories.updateNote(Number(note.id), {
+      const updated = await application.userMemories.updateNoteAsync(Number(note.id), {
         content: body.content,
         kind: body.kind,
         state: body.state,
@@ -230,7 +236,7 @@ export function registerMemoryRoutes(table) {
       if (!updated) {
         throw Object.assign(new Error('笔记内容长度需在 4-400 字之间'), { statusCode: 400 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'USER_MEMORY_NOTE_UPDATE',
         detail: {
@@ -253,10 +259,10 @@ export function registerMemoryRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { response, database, application, params, sendJson } = ctx;
-      const user = requireUser(ctx);
-      const note = loadOwnedNote({ database, user, id: params?.[0] });
-      const deleted = application.userMemories.removeNote(Number(note.id));
-      database.addAuditLog({
+      const user = await requireUser(ctx);
+      const note = await loadOwnedNote({ database, user, id: params?.[0] });
+      const deleted = await application.userMemories.removeNoteAsync(Number(note.id));
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'USER_MEMORY_NOTE_DELETE',
         detail: {
@@ -279,10 +285,10 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, params, readJson, sendJson } = ctx;
-      const user = requireUser(ctx);
-      const document = loadOwnedDocument({ database, user, id: params?.[0] });
+      const user = await requireUser(ctx);
+      const document = await loadOwnedDocument({ database, user, id: params?.[0] });
       const body = await readJson(ctx.request);
-      const updated = application.userMemories.updateDocument(Number(document.id), {
+      const updated = await application.userMemories.updateDocumentAsync(Number(document.id), {
         summary: body.summary,
         content: body.content,
         status: body.status === undefined ? undefined : (body.status ? 1 : 0),
@@ -290,7 +296,7 @@ export function registerMemoryRoutes(table) {
       if (!updated) {
         throw Object.assign(new Error('记忆文档不存在'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: updated.themeId ?? null,
         action: 'USER_MEMORY_DOCUMENT_UPDATE',
@@ -315,10 +321,10 @@ export function registerMemoryRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { response, database, application, params, sendJson } = ctx;
-      const user = requireUser(ctx);
-      const document = loadOwnedDocument({ database, user, id: params?.[0] });
-      const deleted = application.userMemories.removeDocument(Number(document.id));
-      database.addAuditLog({
+      const user = await requireUser(ctx);
+      const document = await loadOwnedDocument({ database, user, id: params?.[0] });
+      const deleted = await application.userMemories.removeDocumentAsync(Number(document.id));
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'USER_MEMORY_DOCUMENT_DELETE',
         detail: {
@@ -340,12 +346,12 @@ export function registerMemoryRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { response, database, application, params, url, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
-      const document = loadOwnedDocument({ database, user, id: params?.[0] });
+      const user = await requireUser(ctx);
+      const document = await loadOwnedDocument({ database, user, id: params?.[0] });
       const limit = Math.max(1, Math.min(parseIntParam(url.searchParams.get('limit'), 20), 100));
       sendJson(response, 200, {
         documentId: Number(document.id),
-        versions: application.userMemories.listVersions(Number(document.id), limit),
+        versions: await application.userMemories.listVersionsAsync(Number(document.id), limit),
       });
     },
   });
@@ -360,17 +366,17 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, params, readJson, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
-      const document = loadOwnedDocument({ database, user, id: params?.[0] });
+      const user = await requireUser(ctx);
+      const document = await loadOwnedDocument({ database, user, id: params?.[0] });
       const body = await readJson(ctx.request);
       const version = parseIntParam(body.version, 0);
       const rolled = version
-        ? application.userMemories.rollback(Number(document.id), version)
+        ? await application.userMemories.rollbackAsync(Number(document.id), version)
         : null;
       if (!rolled) {
         throw Object.assign(new Error('指定版本不存在'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: rolled.themeId ?? null,
         action: 'USER_MEMORY_ROLLBACK',
@@ -396,7 +402,7 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, readJson, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const body = await readJson(ctx.request);
       const scope = resolveScope({
         database,
@@ -412,7 +418,7 @@ export function registerMemoryRoutes(table) {
         themeId,
         auto: Boolean(body.auto),
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: result.document?.themeId ?? null,
         action: 'USER_MEMORY_CONSOLIDATE',
@@ -444,7 +450,7 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, readJson, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const body = await readJson(ctx.request);
       const scope = resolveScope({
         database,
@@ -460,7 +466,7 @@ export function registerMemoryRoutes(table) {
         themeId,
         auto: Boolean(body.auto),
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId,
         action: 'USER_MEMORY_MAINTAIN',
@@ -493,7 +499,7 @@ export function registerMemoryRoutes(table) {
     requestBody: true,
     handler: async (ctx) => {
       const { response, database, application, readJson, sendJson, parseIntParam } = ctx;
-      const user = requireUser(ctx);
+      const user = await requireUser(ctx);
       const body = await readJson(ctx.request);
       const sessionId = parseIntParam(body.sessionId, 0);
       if (!sessionId) {
@@ -516,7 +522,7 @@ export function registerMemoryRoutes(table) {
         answer: lastAssistant,
         useModel: body.useModel !== false,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         themeId: session.themeId ?? null,
         action: 'USER_MEMORY_DISTILL',

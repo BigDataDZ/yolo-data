@@ -40,7 +40,7 @@ async function withServer(run, overrides = {}) {
     return await run({ baseUrl, application });
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 }
 
@@ -106,7 +106,7 @@ test('P0-8 middleware chain resolves auth errors through a single error boundary
   const ctx = {
     request: { url: '/x', headers: {} },
     response,
-    database: { getUser: () => null },
+    database: { userRepository: { getUserAsync: async () => null } },
   };
   const route = {
     middleware: ['auth'],
@@ -167,7 +167,7 @@ test('unconfigured Supersonic defaults to local HTTP reads and supports explicit
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -215,6 +215,18 @@ test('explicitly enabled but unconfigured Supersonic serves the offline snapshot
     });
     assert.equal(themeSave.status, 200);
 
+    const relationSave = await fetch(`${baseUrl}/api/indicators/offline-metric/themes`, {
+      method: 'PUT',
+      headers: { ...admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ themeIds: [1, 999999] }),
+    });
+    assert.equal(relationSave.status, 200);
+    assert.deepEqual(await relationSave.json(), {
+      indicatorId: 'offline-metric',
+      themeIds: [1],
+    });
+    assert.deepEqual(application.database.listThemeIndicatorIds(1), ['offline-metric']);
+
     // Once a snapshot exists it is served with an explicit SNAPSHOT marker.
     application.database.syncIndicators([
       { id: '42', name: '销售额', bizName: '销售额', metrics: [], dimensions: [] },
@@ -241,7 +253,7 @@ test('explicitly enabled but unconfigured Supersonic serves the offline snapshot
     });
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -667,7 +679,7 @@ test('roles are normalized and analysts only receive their granted scope', async
     assert.deepEqual(analyst.models, []);
     assert.deepEqual(analyst.dataSources, []);
     assert.deepEqual(analyst.indicatorTypes, []);
-    assert.equal(analyst.users.length, 1);
+    assert.equal(Object.hasOwn(analyst, 'users'), false);
     assert.equal(analyst.themes.length > 0, true);
     assert.equal(analyst.themes.every((theme) => theme.canManage === false), true);
 

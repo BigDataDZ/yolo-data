@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { readSessionToken, resolveAuthMode, resolveSession } from '../auth.js';
+import { readSessionToken, resolveAuthMode, resolveSessionAsync } from '../auth.js';
 import { isPromptSemanticRule, parseSemanticBlock } from '../themeSemanticRules.js';
 
 export const MIME_TYPES = {
@@ -224,36 +224,28 @@ export async function readJson(request, maxBytes = MAX_JSON_BODY_BYTES) {
   }
 }
 
-export function getRequestUser(request, database, config) {
+export async function getRequestUserAsync(request, database, config) {
   const token = readSessionToken(request);
   if (token) {
-    const sessionUser = resolveSession(database, token);
-    if (sessionUser) {
-      return sessionUser;
-    }
+    const sessionUser = await resolveSessionAsync(database, token);
+    if (sessionUser) return sessionUser;
   }
-  // 生产环境只认登录会话；开发模式保留 x-user-id 直连，方便脚本与测试。
   if (resolveAuthMode(config) !== 'dev') {
     const error = new Error(token ? '登录状态已失效，请重新登录' : '请先登录');
     error.statusCode = 401;
     throw error;
   }
   const userId = request.headers['x-user-id']
-    ?? new URL(request.url, 'http://localhost').searchParams.get('userId')
-    ?? '1';
-  const user = database.getUser(Number(userId));
-  if (!user) {
-    const error = new Error('user not found');
-    error.statusCode = 401;
-    throw error;
-  }
-  if (Number(user.status ?? 1) === 0) {
-    const error = new Error('user is disabled');
-    error.statusCode = 401;
-    throw error;
-  }
+    ?? new URL(request.url, 'http://localhost').searchParams.get('userId') ?? '1';
+  const user = await database.userRepository.getUserAsync(Number(userId));
+  if (!user) throw Object.assign(new Error('user not found'), { statusCode: 401 });
+  if (Number(user.status ?? 1) === 0) throw Object.assign(new Error('user is disabled'), { statusCode: 401 });
   return user;
 }
+
+// Keep the established helper name, but make its contract asynchronous so
+// request authentication never falls back to the SQLite connection.
+export const getRequestUser = getRequestUserAsync;
 
 export function parseIntParam(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);

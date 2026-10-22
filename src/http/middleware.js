@@ -3,7 +3,7 @@
 // `timeout:180s`, `rateLimit:chat`.
 
 import { incrementCounter } from '../metrics.js';
-import { getRequestUser, requireAdmin, sendError } from './support.js';
+import { getRequestUser, getRequestUserAsync, requireAdmin, sendError } from './support.js';
 
 function readLimit(name, fallback) {
   const parsed = Number.parseInt(process.env[name] ?? '', 10);
@@ -98,12 +98,12 @@ export function createMiddlewareRegistry() {
 
     // Resolves the caller once and shares it with downstream middleware/handler.
     auth: () => async (ctx, next) => {
-      ctx.user = getRequestUser(ctx.request, ctx.database, ctx.config);
+      ctx.user = await getRequestUserAsync(ctx.request, ctx.database, ctx.config);
       return next();
     },
 
     admin: () => async (ctx, next) => {
-      ctx.user = ctx.user ?? getRequestUser(ctx.request, ctx.database, ctx.config);
+      ctx.user = ctx.user ?? await getRequestUserAsync(ctx.request, ctx.database, ctx.config);
       requireAdmin(ctx.user);
       return next();
     },
@@ -158,7 +158,7 @@ export function createMiddlewareRegistry() {
     // Token bucket keyed by user + theme (P0-5 foundation).
     rateLimit: (arg) => async (ctx, next) => {
       if (!ctx.user) {
-        ctx.user = getRequestUser(ctx.request, ctx.database, ctx.config);
+        ctx.user = await getRequestUser(ctx.request, ctx.database, ctx.config);
       }
       // themeId is only readable from the query string here: the JSON body is
       // consumed by the handler. Body-based routes therefore fall back to a

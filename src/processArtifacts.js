@@ -143,14 +143,15 @@ function createProcessArtifactRecorder({
       if (!draft) {
         return null;
       }
-      artifact = service.createProcessArtifact({
+      const input = {
         workspaceId,
         userId,
         sessionId,
         title: draft.title,
         metadata: draft.metadata,
         payload: draft.payload,
-      });
+      };
+      artifact = service.createProcessArtifact(input);
     } catch {
       return null;
     }
@@ -164,9 +165,33 @@ function createProcessArtifactRecorder({
   };
 }
 
+function createProcessArtifactRecorderAsync(options) {
+  const { service, workspaceId, userId, sessionId, emit = () => {}, artifactIds = null, maxSteps = MAX_STEPS_PER_RUN } = options;
+  const state = { previousArtifactId: null, count: 0 };
+  return async ({ tool, result = null, error = null, step = {} }) => {
+    if (!service || !workspaceId || state.count >= maxSteps) return null;
+    try {
+      const draft = buildProcessArtifact({ tool, result, error, step, previousArtifactId: state.previousArtifactId });
+      if (!draft) return null;
+      const input = { workspaceId, userId, sessionId, title: draft.title, metadata: draft.metadata, payload: draft.payload };
+      const artifact = service.createProcessArtifactAsync
+        ? await service.createProcessArtifactAsync(input)
+        : service.createProcessArtifact(input);
+      state.previousArtifactId = artifact.id;
+      state.count += 1;
+      if (Array.isArray(artifactIds)) artifactIds.push(artifact.id);
+      emit({ type: 'workspace_updated', workspaceId, artifactId: artifact.id });
+      return artifact;
+    } catch {
+      return null;
+    }
+  };
+}
+
 export {
   buildProcessArtifact,
   createProcessArtifactRecorder,
+  createProcessArtifactRecorderAsync,
   KIND_LABELS,
   MAX_STEPS_PER_RUN,
 };

@@ -1,7 +1,7 @@
 import { loadConfig } from './config.js';
-import { resolveAuthMode } from './auth.js';
+import { resolveAuthMode, seedDefaultPasswordsAsync } from './auth.js';
 import path from 'node:path';
-import { PlatformDatabase } from './database.js';
+import { createPlatformDatabase, initializePlatformDatabase } from './platformDatabase.js';
 import { LocalIndicatorRepository } from './localIndicatorRepository.js';
 import { createHarness, HarnessFactory } from './harness.js';
 import {
@@ -34,12 +34,60 @@ import { STAGE_DEFINITIONS } from './workflow.js';
 
 export async function createApplication(config = loadConfig(), indicatorClientOverride = null) {
   resolveAuthMode(config);
-  const database = new PlatformDatabase(config.dbPath);
-  database.localIndicators = new LocalIndicatorRepository(database.db);
+  const platformDatabaseConfig = {
+    ...(config.platformDatabase ?? {}),
+    backend: config.platformDatabase?.backend ?? 'sqlite',
+    // Legacy embedding configs omit the nested block; keep them deterministic.
+    // loadConfig() supplies the block for installed deployments.
+    seedResources: config.platformDatabase?.seedResources === true,
+    // Test/embedding callers historically override dbPath directly. Keep that
+    // contract authoritative so the new nested config cannot accidentally
+    // reopen the default platform.db.
+    path: config.dbPath ?? config.platformDatabase?.path,
+  };
+  const platformHandle = platformDatabaseConfig.backend === 'mysql'
+    ? await initializePlatformDatabase(platformDatabaseConfig)
+    : { database: createPlatformDatabase(platformDatabaseConfig), backend: 'sqlite' };
+  const database = platformHandle.database;
+  const listThemesAsync = () => database.isAsyncPlatformStore
+    ? database.listThemesAsync() : Promise.resolve(database.listThemes());
+  const saveThemeAsync = (payload, id) => database.isAsyncPlatformStore
+    ? database.saveThemeAsync(payload, id) : Promise.resolve(database.saveTheme(payload, id));
+  const listSkillsAsync = () => database.isAsyncPlatformStore
+    ? database.listSkillsAsync() : Promise.resolve(database.listSkills());
+  const countRowsAsync = async (table) => {
+    if (!database.isAsyncPlatformStore) return database.countRows(table);
+    const [row] = await database.query(`SELECT COUNT(*) AS count FROM ${table}`);
+    return Number(row?.count ?? 0);
+  };
+  const countRowsManyAsync = async (tables) => {
+    if (!database.isAsyncPlatformStore) {
+      return Object.fromEntries(tables.map((table) => [table, database.countRows(table)]));
+    }
+    const allowed = new Set([
+      'app_users', 'themes', 'conversations', 'chat_sessions', 'chat_messages', 'workspaces',
+      'workspace_artifacts', 'artifact_versions', 'audit_logs', 'query_plans', 'qa_feedback',
+      'knowledge_gaps', 'llm_call_logs', 'data_sources', 'business_datasets', 'models',
+      'dataset_fields', 'theme_semantic_value_domains', 'semantic_value_domains',
+    ]);
+    const safeTables = tables.filter((table) => allowed.has(table));
+    if (safeTables.length === 0) return {};
+    const selections = safeTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS \`${table}\``).join(', ');
+    const [row] = await database.query(`SELECT ${selections}`);
+    return Object.fromEntries(safeTables.map((table) => [table, Number(row?.[table] ?? 0)]));
+  };
+  await seedDefaultPasswordsAsync(database);
+  database.localIndicators = new LocalIndicatorRepository(database.db, database);
   // 业务词表以平台设置为准，首次启动时用仓库配置初始化成可维护的设置项。
-  const storedLexicon = database.getPlatformSetting('business.lexicon', null)?.value ?? null;
+  const storedLexicon = database.isAsyncPlatformStore
+    ? (await database.getPlatformSettingAsync('business.lexicon', null))?.value ?? null
+    : database.getPlatformSetting('business.lexicon', null)?.value ?? null;
   if (!storedLexicon) {
-    database.savePlatformSetting('business.lexicon', getPlatformLexicon());
+    if (database.isAsyncPlatformStore) {
+      await database.savePlatformSettingAsync('business.lexicon', getPlatformLexicon());
+    } else {
+      database.savePlatformSetting('business.lexicon', getPlatformLexicon());
+    }
   }
   configureBusinessLexicon(storedLexicon);
   const indicatorClient = indicatorClientOverride
@@ -48,8 +96,17 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
       : new UnavailableIndicatorClient());
   function getSupersonicEnabled() { // Default to local mode; explicit administrator settings take precedence.
     const clientConfigured = indicatorClient.mode === 'supersonic' || Boolean(config.supersonic.baseUrl);
+    if (database.isAsyncPlatformStore) return Boolean(database._supersonicEnabled ?? clientConfigured);
     const stored = database.getPlatformSetting('supersonic.enabled', clientConfigured);
     return Boolean(stored?.value ?? stored);
+  }
+  if (database.isAsyncPlatformStore) {
+    database._supersonicEnabled = Boolean(
+      (await database.getPlatformSettingAsync(
+        'supersonic.enabled',
+        indicatorClientOverride?.mode === 'supersonic' || Boolean(config.supersonic.baseUrl),
+      ))?.value,
+    );
   }
   const harness = createHarness(config.deepseek);
   const llmAudit = new LlmAuditService(database);
@@ -111,9 +168,12 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
   const userMemoryConfig = config.userMemory ?? {};
   const userMemoryDistiller = new UserMemoryDistiller({
     store: userMemories,
-    resolveHarness: (themeId) => harnessFactory.forTheme(
-      agent.resolveThemeModel(database.getTheme(themeId)) ?? {},
-    ),
+    resolveHarness: async (themeId) => {
+      const theme = database.themeRepository?.getThemeAsync
+        ? await database.themeRepository.getThemeAsync(themeId)
+        : database.getTheme(themeId);
+      return harnessFactory.forTheme(agent.resolveThemeModel(theme) ?? {});
+    },
     autoConsolidateAt: userMemoryConfig.autoConsolidateAt,
     compactRatio: userMemoryConfig.compactRatio,
   });
@@ -126,7 +186,7 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     batchSize: userMemoryConfig.maintenanceBatchSize ?? 20,
     onError: (error, target) => {
       try {
-        database.addAuditLog({
+        void database.addAuditLogAsync({
           userId: target?.userId ?? null,
           themeId: target?.themeId ?? null,
           action: 'USER_MEMORY_MAINTENANCE_FAILED',
@@ -152,7 +212,9 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
   };
 
   function resolveIndicatorSource() {
-    const snapshot = database.indicatorCacheStats();
+    const snapshot = database.isAsyncPlatformStore
+      ? { count: 0, freshAt: null, typeCount: 0 }
+      : database.indicatorCacheStats();
     const live = getSupersonicEnabled()
       && indicatorClient.mode !== 'unconfigured'
       && indicatorClient.mode !== 'unavailable'
@@ -190,8 +252,10 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
         // must not write to (or clear) the indicator cache.
         const list = page.list ?? [];
         const total = Number(page.total ?? list.length);
-        database.syncIndicatorTypes(types ?? []);
-        database.syncIndicators(list, { prune: total <= list.length });
+        if (!database.isAsyncPlatformStore) {
+          database.syncIndicatorTypes(types ?? []);
+          database.syncIndicators(list, { prune: total <= list.length });
+        }
       }
       runtime.sourceMode = indicatorClient.mode ?? 'supersonic';
       runtime.supersonicEnabled = true;
@@ -215,7 +279,12 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
 
   async function applySupersonicSetting(enabled) {
     const normalized = enabled !== false;
-    database.savePlatformSetting('supersonic.enabled', normalized);
+    if (database.isAsyncPlatformStore) {
+      await database.savePlatformSettingAsync('supersonic.enabled', normalized);
+      database._supersonicEnabled = normalized;
+    } else {
+      database.savePlatformSetting('supersonic.enabled', normalized);
+    }
     runtime.supersonicEnabled = normalized;
     if (!normalized) {
       runtime.sourceMode = 'direct-llm';
@@ -245,19 +314,19 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
   async function init() {
     assertGateCoverage(STAGE_DEFINITIONS.map((stage) => stage.code));
     try {
-      runtime.skillSync = skillRegistry.refreshExternalSkills();
+      runtime.skillSync = await skillRegistry.refreshExternalSkills();
     } catch (error) {
       runtime.skillSync = {
         error: error.message,
         configuredRoots: config.skillDirectories ?? [],
       };
     }
-    for (const theme of database.listThemes()) {
+    for (const theme of await listThemesAsync()) {
       const llmConfig = theme.llmConfig ?? {};
       if (Number(llmConfig.deterministicDefaultsVersion) >= 3) {
         continue;
       }
-      database.saveTheme({
+      await saveThemeAsync({
         ...theme,
         llmConfig: {
           ...llmConfig,
@@ -292,12 +361,12 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
       );
       if (bootstrapped?.length) {
         const bootstrappedIds = bootstrapped.map((dataset) => dataset.id);
-        for (const theme of database.listThemes()) {
+        for (const theme of await listThemesAsync()) {
           const businessDatasetIds = [...new Set([
             ...(theme.businessDatasetIds ?? []),
             ...bootstrappedIds,
           ])];
-          database.saveTheme({
+          await saveThemeAsync({
             ...theme,
             businessDatasetIds,
             skillCodes: [...new Set([
@@ -307,23 +376,23 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
             ])],
           }, theme.id);
         }
-        for (const user of database.listUsers()) {
+        for (const user of await database.listUsersAsync()) {
           if (user.role === 'ADMIN') {
             continue;
           }
           for (const datasetId of bootstrappedIds) {
-            database.grantDatasetAccess(user.id, datasetId, true);
+            if (!database.isAsyncPlatformStore) database.grantDatasetAccess(user.id, datasetId, true);
           }
         }
       }
     } catch (error) {
       runtime.sourceError ??= `业务数据集初始化失败：${error.message}`;
     }
-    for (const theme of database.listThemes()) {
+    for (const theme of await listThemesAsync()) {
       if ((theme.businessDatasetIds ?? []).length === 0) {
         continue;
       }
-      database.saveTheme({
+      await saveThemeAsync({
         ...theme,
         skillCodes: [...new Set([
           ...(theme.skillCodes ?? []),
@@ -336,7 +405,20 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
     return runtime;
   }
 
-  function currentHealth() {
+  async function currentHealth() {
+    const [models, themes, skills, localIndicatorCount, localIndicatorTypes, counts] = await Promise.all([
+      database.modelRepository.listModelsAsync(),
+      listThemesAsync(),
+      listSkillsAsync(),
+      database.localIndicators.countAsync(),
+      database.localIndicators.listTypesAsync(),
+      countRowsManyAsync([
+        'app_users', 'themes', 'conversations', 'chat_sessions', 'chat_messages', 'workspaces',
+        'workspace_artifacts', 'artifact_versions', 'audit_logs', 'query_plans', 'qa_feedback',
+        'knowledge_gaps', 'llm_call_logs', 'data_sources', 'business_datasets', 'models',
+        'dataset_fields', 'theme_semantic_value_domains', 'semantic_value_domains',
+      ]),
+    ]);
     runtime.supersonicEnabled = getSupersonicEnabled();
     runtime.sourceMode = runtime.supersonicEnabled ? indicatorClient.mode ?? 'unconfigured' : 'direct-llm';
     const indicatorSource = resolveIndicatorSource();
@@ -348,7 +430,7 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
         enabled: runtime.supersonicEnabled,
         configured: runtime.supersonicEnabled && runtime.sourceMode === 'supersonic',
         localIndicatorManagement: !runtime.supersonicEnabled,
-        localIndicatorCount: database.localIndicators.count(),
+        localIndicatorCount,
         indicatorSource: indicatorSource.source,
         indicatorSourceDetail: indicatorSource,
         snapshot: runtime.indicatorSnapshot,
@@ -361,50 +443,50 @@ export async function createApplication(config = loadConfig(), indicatorClientOv
         mode: harness.mode,
         model: harness.mode === 'local-rule' ? null : config.deepseek.model,
         configured: Boolean(config.deepseek.apiKey) && harness.mode !== 'local-rule',
-        themeCredentials: database.listThemes()
+        themeCredentials: themes
           .filter((theme) => (
             Boolean(theme.llmConfig?.apiKeyEncrypted)
             || (theme.modelIds ?? []).some((modelId) => (
-              Boolean(database.getModel(modelId)?.hasApiKey)
+              Boolean(models.find((model) => model.id === Number(modelId))?.hasApiKey)
             ))
           ))
           .length,
         capabilities: harness.capabilities ?? {},
       },
       skills: {
-        externalCount: database.listSkills()
+        externalCount: skills
           .filter((skill) => skill.source === 'SKILL_MD')
           .length,
         sync: runtime.skillSync,
       },
       memory: memoryMaintenance.stats(),
       counts: {
-        users: database.countRows('app_users'),
-        themes: database.countRows('themes'),
+        users: counts.app_users,
+        themes: counts.themes,
         indicators: runtime.supersonicEnabled
           ? runtime.lastSyncCount
-          : database.localIndicators.count(),
+          : localIndicatorCount,
         indicatorTypes: runtime.supersonicEnabled
           ? runtime.lastTypeCount
-          : database.localIndicators.listTypes().length,
-        localIndicators: database.localIndicators.count(),
-        conversations: database.countRows('conversations'),
-        chatSessions: database.countRows('chat_sessions'),
-        chatMessages: database.countRows('chat_messages'),
-        workspaces: database.countRows('workspaces'),
-        workspaceArtifacts: database.countRows('workspace_artifacts'),
-        artifactVersions: database.countRows('artifact_versions'),
-        audits: database.countRows('audit_logs'),
-        queryPlans: database.countRows('query_plans'),
-        feedback: database.countRows('qa_feedback'),
-        knowledgeGaps: database.countRows('knowledge_gaps'),
-        llmCalls: database.countRows('llm_call_logs'),
-        dataSources: database.countRows('data_sources'),
-        businessDatasets: database.countRows('business_datasets'),
-        models: database.countRows('models'),
-        datasetFields: database.countRows('dataset_fields'),
-        semanticValueDomains: database.countRows('theme_semantic_value_domains'),
-        legacySemanticValueDomains: database.countRows('semantic_value_domains'),
+          : localIndicatorTypes.length,
+        localIndicators: localIndicatorCount,
+        conversations: counts.conversations,
+        chatSessions: counts.chat_sessions,
+        chatMessages: counts.chat_messages,
+        workspaces: counts.workspaces,
+        workspaceArtifacts: counts.workspace_artifacts,
+        artifactVersions: counts.artifact_versions,
+        audits: counts.audit_logs,
+        queryPlans: counts.query_plans,
+        feedback: counts.qa_feedback,
+        knowledgeGaps: counts.knowledge_gaps,
+        llmCalls: counts.llm_call_logs,
+        dataSources: counts.data_sources,
+        businessDatasets: counts.business_datasets,
+        models: counts.models,
+        datasetFields: counts.dataset_fields,
+        semanticValueDomains: counts.theme_semantic_value_domains,
+        legacySemanticValueDomains: counts.semantic_value_domains,
       },
     };
   }
