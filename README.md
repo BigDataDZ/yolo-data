@@ -122,10 +122,12 @@ SQLite 模式下，数据卷 `/app/data` 保存平台数据库、数据源加密
 本地初始化（会自动创建 Python `.venv` 并安装分析依赖）：
 
 ```bash
-npm run setup          # 安装 Node/Python 依赖，并把解释器路径写回 yolo-conf.yaml
+npm run setup          # 安装 Node/Python 依赖；项目虚拟环境路径由应用自动探测
 # 按需编辑 yolo-conf.yaml：模型密钥、指标平台、Doris 连接
 npm run dev            # 启动，默认 http://localhost:8088/
 ```
+
+也可使用交互式启动脚本：Linux 运行 `bash start.sh`，Windows PowerShell 运行 `./start.ps1`。脚本会检查依赖，首次启动时引导初始化，之后直接启动服务。
 
 PostgreSQL 仅在使用 PostgreSQL 数据源时额外安装可选驱动 `pg`：
 

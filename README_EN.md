@@ -150,6 +150,8 @@ npm run setup
 npm run dev
 ```
 
+You can also use the guided launcher: run `bash start.sh` on Linux or `./start.ps1` in Windows PowerShell. It checks dependencies, guides first-time setup, and starts the app; later runs skip installation when dependencies are ready.
+
 Install the optional PostgreSQL driver only when needed:
 
 ```bash

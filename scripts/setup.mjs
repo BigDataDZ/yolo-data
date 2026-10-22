@@ -83,7 +83,7 @@ async function verifyMysqlDriver() {
   }
 }
 
-// Python 分析环境是完整安装的一部分：自动创建 .venv、安装依赖并写回 codeExecution.pythonBin。
+// Python 分析环境是完整安装的一部分：自动创建 .venv 并安装依赖；解释器由应用自动探测，不写回配置文件。
 function setupPythonRuntime(confPath) {
   try {
     const runtime = ensurePythonAnalysisRuntime({

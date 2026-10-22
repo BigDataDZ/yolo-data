@@ -67,7 +67,7 @@ test('SQLite platform database exposes the async query/execute/transaction contr
   }
 });
 
-test('Knex SQLite store implements the shared async query and transaction contract', async () => {
+test('native node:sqlite store implements the shared async query and transaction contract', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'platform-knex-sqlite-'));
   const store = createKnexPlatformStore({ backend: 'sqlite', path: path.join(directory, 'platform.db') });
   try {

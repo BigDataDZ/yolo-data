@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,14 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 // Python 沙箱解释器的兜底候选。Windows 装的是 `python`，macOS/Linux 上是 `python3`；
 // 必须和 yolo-conf.yaml 的 `codeExecution.pythonBin` 注释及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
 export const DEFAULT_PYTHON_BIN = process.platform === 'win32' ? 'python' : 'python3';
+
+function projectPythonBin() {
+  const relativePath = process.platform === 'win32'
+    ? path.join('.venv', 'Scripts', 'python.exe')
+    : path.join('.venv', 'bin', 'python');
+  const candidate = path.join(projectRoot, relativePath);
+  return fs.existsSync(candidate) ? candidate : DEFAULT_PYTHON_BIN;
+}
 
 function readInt(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -127,7 +136,7 @@ export function loadConfig(env = process.env) {
       projectRoot,
       String(env.CODE_EXECUTION_ROOT ?? './data/code-runs').trim(),
     ),
-    pythonBin: String(env.PYTHON_BIN ?? '').trim() || DEFAULT_PYTHON_BIN,
+    pythonBin: String(env.PYTHON_BIN ?? '').trim() || projectPythonBin(),
     uploads: {
       maxBytes: Math.max(1, readInt(env.UPLOAD_MAX_BYTES, 8 * 1024 * 1024)),
       maxFilesPerSession: Math.max(1, readInt(env.UPLOAD_MAX_FILES_PER_SESSION, 20)),
