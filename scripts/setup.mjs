@@ -39,9 +39,16 @@ function assertNodeVersion() {
 }
 
 function installDependencies() {
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   info('安装依赖（含 MySQL/Doris 驱动 mysql2）');
-  const result = spawnSync(npm, ['install'], { cwd: projectRoot, stdio: 'inherit' });
+  // Windows cannot reliably spawn .cmd files directly (Node may return EINVAL).
+  // Invoke npm.cmd through cmd.exe there; keep direct execution on POSIX.
+  const command = process.platform === 'win32'
+    ? (process.env.ComSpec || 'cmd.exe')
+    : 'npm';
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', 'npm.cmd install']
+    : ['install'];
+  const result = spawnSync(command, args, { cwd: projectRoot, stdio: 'inherit' });
   if (result.error) {
     abort(`无法执行 npm install：${result.error.message}`);
   }
