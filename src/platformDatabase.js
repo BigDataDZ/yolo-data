@@ -531,7 +531,9 @@ async function seedMysqlPlatformDefaults(database) {
   const bootstrap = loadBootstrapConfig();
   const timestamp = new Date().toISOString();
   const [userCount] = await database.query('SELECT COUNT(*) AS count FROM app_users');
-  if (Number(userCount?.count ?? 0) === 0 && await seedPlatformConfigSnapshot(database)) {
+  if (database.backend === 'mysql'
+    && Number(userCount?.count ?? 0) === 0
+    && await seedPlatformConfigSnapshot(database)) {
     return { seededSnapshot: true };
   }
   if (Number(userCount?.count ?? 0) === 0) {
