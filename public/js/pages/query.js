@@ -465,13 +465,16 @@ function renderWorkspaceDrawer() {
 
 function bindWorkspaceActions() {
   document.querySelectorAll('[data-artifact-view]').forEach((button) => {
-    button.addEventListener('click', () => openWorkspaceArtifact(button.dataset.artifactView));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      openWorkspaceArtifact(button.dataset.artifactView);
+    });
   });
   document.querySelectorAll('[data-artifact-download]').forEach((button) => {
-    button.addEventListener('click', () => downloadWorkspaceArtifact(
-      button.dataset.artifactDownload,
-      button.dataset.format,
-    ));
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      downloadWorkspaceArtifact(button.dataset.artifactDownload, button.dataset.format);
+    });
   });
 }
 
@@ -539,6 +542,18 @@ async function openWorkspaceArtifact(artifactId) {
             </details>
           ` : ''}
         `,
+      });
+      return;
+    }
+    if (artifact.artifactType === 'FILE' && artifact.payload?.content !== undefined) {
+      const format = String(artifact.payload.format ?? artifact.metadata?.format ?? '').toLowerCase();
+      const content = String(artifact.payload.content ?? '');
+      openModal({
+        title: artifact.title || '工作区文件',
+        wide: true,
+        body: format === 'md' || format === 'markdown' || String(artifact.metadata?.mimeType ?? '').includes('markdown')
+          ? `<div class="workspace-markdown-preview chat-answer-text">${renderSafeMarkdown(content)}</div>`
+          : `<pre class="workspace-text-preview">${escapeHtml(content)}</pre>`,
       });
       return;
     }
