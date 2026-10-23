@@ -85,7 +85,7 @@ flowchart LR
 ## 环境要求
 
 - Node.js `>= 22.5`
-- 平台存储：SQLite（默认）或 MySQL；通过 `PLATFORM_DB_BACKEND` 选择。MySQL 模式还需配置 `PLATFORM_DB_HOST`、`PLATFORM_DB_PORT`、`PLATFORM_DB_NAME`、`PLATFORM_DB_USER` 和 `PLATFORM_DB_PASSWORD`。
+- 平台配置： MySQL（默认）或SQLite；通过 `PLATFORM_DB_BACKEND` 选择。MySQL 模式还需配置 `PLATFORM_DB_*`相关参数。
 - npm 或 pnpm
 - Python 3：用于高级数据处理和文件生成。`npm run setup` 会自动初始化环境
 - 或：Docker + Docker Compose，一条命令启动完整平台，无需本机 Node/Python（见 [Docker 一键部署](#docker-一键部署)）
@@ -164,7 +164,6 @@ bootstrapDatasource:
 ```
 
 - **数据落在哪个库**：默认复用平台 MySQL 数据源 `platform_mysql`（需 `platformDatabase.backend: mysql`）；
-  也可以用 `bootstrapDatasource.demo.db` 的 `type/host/port/database/user/password` 指向任意演示库。
 `。
 
 ## API 示例

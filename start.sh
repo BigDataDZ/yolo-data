@@ -21,16 +21,17 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 node_ready=false
-node -e "Promise.all([import('@modelcontextprotocol/sdk'),import('mysql2/promise'),import('knex'),import('yaml'),import('zod')]).catch(()=>process.exit(1))" \
-  >/dev/null 2>&1 && node_ready=true
+[[ -d "$PROJECT_ROOT/node_modules" ]] && node_ready=true
 python_ready=false
 venv_python="$PROJECT_ROOT/.venv/bin/python"
 if [[ -x "$venv_python" ]] && "$venv_python" -c 'import pandas, openpyxl' >/dev/null 2>&1; then
   python_ready=true
 fi
 
-if [[ "$node_ready" != true || "$python_ready" != true ]]; then
-  echo "首次启动或检测到依赖缺失，需要初始化运行环境。"
+if [[ "$node_ready" == true && "$python_ready" == true ]]; then
+  echo "项目已初始化，跳过依赖安装。"
+else
+  echo "首次启动或检测到运行环境未就绪，需要初始化。"
   read -r -p "npm registry（回车沿用当前配置，输入 m 使用 npmmirror）： " npm_choice
   if [[ "$npm_choice" == "m" || "$npm_choice" == "M" ]]; then
     export npm_config_registry="https://registry.npmmirror.com"
@@ -45,4 +46,29 @@ else
 fi
 
 echo "正在启动……"
-npm run dev
+npm run dev &
+dev_pid=$!
+port="${PORT:-8088}"
+if [[ -z "${PORT:-}" ]] && [[ -f yolo-conf.yaml ]]; then
+  configured_port="$(sed -nE 's/^[[:space:]]*port:[[:space:]]*([0-9]+)[[:space:]]*(#.*)?$/\1/p' yolo-conf.yaml | head -n 1)"
+  [[ -n "$configured_port" ]] && port="$configured_port"
+fi
+url="http://127.0.0.1:${port}"
+started=false
+for _ in {1..60}; do
+  if ! kill -0 "$dev_pid" 2>/dev/null; then
+    wait "$dev_pid"
+    exit $?
+  fi
+  if curl --silent --fail --max-time 2 "$url/api/health" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then
+    started=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$started" != true ]]; then
+  echo "等待服务启动超时，请检查启动日志（端口 ${port}）。" >&2
+  exit 1
+fi
+echo "Project start success: ${url}"
+wait "$dev_pid"

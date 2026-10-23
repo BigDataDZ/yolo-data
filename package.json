@@ -10,6 +10,8 @@
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "db:init": "node scripts/init-platform-db.mjs",
+    "db:config:export": "node scripts/export-platform-config.mjs",
+    "db:config:seed": "node scripts/seed-platform-config.mjs",
     "db:init:mysql": "node scripts/generate-mysql-init.mjs",
     "dev": "node scripts/dev.mjs",
     "start": "node src/server.js",
