@@ -2531,7 +2531,7 @@ body.workspace-open .app-shell {
 }
 
 .theme-editor-page-body {
-  padding: 0 24px;
+  padding: 0 24px 104px;
   border: 1px solid #e5e5e5;
   border-radius: 12px;
   background: #ffffff;
@@ -2624,15 +2624,18 @@ body.workspace-open .app-shell {
 }
 
 .theme-editor-page-actions {
-  position: sticky;
-  bottom: 14px;
+  position: fixed;
+  left: var(--theme-editor-actions-left, 0px);
+  width: var(--theme-editor-actions-width, 100%);
+  bottom: 0;
   z-index: 20;
   display: flex;
   justify-content: flex-end;
   gap: 9px;
-  padding: 12px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
   border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(14px);
@@ -3342,7 +3345,7 @@ body.workspace-open .app-shell {
   }
 
   .theme-editor-page-body {
-    padding: 0 14px;
+    padding: 0 14px 104px;
   }
 
   .theme-config-section {
@@ -3364,7 +3367,8 @@ body.workspace-open .app-shell {
   }
 
   .theme-editor-page-actions {
-    bottom: 8px;
+    left: var(--theme-editor-actions-left, 0px);
+    width: var(--theme-editor-actions-width, 100%);
   }
 
   .theme-editor-page-actions .btn {
@@ -3387,6 +3391,15 @@ body.workspace-open .app-shell {
 
   .topbar h1 {
     font-size: 17px;
+  }
+}
+
+@media (max-width: 760px) {
+  .theme-editor-page-actions {
+    left: var(--theme-editor-actions-left, 0px);
+    width: var(--theme-editor-actions-width, 100%);
+    bottom: calc(62px + env(safe-area-inset-bottom));
+    padding: 10px 12px;
   }
 }
 

@@ -601,6 +601,7 @@ function renderChatTimeline() {
     const stats = opening.stats ?? {};
     return renderChatOpening({
       themeName: theme?.name ?? '当前主题',
+      themeDescription: theme?.description?.trim() ?? '',
       datasetName: stats.datasetName ?? '',
       metricCount: Number(stats.metricCount) || 0,
       dimensionCount: Number(stats.dimensionCount) || 0,

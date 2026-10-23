@@ -46,6 +46,7 @@ function resumeMarkup(resume) {
 
 export function renderChatOpening({
   themeName = '',
+  themeDescription = '',
   datasetName = '',
   metricCount = 0,
   dimensionCount = 0,
@@ -63,7 +64,7 @@ export function renderChatOpening({
       <div class="welcome-mini-mark">
         <img src="/yolo-mark.svg" alt="YOLO" />
       </div>
-      <h2 class="welcome-mini-title">今天想问点什么？</h2>
+      <h2 class="welcome-mini-title">${escapeHtml(themeDescription || '今天想问点什么？')}</h2>
       ${subtitle ? `<p class="welcome-mini-sub">${subtitle}</p>` : ''}
       ${resumeMarkup(resume)}
       ${cardsMarkup(cards)}
