@@ -1,6 +1,6 @@
 // MCP 管理后台路由：配置开关、API Key 管理、审计查询。全部需 admin 中间件。
-import { setMcpConfig, getMcpConfig, setMcpConfigAsync, getMcpConfigAsync, getDefaultMcpConfig } from '../../mcp/config.js';
-import { generateApiKey, revokeApiKey, listApiKeys } from '../../mcp/auth.js';
+import { setMcpConfigAsync, getMcpConfigAsync, getDefaultMcpConfig } from '../../mcp/config.js';
+import { generateApiKeyAsync, revokeApiKeyAsync, listApiKeysAsync } from '../../mcp/auth.js';
 
 export function registerMcpAdminRoutes(table) {
   table.add({
@@ -36,7 +36,7 @@ export function registerMcpAdminRoutes(table) {
     handler: async (ctx) => {
       const body = await ctx.readJson(ctx.request);
       const createdBy = ctx.user?.id ?? null;
-      const result = generateApiKey(ctx.database, {
+      const result = await generateApiKeyAsync(ctx.database, {
         name: body.name ?? 'mcp',
         tenantId: body.tenantId ?? 'default',
         createdBy,
@@ -52,7 +52,7 @@ export function registerMcpAdminRoutes(table) {
     middleware: ['admin'],
     summary: '列出 MCP API Key（不含哈希）',
     handler: async (ctx) => {
-      ctx.sendJson(ctx.response, 200, listApiKeys(ctx.database));
+      ctx.sendJson(ctx.response, 200, await listApiKeysAsync(ctx.database));
     },
   });
 
@@ -64,7 +64,7 @@ export function registerMcpAdminRoutes(table) {
     summary: '吊销 MCP API Key',
     handler: async (ctx) => {
       const keyId = ctx.params[0];
-      const ok = revokeApiKey(ctx.database, keyId);
+      const ok = await revokeApiKeyAsync(ctx.database, keyId);
       ctx.sendJson(ctx.response, 200, { revoked: Boolean(ok) });
     },
   });

@@ -205,6 +205,28 @@ function attachAsyncRepositories(store) {
     try { scopes = JSON.parse(scopes); } catch { /* keep scalar scope */ }
     return { ...row, scopes };
   };
+  store.createMcpApiKeyAsync = async ({ keyId, keyHash, name, tenantId, createdBy, scopes = 'mcp', createdAt }) => {
+    await store.execute(`INSERT INTO mcp_api_keys
+      (key_id, key_hash, name, tenant_id, scopes, created_by, created_at, revoked)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0)`, [
+      String(keyId), String(keyHash), String(name ?? 'mcp'), String(tenantId ?? 'default'),
+      JSON.stringify(scopes), Number(createdBy) || null, String(createdAt ?? new Date().toISOString()),
+    ]);
+    return { keyId: String(keyId), name: name ?? 'mcp', tenantId: tenantId ?? 'default' };
+  };
+  store.listMcpApiKeysAsync = async () => {
+    const rows = await store.query(`SELECT key_id AS keyId, name, tenant_id AS tenantId,
+      scopes, created_at AS createdAt, revoked FROM mcp_api_keys ORDER BY created_at DESC`);
+    return rows.map((row) => ({
+      ...row,
+      scopes: parseJson(row.scopes, 'mcp'),
+      revoked: row.revoked === true || Number(row.revoked) === 1,
+    }));
+  };
+  store.revokeMcpApiKeyAsync = async (keyId) => {
+    const result = await store.execute('UPDATE mcp_api_keys SET revoked = 1 WHERE key_id = ?', [String(keyId)]);
+    return Number(result.affectedRows) > 0;
+  };
   store.createChatSessionAsync = async ({ userId, themeId, title = '新会话', modelId = null }) => {
     const timestamp = new Date().toISOString();
     const result = await store.execute(`INSERT INTO chat_sessions
@@ -470,6 +492,26 @@ function attachAsyncRepositories(store) {
       VALUES (?, ?, ?, ?, ?, 'PENDING', ?, 0, 0, 0, 0, '{}', NULL, NULL, ?)`, [Number(themeId), String(sourceType), String(sourceId), String(fieldName), String(trigger), requestedBy ? Number(requestedBy) : null, new Date().toISOString()]);
     return Number(result.insertId);
   };
+
+  // These query/execute-based async operations live on PlatformDatabase for
+  // the native SQLite facade. Reuse them on the MySQL store as well; they only
+  // depend on the common async store contract and repositories attached above.
+  // Keeping the method list explicit avoids accidentally exposing SQLite-only
+  // sync APIs (or methods that require `this.db`) on a remote store.
+  for (const methodName of [
+    'getDataSourceByCodeAsync',
+    'getBusinessDatasetAsync',
+    'saveBusinessDatasetAsync',
+    'replaceDatasetFieldsAsync',
+    'listDatasetFieldsAsync',
+    'setDatasetFieldEnabledAsync',
+    'deleteBusinessDatasetAsync',
+  ]) {
+    if (typeof store[methodName] !== 'function'
+      && typeof PlatformDatabase.prototype[methodName] === 'function') {
+      store[methodName] = (...args) => PlatformDatabase.prototype[methodName].apply(store, args);
+    }
+  }
   return store;
 }
 

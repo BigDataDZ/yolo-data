@@ -110,6 +110,10 @@ test('configured MySQL backend connects and executes its selected init script', 
         calls.push(['initialize', scriptPath]);
         return 42;
       },
+      query: async (sql) => {
+        calls.push(['query', sql]);
+        return /^\s*SELECT COUNT\(\*\) AS count FROM/i.test(sql) ? [{ count: 1 }] : [];
+      },
       execute: async (sql) => {
         calls.push(['execute', sql]);
         return { insertId: calls.length, affectedRows: 1 };
@@ -126,14 +130,32 @@ test('configured MySQL backend connects and executes its selected init script', 
   assert.equal(typeof initialized.database.listChatMessagesAsync, 'function');
   assert.equal(typeof initialized.database.appendChatMessageAsync, 'function');
   assert.equal(typeof initialized.database.saveConversationAsync, 'function');
+  assert.equal(typeof initialized.database.createMcpApiKeyAsync, 'function');
+  assert.equal(typeof initialized.database.listMcpApiKeysAsync, 'function');
+  assert.equal(typeof initialized.database.revokeMcpApiKeyAsync, 'function');
+  assert.equal(typeof initialized.database.getDataSourceByCodeAsync, 'function');
+  assert.equal(typeof initialized.database.getBusinessDatasetAsync, 'function');
+  assert.equal(typeof initialized.database.saveBusinessDatasetAsync, 'function');
+  assert.equal(typeof initialized.database.replaceDatasetFieldsAsync, 'function');
+  assert.equal(typeof initialized.database.listDatasetFieldsAsync, 'function');
+  assert.equal(typeof initialized.database.setDatasetFieldEnabledAsync, 'function');
+  assert.equal(typeof initialized.database.deleteBusinessDatasetAsync, 'function');
   assert.deepEqual(calls, [
     ['connect', 'mysql-test'],
     ['initialize', 'config/platform/mysql-init.sql'],
+    ['query', 'SELECT COUNT(*) AS count FROM app_users'],
+    ['query', 'SELECT COUNT(*) AS count FROM themes'],
+    ['query', 'SELECT COUNT(*) AS count FROM user_theme_grants'],
   ]);
   const savedMessage = await initialized.database.appendChatMessageAsync({ sessionId: 7, userId: 3, role: 'user', content: 'question' });
   assert.equal(savedMessage.id, calls.length - 1);
   const conversationId = await initialized.database.saveConversationAsync({ userId: 3, themeId: 2, question: 'question', answer: {} });
   assert.equal(typeof conversationId, 'number');
+  assert.equal(await initialized.database.getDataSourceByCodeAsync('absent'), null);
+  assert.equal(await initialized.database.getBusinessDatasetAsync(999), null);
+  assert.deepEqual(await initialized.database.listDatasetFieldsAsync(999), []);
+  assert.equal(await initialized.database.deleteBusinessDatasetAsync(999), false);
+  assert.ok(calls.some(([kind, sql]) => kind === 'query' && sql.includes('business_datasets')));
   await initialized.close();
   assert.deepEqual(calls.at(-1), ['close']);
 });

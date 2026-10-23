@@ -263,7 +263,9 @@ export function registerThemeRoutes(table) {
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listSkills());
+      sendJson(response, 200, database.isAsyncPlatformStore
+        ? await database.listSkillsAsync()
+        : database.listSkills());
     },
   });
 
@@ -284,7 +286,9 @@ export function registerThemeRoutes(table) {
       sendJson(response, 200, {
         roots: application.config.skillDirectories ?? [],
         sync: application.runtime.skillSync,
-        skills: database.listSkills(),
+        skills: database.isAsyncPlatformStore
+          ? await database.listSkillsAsync()
+          : database.listSkills(),
       });
     },
   });
@@ -316,7 +320,9 @@ export function registerThemeRoutes(table) {
       });
       sendJson(response, 200, {
         ...sync,
-        skills: database.listSkills(),
+        skills: database.isAsyncPlatformStore
+          ? await database.listSkillsAsync()
+          : database.listSkills(),
       });
     },
   });
