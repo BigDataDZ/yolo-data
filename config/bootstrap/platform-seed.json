@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-10-23T03:41:33.427Z",
+  "generatedAt": "2026-10-23T03:55:40.422Z",
   "sourceDatabase": "yolo-data",
   "excluded": [
     "ads_sale_detail",
@@ -105,7 +105,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "D:\\workspace\\yolo-data\\skills\\attribution-analysis\\SKILL.md",
         "metadata_json": "{\"name\":\"归因与变化分析（代码驱动）\",\"description\":\"归因、拆解、驱动因素类问题的分析方法指引。平台不内置任何分析算法，分析必须由生成代码基于已锁定快照完成，并按分析结果契约输出可校验的产物。\",\"code\":\"attribution-analysis\",\"phases\":{},\"version\":\"1.0\",\"compatibility\":\"\"}",
@@ -124,7 +124,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "C:\\Users\\admin\\.codex\\skills\\auditing-data-and-ground-truth\\SKILL.md",
         "metadata_json": "{\"name\":\"auditing-data-and-ground-truth\",\"description\":\"Audit datasets, joins, labels, and ground truth before analysis or modeling. Use when data meaning, row grain, time semantics, source-of-truth reliability, or label construction may invalidate conclusions; not for general model evaluation after the evidence base is already trusted.\",\"compatibility\":\"\",\"version\":\"\"}",
@@ -143,7 +143,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "C:\\Users\\admin\\.codex\\skills\\running-decision-grade-data-science\\SKILL.md",
         "metadata_json": "{\"name\":\"running-decision-grade-data-science\",\"description\":\"Orchestrate an end-to-end data analysis or machine learning project from decision framing through reproducible handoff. Use when a request spans multiple lifecycle stages or an ambiguous modeling request must become a decision-ready result; use narrower audit or experiment-design skills for isolated reviews.\",\"compatibility\":\"\",\"version\":\"\"}",
@@ -162,7 +162,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "C:\\Users\\admin\\.codex\\skills\\validating-models-and-claims\\SKILL.md",
         "metadata_json": "{\"name\":\"validating-models-and-claims\",\"description\":\"Validate trained models and analytical claims against their intended decision, independent evidence, and human-reviewed ground truth. Use when reviewing model performance, analysis conclusions, launch claims, or evaluation reports; use failure diagnosis instead when the main task is locating a known defect.\",\"compatibility\":\"\",\"version\":\"\"}",
@@ -181,7 +181,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "D:\\workspace\\yolo-data\\skills\\yolo-core-skill-business-vocabulary\\SKILL.md",
         "metadata_json": "{\"code\":\"yolo-core-skill.business_vocabulary\",\"name\":\"业务词汇解析\",\"description\":\"解析中文时间粒度、排名数量和常用业务表达为结构化意图\",\"category\":\"CORE\",\"kind\":\"RESOLVER\",\"resolverName\":\"business_vocabulary\",\"version\":\"1.0.0\",\"compatibility\":\"\"}",
@@ -200,7 +200,7 @@
         "default_enabled": 0,
         "status": 1,
         "created_at": "2026-10-22T01:32:32.410Z",
-        "updated_at": "2026-10-23T03:33:25.000Z",
+        "updated_at": "2026-10-23T03:53:24.716Z",
         "source": "SKILL_MD",
         "source_path": "D:\\workspace\\yolo-data\\skills\\yolo-core-skill-temporal-expression\\SKILL.md",
         "metadata_json": "{\"code\":\"yolo-core-skill.temporal_expression\",\"name\":\"时间表达式解析\",\"description\":\"把自然语言中的日期范围和时间周期解析为结构化时间条件\",\"category\":\"CORE\",\"kind\":\"RESOLVER\",\"resolverName\":\"temporal_expression\",\"version\":\"1.0.0\",\"compatibility\":\"\"}",
@@ -264,14 +264,14 @@
         "primary_table": "ads_sale_detail",
         "config_json": "{\"readonly\":true,\"maxRows\":5000,\"queryTimeoutMs\":30000,\"requireDateRange\":false,\"autoLatestDateRange\":true,\"autoRangeDays\":30}",
         "status": 1,
-        "last_synced_at": "2026-10-23T03:33:27.233Z",
+        "last_synced_at": "2026-10-23T03:53:26.442Z",
         "created_at": "2026-10-23T03:15:55.245Z",
-        "updated_at": "2026-10-23T03:33:27.233Z"
+        "updated_at": "2026-10-23T03:53:26.442Z"
       }
     ],
     "dataset_fields": [
       {
-        "id": 1121,
+        "id": 1681,
         "dataset_id": 1,
         "field_name": "sales_date",
         "display_name": "销售日期",
@@ -285,7 +285,7 @@
         "enabled": 1
       },
       {
-        "id": 1122,
+        "id": 1682,
         "dataset_id": 1,
         "field_name": "credential_no",
         "display_name": "凭证单号",
@@ -299,7 +299,7 @@
         "enabled": 1
       },
       {
-        "id": 1123,
+        "id": 1683,
         "dataset_id": 1,
         "field_name": "goods_code",
         "display_name": "商品编码",
@@ -313,7 +313,7 @@
         "enabled": 1
       },
       {
-        "id": 1124,
+        "id": 1684,
         "dataset_id": 1,
         "field_name": "customer_code",
         "display_name": "客户编码",
@@ -327,7 +327,7 @@
         "enabled": 1
       },
       {
-        "id": 1125,
+        "id": 1685,
         "dataset_id": 1,
         "field_name": "sale_time",
         "display_name": "销售时间",
@@ -341,7 +341,7 @@
         "enabled": 1
       },
       {
-        "id": 1126,
+        "id": 1686,
         "dataset_id": 1,
         "field_name": "require_delivery_date",
         "display_name": "要求送货日期",
@@ -355,7 +355,7 @@
         "enabled": 1
       },
       {
-        "id": 1127,
+        "id": 1687,
         "dataset_id": 1,
         "field_name": "delivery_time",
         "display_name": "发货时间",
@@ -369,7 +369,7 @@
         "enabled": 1
       },
       {
-        "id": 1128,
+        "id": 1688,
         "dataset_id": 1,
         "field_name": "original_order_code",
         "display_name": "原销售单号",
@@ -383,7 +383,7 @@
         "enabled": 1
       },
       {
-        "id": 1129,
+        "id": 1689,
         "dataset_id": 1,
         "field_name": "order_code",
         "display_name": "销售单号",
@@ -397,7 +397,7 @@
         "enabled": 1
       },
       {
-        "id": 1130,
+        "id": 1690,
         "dataset_id": 1,
         "field_name": "business_type_code",
         "display_name": "业务类型编码",
@@ -411,7 +411,7 @@
         "enabled": 1
       },
       {
-        "id": 1131,
+        "id": 1691,
         "dataset_id": 1,
         "field_name": "business_type_name",
         "display_name": "业务类型名称",
@@ -425,7 +425,7 @@
         "enabled": 1
       },
       {
-        "id": 1132,
+        "id": 1692,
         "dataset_id": 1,
         "field_name": "order_channel_detail_name",
         "display_name": "下单渠道名称",
@@ -439,7 +439,7 @@
         "enabled": 1
       },
       {
-        "id": 1133,
+        "id": 1693,
         "dataset_id": 1,
         "field_name": "customer_name",
         "display_name": "客户名称",
@@ -453,7 +453,7 @@
         "enabled": 1
       },
       {
-        "id": 1134,
+        "id": 1694,
         "dataset_id": 1,
         "field_name": "sub_customer_code",
         "display_name": "子客户编码",
@@ -467,7 +467,7 @@
         "enabled": 1
       },
       {
-        "id": 1135,
+        "id": 1695,
         "dataset_id": 1,
         "field_name": "sub_customer_name",
         "display_name": "子客户名称",
@@ -481,7 +481,7 @@
         "enabled": 1
       },
       {
-        "id": 1136,
+        "id": 1696,
         "dataset_id": 1,
         "field_name": "performance_region_code",
         "display_name": "销售大区编码",
@@ -495,7 +495,7 @@
         "enabled": 1
       },
       {
-        "id": 1137,
+        "id": 1697,
         "dataset_id": 1,
         "field_name": "performance_region_name",
         "display_name": "销售大区名称",
@@ -509,7 +509,7 @@
         "enabled": 1
       },
       {
-        "id": 1138,
+        "id": 1698,
         "dataset_id": 1,
         "field_name": "performance_province_code",
         "display_name": "销售省区编码",
@@ -523,7 +523,7 @@
         "enabled": 1
       },
       {
-        "id": 1139,
+        "id": 1699,
         "dataset_id": 1,
         "field_name": "performance_province_name",
         "display_name": "销售省区名称",
@@ -537,7 +537,7 @@
         "enabled": 1
       },
       {
-        "id": 1140,
+        "id": 1700,
         "dataset_id": 1,
         "field_name": "performance_city_code",
         "display_name": "销售城市组编码",
@@ -551,7 +551,7 @@
         "enabled": 1
       },
       {
-        "id": 1141,
+        "id": 1701,
         "dataset_id": 1,
         "field_name": "performance_city_name",
         "display_name": "销售城市组名称",
@@ -565,7 +565,7 @@
         "enabled": 1
       },
       {
-        "id": 1142,
+        "id": 1702,
         "dataset_id": 1,
         "field_name": "sign_time",
         "display_name": "客户签约日期",
@@ -579,7 +579,7 @@
         "enabled": 1
       },
       {
-        "id": 1143,
+        "id": 1703,
         "dataset_id": 1,
         "field_name": "sales_user_number",
         "display_name": "销售员工号",
@@ -593,7 +593,7 @@
         "enabled": 1
       },
       {
-        "id": 1144,
+        "id": 1704,
         "dataset_id": 1,
         "field_name": "sales_user_name",
         "display_name": "销售员名称",
@@ -607,7 +607,7 @@
         "enabled": 1
       },
       {
-        "id": 1145,
+        "id": 1705,
         "dataset_id": 1,
         "field_name": "supervisor_user_number",
         "display_name": "销售主管工号",
@@ -621,7 +621,7 @@
         "enabled": 1
       },
       {
-        "id": 1146,
+        "id": 1706,
         "dataset_id": 1,
         "field_name": "supervisor_user_name",
         "display_name": "销售主管名称",
@@ -635,7 +635,7 @@
         "enabled": 1
       },
       {
-        "id": 1147,
+        "id": 1707,
         "dataset_id": 1,
         "field_name": "sign_company_code",
         "display_name": "签约公司编码",
@@ -649,7 +649,7 @@
         "enabled": 1
       },
       {
-        "id": 1148,
+        "id": 1708,
         "dataset_id": 1,
         "field_name": "sign_company_name",
         "display_name": "签约公司名称",
@@ -663,7 +663,7 @@
         "enabled": 1
       },
       {
-        "id": 1149,
+        "id": 1709,
         "dataset_id": 1,
         "field_name": "agreement_dc_code",
         "display_name": "履约DC编码",
@@ -677,7 +677,7 @@
         "enabled": 1
       },
       {
-        "id": 1150,
+        "id": 1710,
         "dataset_id": 1,
         "field_name": "agreement_dc_name",
         "display_name": "履约DC名称",
@@ -691,7 +691,7 @@
         "enabled": 1
       },
       {
-        "id": 1151,
+        "id": 1711,
         "dataset_id": 1,
         "field_name": "company_code",
         "display_name": "库存DC公司编码",
@@ -705,7 +705,7 @@
         "enabled": 1
       },
       {
-        "id": 1152,
+        "id": 1712,
         "dataset_id": 1,
         "field_name": "company_name",
         "display_name": "库存DC公司名称",
@@ -719,7 +719,7 @@
         "enabled": 1
       },
       {
-        "id": 1153,
+        "id": 1713,
         "dataset_id": 1,
         "field_name": "inventory_dc_code",
         "display_name": "库存DC编码",
@@ -733,7 +733,7 @@
         "enabled": 1
       },
       {
-        "id": 1154,
+        "id": 1714,
         "dataset_id": 1,
         "field_name": "inventory_dc_name",
         "display_name": "库存DC名称",
@@ -747,7 +747,7 @@
         "enabled": 1
       },
       {
-        "id": 1155,
+        "id": 1715,
         "dataset_id": 1,
         "field_name": "goods_name",
         "display_name": "商品名称",
@@ -761,7 +761,7 @@
         "enabled": 1
       },
       {
-        "id": 1156,
+        "id": 1716,
         "dataset_id": 1,
         "field_name": "goods_bar_code",
         "display_name": "商品条码",
@@ -775,7 +775,7 @@
         "enabled": 1
       },
       {
-        "id": 1157,
+        "id": 1717,
         "dataset_id": 1,
         "field_name": "spec",
         "display_name": "规格",
@@ -789,7 +789,7 @@
         "enabled": 1
       },
       {
-        "id": 1158,
+        "id": 1718,
         "dataset_id": 1,
         "field_name": "unit_name",
         "display_name": "销售单位",
@@ -803,7 +803,7 @@
         "enabled": 1
       },
       {
-        "id": 1159,
+        "id": 1719,
         "dataset_id": 1,
         "field_name": "business_division_code",
         "display_name": "管理分类部类编码",
@@ -817,7 +817,7 @@
         "enabled": 1
       },
       {
-        "id": 1160,
+        "id": 1720,
         "dataset_id": 1,
         "field_name": "business_division_name",
         "display_name": "管理分类部类名称",
@@ -831,7 +831,7 @@
         "enabled": 1
       },
       {
-        "id": 1161,
+        "id": 1721,
         "dataset_id": 1,
         "field_name": "is_factory_goods_flag",
         "display_name": "是否工厂商品",
@@ -845,7 +845,7 @@
         "enabled": 1
       },
       {
-        "id": 1162,
+        "id": 1722,
         "dataset_id": 1,
         "field_name": "cost_price",
         "display_name": "含税进价",
@@ -859,7 +859,7 @@
         "enabled": 1
       },
       {
-        "id": 1163,
+        "id": 1723,
         "dataset_id": 1,
         "field_name": "sale_price",
         "display_name": "含税售价",
@@ -873,7 +873,7 @@
         "enabled": 1
       },
       {
-        "id": 1164,
+        "id": 1724,
         "dataset_id": 1,
         "field_name": "purchase_qty",
         "display_name": "下单数量",
@@ -887,7 +887,7 @@
         "enabled": 1
       },
       {
-        "id": 1165,
+        "id": 1725,
         "dataset_id": 1,
         "field_name": "sale_qty",
         "display_name": "销售数量",
@@ -901,7 +901,7 @@
         "enabled": 1
       },
       {
-        "id": 1166,
+        "id": 1726,
         "dataset_id": 1,
         "field_name": "sale_amt",
         "display_name": "含税销售额",
@@ -915,7 +915,7 @@
         "enabled": 1
       },
       {
-        "id": 1167,
+        "id": 1727,
         "dataset_id": 1,
         "field_name": "sale_cost",
         "display_name": "含税销售成本",
@@ -929,7 +929,7 @@
         "enabled": 1
       },
       {
-        "id": 1168,
+        "id": 1728,
         "dataset_id": 1,
         "field_name": "profit",
         "display_name": "含税定价毛利额",
@@ -943,7 +943,7 @@
         "enabled": 1
       },
       {
-        "id": 1169,
+        "id": 1729,
         "dataset_id": 1,
         "field_name": "sale_amt_no_tax",
         "display_name": "未税销售额",
@@ -957,7 +957,7 @@
         "enabled": 1
       },
       {
-        "id": 1170,
+        "id": 1730,
         "dataset_id": 1,
         "field_name": "sale_cost_no_tax",
         "display_name": "未税销售成本",
@@ -971,7 +971,7 @@
         "enabled": 1
       },
       {
-        "id": 1171,
+        "id": 1731,
         "dataset_id": 1,
         "field_name": "profit_no_tax",
         "display_name": "未税定价毛利额",
@@ -985,7 +985,7 @@
         "enabled": 1
       },
       {
-        "id": 1172,
+        "id": 1732,
         "dataset_id": 1,
         "field_name": "tax_rate",
         "display_name": "税率",
@@ -999,7 +999,7 @@
         "enabled": 1
       },
       {
-        "id": 1173,
+        "id": 1733,
         "dataset_id": 1,
         "field_name": "tax_amt",
         "display_name": "税金",
@@ -1013,7 +1013,7 @@
         "enabled": 1
       },
       {
-        "id": 1174,
+        "id": 1734,
         "dataset_id": 1,
         "field_name": "order_channel_code",
         "display_name": "单据类型",
@@ -1027,7 +1027,7 @@
         "enabled": 1
       },
       {
-        "id": 1175,
+        "id": 1735,
         "dataset_id": 1,
         "field_name": "credit_code",
         "display_name": "信控号",
@@ -1041,7 +1041,7 @@
         "enabled": 1
       },
       {
-        "id": 1176,
+        "id": 1736,
         "dataset_id": 1,
         "field_name": "purchase_order_code",
         "display_name": "采购订单号",
@@ -1055,7 +1055,7 @@
         "enabled": 1
       },
       {
-        "id": 1177,
+        "id": 1737,
         "dataset_id": 1,
         "field_name": "wms_order_code",
         "display_name": "履约出库单号",
@@ -1069,7 +1069,7 @@
         "enabled": 1
       },
       {
-        "id": 1178,
+        "id": 1738,
         "dataset_id": 1,
         "field_name": "business_sign_date",
         "display_name": "最近业务类型签约日期",
@@ -1083,7 +1083,7 @@
         "enabled": 1
       },
       {
-        "id": 1179,
+        "id": 1739,
         "dataset_id": 1,
         "field_name": "first_business_sign_date",
         "display_name": "首次业务类型签约日期",
@@ -1097,7 +1097,7 @@
         "enabled": 1
       },
       {
-        "id": 1180,
+        "id": 1740,
         "dataset_id": 1,
         "field_name": "first_business_sale_date",
         "display_name": "首次业务类型销售日期",
@@ -1111,7 +1111,7 @@
         "enabled": 1
       },
       {
-        "id": 1181,
+        "id": 1741,
         "dataset_id": 1,
         "field_name": "last_business_sale_date",
         "display_name": "末次业务类型销售日期",
@@ -1125,7 +1125,7 @@
         "enabled": 1
       },
       {
-        "id": 1182,
+        "id": 1742,
         "dataset_id": 1,
         "field_name": "sale_price_explain",
         "display_name": "售价来源",
@@ -1139,7 +1139,7 @@
         "enabled": 1
       },
       {
-        "id": 1183,
+        "id": 1743,
         "dataset_id": 1,
         "field_name": "brand_name",
         "display_name": "品牌名称",
@@ -1153,7 +1153,7 @@
         "enabled": 1
       },
       {
-        "id": 1184,
+        "id": 1744,
         "dataset_id": 1,
         "field_name": "supplier_code",
         "display_name": "供应商编码",
@@ -1167,7 +1167,7 @@
         "enabled": 1
       },
       {
-        "id": 1185,
+        "id": 1745,
         "dataset_id": 1,
         "field_name": "supplier_name",
         "display_name": "供应商名称",
@@ -1181,7 +1181,7 @@
         "enabled": 1
       },
       {
-        "id": 1186,
+        "id": 1746,
         "dataset_id": 1,
         "field_name": "classify_large_code",
         "display_name": "管理大类编码",
@@ -1195,7 +1195,7 @@
         "enabled": 1
       },
       {
-        "id": 1187,
+        "id": 1747,
         "dataset_id": 1,
         "field_name": "classify_large_name",
         "display_name": "管理大类名称",
@@ -1209,7 +1209,7 @@
         "enabled": 1
       },
       {
-        "id": 1188,
+        "id": 1748,
         "dataset_id": 1,
         "field_name": "classify_middle_code",
         "display_name": "管理中类编码",
@@ -1223,7 +1223,7 @@
         "enabled": 1
       },
       {
-        "id": 1189,
+        "id": 1749,
         "dataset_id": 1,
         "field_name": "classify_middle_name",
         "display_name": "管理中类名称",
@@ -1237,7 +1237,7 @@
         "enabled": 1
       },
       {
-        "id": 1190,
+        "id": 1750,
         "dataset_id": 1,
         "field_name": "classify_small_name",
         "display_name": "管理小类名称",
@@ -1251,7 +1251,7 @@
         "enabled": 1
       },
       {
-        "id": 1191,
+        "id": 1751,
         "dataset_id": 1,
         "field_name": "classify_small_code",
         "display_name": "管理小类编码",
@@ -1265,7 +1265,7 @@
         "enabled": 1
       },
       {
-        "id": 1192,
+        "id": 1752,
         "dataset_id": 1,
         "field_name": "goods_purchase_level",
         "display_name": "商品采购级别",
@@ -1279,7 +1279,7 @@
         "enabled": 1
       },
       {
-        "id": 1193,
+        "id": 1753,
         "dataset_id": 1,
         "field_name": "sales_manager_user_number",
         "display_name": "销售经理工号",
@@ -1293,7 +1293,7 @@
         "enabled": 1
       },
       {
-        "id": 1194,
+        "id": 1754,
         "dataset_id": 1,
         "field_name": "sales_manager_user_name",
         "display_name": "销售经理姓名",
@@ -1307,7 +1307,7 @@
         "enabled": 1
       },
       {
-        "id": 1195,
+        "id": 1755,
         "dataset_id": 1,
         "field_name": "city_manager_user_number",
         "display_name": "城市经理工号",
@@ -1321,7 +1321,7 @@
         "enabled": 1
       },
       {
-        "id": 1196,
+        "id": 1756,
         "dataset_id": 1,
         "field_name": "city_manager_user_name",
         "display_name": "城市经理姓名",
@@ -1335,7 +1335,7 @@
         "enabled": 1
       },
       {
-        "id": 1197,
+        "id": 1757,
         "dataset_id": 1,
         "field_name": "bloc_name",
         "display_name": "集团名称",
@@ -1349,7 +1349,7 @@
         "enabled": 1
       },
       {
-        "id": 1198,
+        "id": 1758,
         "dataset_id": 1,
         "field_name": "first_category_code",
         "display_name": "客户一级履约行业编码",
@@ -1363,7 +1363,7 @@
         "enabled": 1
       },
       {
-        "id": 1199,
+        "id": 1759,
         "dataset_id": 1,
         "field_name": "first_category_name",
         "display_name": "客户一级履约行业名称",
@@ -1377,7 +1377,7 @@
         "enabled": 1
       },
       {
-        "id": 1200,
+        "id": 1760,
         "dataset_id": 1,
         "field_name": "second_category_code",
         "display_name": "客户二级履约行业编码",
@@ -1403,13 +1403,13 @@
         "dataset_ids_json": "[]",
         "business_dataset_ids_json": "[1]",
         "primary_business_dataset_id": null,
-        "semantic_value_config_json": "{}",
+        "semantic_value_config_json": "{\"enabled\":true,\"autoDiscover\":true,\"fields\":{\"DATASET:1:city_manager_user_number\":false,\"DATASET:1:city_manager_user_name\":false,\"DATASET:1:order_channel_code\":true,\"DATASET:1:business_division_code\":false,\"DATASET:1:business_division_name\":false,\"DATASET:1:second_category_code\":false,\"DATASET:1:first_category_code\":false,\"DATASET:1:first_category_name\":false,\"DATASET:1:last_business_sale_date\":false,\"DATASET:1:goods_purchase_level\":true,\"DATASET:1:first_business_sign_date\":false,\"DATASET:1:first_business_sale_date\":false,\"DATASET:1:order_channel_detail_name\":true,\"DATASET:1:performance_city_code\":false,\"DATASET:1:performance_city_name\":true,\"DATASET:1:business_type_code\":false,\"DATASET:1:business_type_name\":true,\"DATASET:1:business_sign_date\":false}}",
         "semantic_policy_json": "{\"version\":1,\"metrics\":[],\"dimensions\":[],\"filters\":[],\"enumGroups\":[],\"policies\":{\"ambiguity\":\"CLARIFY\",\"allowFuzzyMapping\":false},\"plugins\":[],\"lexicon\":{\"version\":1,\"metricTerms\":[],\"identifierPatterns\":[],\"rateTerms\":[],\"enumFieldTerms\":[],\"ignoredValues\":[],\"dimensionFallback\":[],\"dimensionAliases\":{},\"dimensionValues\":{},\"taxPrefixes\":{\"all\":[],\"excluded\":[]},\"profileHints\":{\"identifier\":{\"wholeWord\":false,\"terms\":[]},\"rate\":{\"wholeWord\":false,\"terms\":[]},\"average\":{\"wholeWord\":false,\"terms\":[]},\"stock\":{\"wholeWord\":false,\"terms\":[]},\"count\":{\"wholeWord\":false,\"terms\":[]},\"extreme\":{\"wholeWord\":false,\"terms\":[]},\"metric\":{\"wholeWord\":false,\"terms\":[]},\"time\":{\"wholeWord\":false,\"terms\":[]}}}}",
         "examples_json": "[]",
         "default_chart": "auto",
         "status": 1,
         "created_at": "2026-10-22T01:36:01.624Z",
-        "updated_at": "2026-10-23T03:33:46.673Z",
+        "updated_at": "2026-10-23T03:54:31.683Z",
         "model_ids_json": "[1]",
         "default_model_id": 1
       },
@@ -1430,7 +1430,7 @@
         "default_chart": "auto",
         "status": 1,
         "created_at": "2026-10-22T01:36:02.801Z",
-        "updated_at": "2026-10-23T03:33:47.458Z",
+        "updated_at": "2026-10-23T03:53:42.662Z",
         "model_ids_json": "[1]",
         "default_model_id": 1
       },
@@ -1451,14 +1451,51 @@
         "default_chart": "auto",
         "status": 1,
         "created_at": "2026-10-22T01:36:03.702Z",
-        "updated_at": "2026-10-23T03:33:48.247Z",
+        "updated_at": "2026-10-23T03:53:43.410Z",
         "model_ids_json": "[1]",
         "default_model_id": 1
       }
     ],
     "indicator_types": [],
     "local_indicators": [],
-    "theme_skills": [],
+    "theme_skills": [
+      {
+        "theme_id": 1,
+        "skill_code": "external:attribution-analysis",
+        "enabled": 1,
+        "config_json": "{}"
+      },
+      {
+        "theme_id": 1,
+        "skill_code": "external:auditing-data-and-ground-truth",
+        "enabled": 1,
+        "config_json": "{}"
+      },
+      {
+        "theme_id": 1,
+        "skill_code": "external:running-decision-grade-data-science",
+        "enabled": 1,
+        "config_json": "{}"
+      },
+      {
+        "theme_id": 1,
+        "skill_code": "external:validating-models-and-claims",
+        "enabled": 1,
+        "config_json": "{}"
+      },
+      {
+        "theme_id": 1,
+        "skill_code": "yolo-core-skill.business_vocabulary",
+        "enabled": 1,
+        "config_json": "{}"
+      },
+      {
+        "theme_id": 1,
+        "skill_code": "yolo-core-skill.temporal_expression",
+        "enabled": 1,
+        "config_json": "{}"
+      }
+    ],
     "theme_indicators": [],
     "user_theme_grants": [
       {
