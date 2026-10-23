@@ -76,7 +76,7 @@ test('browser: Skill upload/update/toggle/delete, HTML escaping and analyst boun
       assert.equal(application.skillRegistry.listForTheme(application.database.getTheme(theme.id)).some((skill) => skill.code === code), false);
       await upload(`${content}\n新版步骤`);
       await expect(row).toContainText('已停用');
-      assert.equal(application.skillCatalog.list().skills.filter((skill) => skill.code === code).length, 1);
+      assert.equal((await application.skillCatalog.list()).skills.filter((skill) => skill.code === code).length, 1);
       await toggle();
       await expect(row).toContainText('已启用');
       const active = application.skillRegistry.listForTheme(application.database.getTheme(theme.id));

@@ -63,7 +63,7 @@ test('application rejects unsupported auth overrides before creating persistent 
   try {
     await assert.rejects(async () => {
       const application = await createApplication(config);
-      application.database.close();
+      await application.database.closeAsync();
     }, /AUTH_MODE.*dev.*session/);
     assert.deepEqual(fs.readdirSync(directory), []);
   } finally {

@@ -1,0 +1,4159 @@
+
+> yolo-data@1.1.0 test
+> node --test
+
+TAP version 13
+# (node:26020) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: agent answer enforces user row policy during indicator execution
+ok 1 - agent answer enforces user row policy during indicator execution
+  ---
+  duration_ms: 521.1547
+  type: 'test'
+  ...
+# Subtest: theme permission blocks users without a query grant
+ok 2 - theme permission blocks users without a query grant
+  ---
+  duration_ms: 315.0687
+  type: 'test'
+  ...
+# Subtest: chat session model is locked after the first conversation message
+ok 3 - chat session model is locked after the first conversation message
+  ---
+  duration_ms: 349.6289
+  type: 'test'
+  ...
+# Subtest: multi-turn questions reuse session memory and inherit prior context
+ok 4 - multi-turn questions reuse session memory and inherit prior context
+  ---
+  duration_ms: 396.1233
+  type: 'test'
+  ...
+# Subtest: chat sessions are isolated per user and prompt changes are agent-scoped
+ok 5 - chat sessions are isolated per user and prompt changes are agent-scoped
+  ---
+  duration_ms: 289.1871
+  type: 'test'
+  ...
+# Subtest: revoked theme permission also hides its stored session memory
+ok 6 - revoked theme permission also hides its stored session memory
+  ---
+  duration_ms: 372.8084
+  type: 'test'
+  ...
+# Subtest: theme configuration is persisted without storing the indicator catalog
+ok 7 - theme configuration is persisted without storing the indicator catalog
+  ---
+  duration_ms: 351.0288
+  type: 'test'
+  ...
+# Subtest: indicator query is rejected until semantic definition confirmation completes
+ok 8 - indicator query is rejected until semantic definition confirmation completes
+  ---
+  duration_ms: 347.7523
+  type: 'test'
+  ...
+# Subtest: agent emits auditable runtime events while answering
+ok 9 - agent emits auditable runtime events while answering
+  ---
+  duration_ms: 511.3512
+  type: 'test'
+  ...
+# Subtest: unconfigured Supersonic defaults to the same local mode in health and agent execution
+ok 10 - unconfigured Supersonic defaults to the same local mode in health and agent execution
+  ---
+  duration_ms: 411.8845
+  type: 'test'
+  ...
+# Subtest: explicitly enabled Supersonic requires a configured indicator source
+ok 11 - explicitly enabled Supersonic requires a configured indicator source
+  ---
+  duration_ms: 383.9876
+  type: 'test'
+  ...
+# Subtest: agent reuses identical snapshots but preserves distinct query results
+ok 12 - agent reuses identical snapshots but preserves distinct query results
+  ---
+  duration_ms: 387.7209
+  type: 'test'
+  ...
+# Subtest: agent executes indicator queries only through a compiled query contract
+ok 13 - agent executes indicator queries only through a compiled query contract
+  ---
+  duration_ms: 355.0612
+  type: 'test'
+  ...
+# Subtest: execution messages use the structured contract instead of raw session history
+ok 14 - execution messages use the structured contract instead of raw session history
+  ---
+  duration_ms: 301.6685
+  type: 'test'
+  ...
+# Subtest: artifact follow-up keeps controlled dataset requery tools
+ok 15 - artifact follow-up keeps controlled dataset requery tools
+  ---
+  duration_ms: 291.2801
+  type: 'test'
+  ...
+# Subtest: agent returns structured clarification options with a recommended path
+ok 16 - agent returns structured clarification options with a recommended path
+  ---
+  duration_ms: 312.6728
+  type: 'test'
+  ...
+# Subtest: ambiguous filter value is asked as a value choice instead of a caliber questionnaire
+ok 17 - ambiguous filter value is asked as a value choice instead of a caliber questionnaire
+  ---
+  duration_ms: 346.6396
+  type: 'test'
+  ...
+# Subtest: model clarification tool renders the model question into pickable business options
+ok 18 - model clarification tool renders the model question into pickable business options
+  ---
+  duration_ms: 252.8491
+  type: 'test'
+  ...
+# Subtest: agent wires the long-term memory tool into the tool loop
+ok 19 - agent wires the long-term memory tool into the tool loop
+  ---
+  duration_ms: 255.6838
+  type: 'test'
+  ...
+# Subtest: chart type follow-ups reuse the locked result and render natively
+ok 20 - chart type follow-ups reuse the locked result and render natively
+  ---
+  duration_ms: 252.6202
+  type: 'test'
+  ...
+# Subtest: attribution system prompt renders the analysis result file contract
+ok 21 - attribution system prompt renders the analysis result file contract
+  ---
+  duration_ms: 2.9381
+  type: 'test'
+  ...
+# Subtest: session directives are injected into the execution prompt
+ok 22 - session directives are injected into the execution prompt
+  ---
+  duration_ms: 2.8956
+  type: 'test'
+  ...
+# Subtest: no contract artifact means nothing to validate
+ok 23 - no contract artifact means nothing to validate
+  ---
+  duration_ms: 1.169
+  type: 'test'
+  ...
+# Subtest: a valid analysis artifact is summarised for the model
+ok 24 - a valid analysis artifact is summarised for the model
+  ---
+  duration_ms: 1.9158
+  type: 'test'
+  ...
+# Subtest: an unreadable artifact reports ANALYSIS-UNREADABLE
+ok 25 - an unreadable artifact reports ANALYSIS-UNREADABLE
+  ---
+  duration_ms: 0.4148
+  type: 'test'
+  ...
+# Subtest: malformed json reports ANALYSIS-INVALID-JSON
+ok 26 - malformed json reports ANALYSIS-INVALID-JSON
+  ---
+  duration_ms: 0.1799
+  type: 'test'
+  ...
+# Subtest: an artifact that breaks its own claims is rejected instead of repaired
+ok 27 - an artifact that breaks its own claims is rejected instead of repaired
+  ---
+  duration_ms: 0.2925
+  type: 'test'
+  ...
+# Subtest: file name matching is case insensitive
+ok 28 - file name matching is case insensitive
+  ---
+  duration_ms: 0.2106
+  type: 'test'
+  ...
+# Subtest: analysis result file and claim registry are stable
+ok 29 - analysis result file and claim registry are stable
+  ---
+  duration_ms: 2.7298
+  type: 'test'
+  ...
+# Subtest: normalizeAnalysisResult coerces values and caps rows
+ok 30 - normalizeAnalysisResult coerces values and caps rows
+  ---
+  duration_ms: 0.8434
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult accepts a payload whose declared additivity holds
+ok 31 - validateAnalysisResult accepts a payload whose declared additivity holds
+  ---
+  duration_ms: 0.9166
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult rejects a payload that violates declared additivity
+ok 32 - validateAnalysisResult rejects a payload that violates declared additivity
+  ---
+  duration_ms: 0.6165
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult verifies share normalisation and delta consistency
+ok 33 - validateAnalysisResult verifies share normalisation and delta consistency
+  ---
+  duration_ms: 0.8284
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult catches inconsistent totals and non-finite numbers
+ok 34 - validateAnalysisResult catches inconsistent totals and non-finite numbers
+  ---
+  duration_ms: 0.9055
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult warns on unknown claims without blocking
+ok 35 - validateAnalysisResult warns on unknown claims without blocking
+  ---
+  duration_ms: 0.3439
+  type: 'test'
+  ...
+# Subtest: validateAnalysisResult rejects empty results
+ok 36 - validateAnalysisResult rejects empty results
+  ---
+  duration_ms: 0.2005
+  type: 'test'
+  ...
+# Subtest: buildAnalysisContractPrompt describes the sandbox output contract
+ok 37 - buildAnalysisContractPrompt describes the sandbox output contract
+  ---
+  duration_ms: 0.6085
+  type: 'test'
+  ...
+# Subtest: summarizeAnalysisResult ranks rows by contribution without inventing numbers
+ok 38 - summarizeAnalysisResult ranks rows by contribution without inventing numbers
+  ---
+  duration_ms: 0.7219
+  type: 'test'
+  ...
+# Subtest: attribution intent covers causal, contribution and comparison diagnoses
+ok 39 - attribution intent covers causal, contribution and comparison diagnoses
+  ---
+  duration_ms: 2.6035
+  type: 'test'
+  ...
+# Subtest: plain comparisons and trend questions are not forced into attribution
+ok 40 - plain comparisons and trend questions are not forced into attribution
+  ---
+  duration_ms: 0.2292
+  type: 'test'
+  ...
+# Subtest: analysis pipeline stays inert when no stages are supplied
+ok 41 - analysis pipeline stays inert when no stages are supplied
+  ---
+  duration_ms: 2.3447
+  type: 'test'
+  ...
+# Subtest: analysis pipeline computes per-row derived values and qualification counts
+ok 42 - analysis pipeline computes per-row derived values and qualification counts
+  ---
+  duration_ms: 2.5624
+  type: 'test'
+  ...
+# Subtest: bucket field and multi-key sort are generic deterministic stages
+ok 43 - bucket field and multi-key sort are generic deterministic stages
+  ---
+  duration_ms: 10.806
+  type: 'test'
+  ...
+# Subtest: bucket predicates normalize full-date bounds to the generated grain
+ok 44 - bucket predicates normalize full-date bounds to the generated grain
+  ---
+  duration_ms: 0.3969
+  type: 'test'
+  ...
+# Subtest: plugin registry exposes semantic resolver and result analyst
+ok 45 - plugin registry exposes semantic resolver and result analyst
+  ---
+  duration_ms: 22.6459
+  type: 'test'
+  ...
+# Subtest: analysis semantics classifies structural and analytical conditions
+ok 46 - analysis semantics classifies structural and analytical conditions
+  ---
+  duration_ms: 38.4038
+  type: 'test'
+  ...
+# Subtest: analysis semantics exposes a model-facing taxonomy prompt
+ok 47 - analysis semantics exposes a model-facing taxonomy prompt
+  ---
+  duration_ms: 1.9662
+  type: 'test'
+  ...
+# Subtest: answer evidence requires a contract, rows, fingerprint and data hash
+ok 48 - answer evidence requires a contract, rows, fingerprint and data hash
+  ---
+  duration_ms: 1.1673
+  type: 'test'
+  ...
+# Subtest: grounding only applies to data analysis turns with no clarification
+ok 49 - grounding only applies to data analysis turns with no clarification
+  ---
+  duration_ms: 0.2192
+  type: 'test'
+  ...
+# Subtest: data-claim detection keeps explanations and clarifications intact
+ok 50 - data-claim detection keeps explanations and clarifications intact
+  ---
+  duration_ms: 0.884
+  type: 'test'
+  ...
+# Subtest: progressive answer emits one provisional stream and ignores later previews
+ok 51 - progressive answer emits one provisional stream and ignores later previews
+  ---
+  duration_ms: 2.5354
+  type: 'test'
+  ...
+# Subtest: progressive answer ignores empty previews
+ok 52 - progressive answer ignores empty previews
+  ---
+  duration_ms: 0.1674
+  type: 'test'
+  ...
+# Subtest: artifact capabilities describe row grain, metrics and derived fields
+ok 53 - artifact capabilities describe row grain, metrics and derived fields
+  ---
+  duration_ms: 7.5278
+  type: 'test'
+  ...
+# Subtest: artifact strategy chooses reuse only when required fields are available
+ok 54 - artifact strategy chooses reuse only when required fields are available
+  ---
+  duration_ms: 3.3059
+  type: 'test'
+  ...
+# (node:24272) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: loadConfig rejects unsupported AUTH_MODE "oidc"
+ok 55 - loadConfig rejects unsupported AUTH_MODE "oidc"
+  ---
+  duration_ms: 2.9639
+  type: 'test'
+  ...
+# Subtest: resolveAuthMode rejects unsupported override "oidc"
+ok 56 - resolveAuthMode rejects unsupported override "oidc"
+  ---
+  duration_ms: 0.2481
+  type: 'test'
+  ...
+# Subtest: loadConfig rejects unsupported AUTH_MODE "sessoin"
+ok 57 - loadConfig rejects unsupported AUTH_MODE "sessoin"
+  ---
+  duration_ms: 0.1373
+  type: 'test'
+  ...
+# Subtest: resolveAuthMode rejects unsupported override "sessoin"
+ok 58 - resolveAuthMode rejects unsupported override "sessoin"
+  ---
+  duration_ms: 0.1131
+  type: 'test'
+  ...
+# Subtest: loadConfig rejects unsupported AUTH_MODE " OIDC "
+ok 59 - loadConfig rejects unsupported AUTH_MODE " OIDC "
+  ---
+  duration_ms: 0.2098
+  type: 'test'
+  ...
+# Subtest: resolveAuthMode rejects unsupported override " OIDC "
+ok 60 - resolveAuthMode rejects unsupported override " OIDC "
+  ---
+  duration_ms: 0.2249
+  type: 'test'
+  ...
+# Subtest: auth mode "dev" in "production" resolves to dev
+ok 61 - auth mode "dev" in "production" resolves to dev
+  ---
+  duration_ms: 0.9015
+  type: 'test'
+  ...
+# Subtest: auth mode " DeV " in "production" resolves to dev
+ok 62 - auth mode " DeV " in "production" resolves to dev
+  ---
+  duration_ms: 0.291
+  type: 'test'
+  ...
+# Subtest: auth mode "session" in "" resolves to session
+ok 63 - auth mode "session" in "" resolves to session
+  ---
+  duration_ms: 0.4206
+  type: 'test'
+  ...
+# Subtest: auth mode " SESSION " in "" resolves to session
+ok 64 - auth mode " SESSION " in "" resolves to session
+  ---
+  duration_ms: 0.6321
+  type: 'test'
+  ...
+# Subtest: auth mode "" in "" resolves to dev
+ok 65 - auth mode "" in "" resolves to dev
+  ---
+  duration_ms: 0.5925
+  type: 'test'
+  ...
+# Subtest: auth mode "  " in "" resolves to dev
+ok 66 - auth mode "  " in "" resolves to dev
+  ---
+  duration_ms: 0.3618
+  type: 'test'
+  ...
+# Subtest: auth mode "" in "production" resolves to session
+ok 67 - auth mode "" in "production" resolves to session
+  ---
+  duration_ms: 0.1924
+  type: 'test'
+  ...
+# Subtest: auth mode "  " in " Production " resolves to session
+ok 68 - auth mode "  " in " Production " resolves to session
+  ---
+  duration_ms: 0.1373
+  type: 'test'
+  ...
+# Subtest: loadConfig defaults absent AUTH_MODE according to NODE_ENV
+ok 69 - loadConfig defaults absent AUTH_MODE according to NODE_ENV
+  ---
+  duration_ms: 0.6986
+  type: 'test'
+  ...
+# Subtest: dev mode binds to loopback unless HOST is explicitly overridden
+ok 70 - dev mode binds to loopback unless HOST is explicitly overridden
+  ---
+  duration_ms: 0.6003
+  type: 'test'
+  ...
+# Subtest: application rejects unsupported auth overrides before creating persistent state
+ok 71 - application rejects unsupported auth overrides before creating persistent state
+  ---
+  duration_ms: 3.2578
+  type: 'test'
+  ...
+# (node:40408) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: business dataset query is compiled from semantic fields without raw SQL
+ok 72 - business dataset query is compiled from semantic fields without raw SQL
+  ---
+  duration_ms: 421.9391
+  type: 'test'
+  ...
+# Subtest: business dataset query groups time dimensions at the requested grain
+ok 73 - business dataset query groups time dimensions at the requested grain
+  ---
+  duration_ms: 335.1399
+  type: 'test'
+  ...
+# Subtest: business dataset query orders grouped metrics by their output alias
+ok 74 - business dataset query orders grouped metrics by their output alias
+  ---
+  duration_ms: 344.5132
+  type: 'test'
+  ...
+# Subtest: business dataset query separates row filters from aggregate filters
+ok 75 - business dataset query separates row filters from aggregate filters
+  ---
+  duration_ms: 332.05
+  type: 'test'
+  ...
+# Subtest: business dataset query renders scoped metrics with per-metric conditional filters
+ok 76 - business dataset query renders scoped metrics with per-metric conditional filters
+  ---
+  duration_ms: 321.0605
+  type: 'test'
+  ...
+# Subtest: business dataset can load distinct values for enum-like fields
+ok 77 - business dataset can load distinct values for enum-like fields
+  ---
+  duration_ms: 390.1245
+  type: 'test'
+  ...
+# Subtest: semantic value preview follows draft dataset selection without saving it
+ok 78 - semantic value preview follows draft dataset selection without saving it
+  ---
+  duration_ms: 338.0205
+  type: 'test'
+  ...
+# Subtest: agent rejects indicator execution when the theme has a business dataset
+ok 79 - agent rejects indicator execution when the theme has a business dataset
+  ---
+  duration_ms: 469.6488
+  type: 'test'
+  ...
+# Subtest: agent routes and labels the authorized DORIS dataset executor
+ok 80 - agent routes and labels the authorized DORIS dataset executor
+  ---
+  duration_ms: 786.35
+  type: 'test'
+  ...
+# Subtest: agent routes and labels the authorized MYSQL dataset executor
+ok 81 - agent routes and labels the authorized MYSQL dataset executor
+  ---
+  duration_ms: 527.565
+  type: 'test'
+  ...
+# Subtest: agent routes and labels the authorized TIDB dataset executor
+ok 82 - agent routes and labels the authorized TIDB dataset executor
+  ---
+  duration_ms: 461.71
+  type: 'test'
+  ...
+# Subtest: agent routes and labels the authorized POSTGRESQL dataset executor
+ok 83 - agent routes and labels the authorized POSTGRESQL dataset executor
+  ---
+  duration_ms: 392.3619
+  type: 'test'
+  ...
+# Subtest: agent does not execute a guessed aggregate when the model only clarifies
+ok 84 - agent does not execute a guessed aggregate when the model only clarifies
+  ---
+  duration_ms: 300.8094
+  type: 'test'
+  ...
+# Subtest: data source creation generates a readable unique code without user input
+ok 85 - data source creation generates a readable unique code without user input
+  ---
+  duration_ms: 301.5334
+  type: 'test'
+  ...
+# Subtest: aliased metric output columns keep metric semantics
+ok 86 - aliased metric output columns keep metric semantics
+  ---
+  duration_ms: 311.023
+  type: 'test'
+  ...
+# Subtest: business dataset execution probes one extra row without false truncation
+ok 87 - business dataset execution probes one extra row without false truncation
+  ---
+  duration_ms: 264.1774
+  type: 'test'
+  ...
+# Subtest: platform lexicon comes from configuration, not from code
+ok 88 - platform lexicon comes from configuration, not from code
+  ---
+  duration_ms: 3.6139
+  type: 'test'
+  ...
+# Subtest: theme semantic policy overrides and extends the platform lexicon
+ok 89 - theme semantic policy overrides and extends the platform lexicon
+  ---
+  duration_ms: 1.7661
+  type: 'test'
+  ...
+# Subtest: normalizeLexicon keeps list, map, tax and profile sections
+ok 90 - normalizeLexicon keeps list, map, tax and profile sections
+  ---
+  duration_ms: 0.5008
+  type: 'test'
+  ...
+# Subtest: mergeLexicon unions lists and keeps override entries
+ok 91 - mergeLexicon unions lists and keeps override entries
+  ---
+  duration_ms: 0.3637
+  type: 'test'
+  ...
+# Subtest: profileHintPattern builds patterns from lexicon data
+ok 92 - profileHintPattern builds patterns from lexicon data
+  ---
+  duration_ms: 0.7378
+  type: 'test'
+  ...
+# Subtest: semantic policy keeps the theme lexicon section
+ok 93 - semantic policy keeps the theme lexicon section
+  ---
+  duration_ms: 0.3501
+  type: 'test'
+  ...
+# Subtest: business vocabulary guard detects high-confidence domain terms
+ok 94 - business vocabulary guard detects high-confidence domain terms
+  ---
+  duration_ms: 3.3936
+  type: 'test'
+  ...
+# Subtest: business vocabulary guard allows generic analytical language
+ok 95 - business vocabulary guard allows generic analytical language
+  ---
+  duration_ms: 0.209
+  type: 'test'
+  ...
+# Subtest: production source tree has no hardcoded business vocabulary
+ok 96 - production source tree has no hardcoded business vocabulary
+  ---
+  duration_ms: 80.7472
+  type: 'test'
+  ...
+# (node:35272) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P0-7 every workflow stage owns a gate and coverage self-check is enforced
+ok 97 - P0-7 every workflow stage owns a gate and coverage self-check is enforced
+  ---
+  duration_ms: 1.9973
+  type: 'test'
+  ...
+# Subtest: P0-7 gate blocks are counted per gateId/phase/blocking
+ok 98 - P0-7 gate blocks are counted per gateId/phase/blocking
+  ---
+  duration_ms: 11.0369
+  type: 'test'
+  ...
+# Subtest: P0-7 frozen contracts carry the compiler version
+ok 99 - P0-7 frozen contracts carry the compiler version
+  ---
+  duration_ms: 0.7211
+  type: 'test'
+  ...
+# Subtest: P0-1 indicator source is explicitly classified
+ok 100 - P0-1 indicator source is explicitly classified
+  ---
+  duration_ms: 1.1471
+  type: 'test'
+  ...
+# Subtest: P0-1 startup neither clears nor writes the indicator catalog
+ok 101 - P0-1 startup neither clears nor writes the indicator catalog
+  ---
+  duration_ms: 387.2962
+  type: 'test'
+  ...
+# Subtest: P0-1 explicit sync persists a snapshot and snapshot reads are marked
+ok 102 - P0-1 explicit sync persists a snapshot and snapshot reads are marked
+  ---
+  duration_ms: 379.5699
+  type: 'test'
+  ...
+# Subtest: P0-4 traceId threads through plan, audit and emitted events
+ok 103 - P0-4 traceId threads through plan, audit and emitted events
+  ---
+  duration_ms: 446.9829
+  type: 'test'
+  ...
+# Subtest: CODE-001 generated code cannot hold datasource access
+ok 104 - CODE-001 generated code cannot hold datasource access
+  ---
+  duration_ms: 3.7191
+  type: 'test'
+  ...
+# Subtest: time dimensions are rendered as a line chart
+ok 105 - time dimensions are rendered as a line chart
+  ---
+  duration_ms: 4.6611
+  type: 'test'
+  ...
+# Subtest: composition questions use pie charts for a small category count
+ok 106 - composition questions use pie charts for a small category count
+  ---
+  duration_ms: 0.7779
+  type: 'test'
+  ...
+# Subtest: time plus channel dimensions become one series per channel
+ok 107 - time plus channel dimensions become one series per channel
+  ---
+  duration_ms: 0.4491
+  type: 'test'
+  ...
+# Subtest: degraded column metadata still produces a trend line
+ok 108 - degraded column metadata still produces a trend line
+  ---
+  duration_ms: 0.2952
+  type: 'test'
+  ...
+# Subtest: metric role and semantic type drive column classification
+ok 109 - metric role and semantic type drive column classification
+  ---
+  duration_ms: 0.1534
+  type: 'test'
+  ...
+# Subtest: trend intent keeps a chart instead of collapsing a single row into a kpi
+ok 110 - trend intent keeps a chart instead of collapsing a single row into a kpi
+  ---
+  duration_ms: 0.2098
+  type: 'test'
+  ...
+# Subtest: numeric identifier dimensions stay categorical
+ok 111 - numeric identifier dimensions stay categorical
+  ---
+  duration_ms: 0.3136
+  type: 'test'
+  ...
+# Subtest: preferred chart type falls back when there is no axis dimension
+ok 112 - preferred chart type falls back when there is no axis dimension
+  ---
+  duration_ms: 0.1684
+  type: 'test'
+  ...
+# Subtest: chart type words are detected in user questions
+ok 113 - chart type words are detected in user questions
+  ---
+  duration_ms: 7.119
+  type: 'test'
+  ...
+# Subtest: negated chart types are skipped in favor of the requested one
+ok 114 - negated chart types are skipped in favor of the requested one
+  ---
+  duration_ms: 0.2817
+  type: 'test'
+  ...
+# Subtest: chart preference priority is explicit > question > theme default > auto
+ok 115 - chart preference priority is explicit > question > theme default > auto
+  ---
+  duration_ms: 0.2295
+  type: 'test'
+  ...
+# Subtest: reusable snapshot picks the newest result artifact with tabular data
+ok 116 - reusable snapshot picks the newest result artifact with tabular data
+  ---
+  duration_ms: 0.2899
+  type: 'test'
+  ...
+# Subtest: only pure chart-type switches are treated as display restyles
+ok 117 - only pure chart-type switches are treated as display restyles
+  ---
+  duration_ms: 36.1362
+  type: 'test'
+  ...
+# Subtest: chat stream presenter turns workflow stages into readable progress
+ok 118 - chat stream presenter turns workflow stages into readable progress
+  ---
+  duration_ms: 1.2452
+  type: 'test'
+  ...
+# Subtest: chat stream presenter exposes tool activity without private reasoning
+ok 119 - chat stream presenter exposes tool activity without private reasoning
+  ---
+  duration_ms: 0.3377
+  type: 'test'
+  ...
+# Subtest: assistant text chunks preserve the complete answer
+ok 120 - assistant text chunks preserve the complete answer
+  ---
+  duration_ms: 0.3283
+  type: 'test'
+  ...
+# Subtest: chat stream state upserts progress updates instead of duplicating stages
+ok 121 - chat stream state upserts progress updates instead of duplicating stages
+  ---
+  duration_ms: 1.3407
+  type: 'test'
+  ...
+# Subtest: chat stream state accumulates answer deltas and marks completion
+ok 122 - chat stream state accumulates answer deltas and marks completion
+  ---
+  duration_ms: 0.2372
+  type: 'test'
+  ...
+# Subtest: provisional streamed text is replaced by the final authoritative answer
+ok 123 - provisional streamed text is replaced by the final authoritative answer
+  ---
+  duration_ms: 0.1451
+  type: 'test'
+  ...
+# Subtest: chat stream state keeps the structured context decision for live UI
+ok 124 - chat stream state keeps the structured context decision for live UI
+  ---
+  duration_ms: 0.1645
+  type: 'test'
+  ...
+# (node:42628) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: analysis code reads workspace artifacts and writes downloadable outputs
+ok 125 - analysis code reads workspace artifacts and writes downloadable outputs # SKIP Python 解释器「python3」缺少 pandas/openpyxl：涉及 .xlsx 的代码执行会失败，请运行 python3 -m pip install pandas openpyxl。
+  ---
+  duration_ms: 922.939
+  type: 'test'
+  ...
+# Subtest: analysis code rejects network and process execution primitives
+ok 126 - analysis code rejects network and process execution primitives
+  ---
+  duration_ms: 0.9665
+  type: 'test'
+  ...
+# Subtest: numeric detection covers driver type spellings without flagging text types
+ok 127 - numeric detection covers driver type spellings without flagging text types
+  ---
+  duration_ms: 2.2394
+  type: 'test'
+  ...
+# Subtest: numeric detection uses values when the driver only returns a bare type code
+ok 128 - numeric detection uses values when the driver only returns a bare type code
+  ---
+  duration_ms: 0.6457
+  type: 'test'
+  ...
+# Subtest: numeric detection tolerates array filter callbacks
+ok 129 - numeric detection tolerates array filter callbacks
+  ---
+  duration_ms: 0.1805
+  type: 'test'
+  ...
+# Subtest: temporal detection prefers explicit semantics over column names
+ok 130 - temporal detection prefers explicit semantics over column names
+  ---
+  duration_ms: 1.635
+  type: 'test'
+  ...
+# Subtest: independent questions do not leak previous time conditions into contract binding
+ok 131 - independent questions do not leak previous time conditions into contract binding
+  ---
+  duration_ms: 14.6959
+  type: 'test'
+  ...
+# Subtest: follow-up questions bind only structured inherited slots
+ok 132 - follow-up questions bind only structured inherited slots
+  ---
+  duration_ms: 1.7056
+  type: 'test'
+  ...
+# Subtest: first-turn binding context does not duplicate explicit slots into pseudo clauses
+ok 133 - first-turn binding context does not duplicate explicit slots into pseudo clauses
+  ---
+  duration_ms: 0.6121
+  type: 'test'
+  ...
+# Subtest: confirmed clarification values are included in contract traceability context
+ok 134 - confirmed clarification values are included in contract traceability context
+  ---
+  duration_ms: 0.1741
+  type: 'test'
+  ...
+# Subtest: bound dataset dimensions keep the time field required for trend grouping
+ok 135 - bound dataset dimensions keep the time field required for trend grouping
+  ---
+  duration_ms: 1.105
+  type: 'test'
+  ...
+# Subtest: parses a persistent unit instruction
+ok 136 - parses a persistent unit instruction
+  ---
+  duration_ms: 1.7314
+  type: 'test'
+  ...
+# Subtest: parses decimal precision as a session display instruction
+ok 137 - parses decimal precision as a session display instruction
+  ---
+  duration_ms: 2.2191
+  type: 'test'
+  ...
+# Subtest: display directives can set unit and decimal precision together
+ok 138 - display directives can set unit and decimal precision together
+  ---
+  duration_ms: 0.2927
+  type: 'test'
+  ...
+# Subtest: a persistent display sentence with 展示 is still an instruction
+ok 139 - a persistent display sentence with 展示 is still an instruction
+  ---
+  duration_ms: 0.2031
+  type: 'test'
+  ...
+# Subtest: unit phrases inside data questions are not directives
+ok 140 - unit phrases inside data questions are not directives
+  ---
+  duration_ms: 0.1424
+  type: 'test'
+  ...
+# Subtest: session directives replace the previous value of the same kind
+ok 141 - session directives replace the previous value of the same kind
+  ---
+  duration_ms: 10.5621
+  type: 'test'
+  ...
+# Subtest: unit and decimal directives coexist and combined instructions replace both
+ok 142 - unit and decimal directives coexist and combined instructions replace both
+  ---
+  duration_ms: 0.3036
+  type: 'test'
+  ...
+# Subtest: presentation override applies only to amount fields
+ok 143 - presentation override applies only to amount fields
+  ---
+  duration_ms: 0.3651
+  type: 'test'
+  ...
+# Subtest: decimal directive applies to every numeric presentation type
+ok 144 - decimal directive applies to every numeric presentation type
+  ---
+  duration_ms: 1.6229
+  type: 'test'
+  ...
+# Subtest: runtime zero turn budget starts a clean execution task despite completed history
+ok 145 - runtime zero turn budget starts a clean execution task despite completed history
+  ---
+  duration_ms: 19.566
+  type: 'test'
+  ...
+# Subtest: runtime zero slot budget excludes prior conditions from the execution contract
+ok 146 - runtime zero slot budget excludes prior conditions from the execution contract
+  ---
+  duration_ms: 3.5944
+  type: 'test'
+  ...
+# Subtest: runtime omitted budgets retain default inheritance
+ok 147 - runtime omitted budgets retain default inheritance
+  ---
+  duration_ms: 2.364
+  type: 'test'
+  ...
+# Subtest: runtime undefined budgets retain default inheritance
+ok 148 - runtime undefined budgets retain default inheritance
+  ---
+  duration_ms: 0.9743
+  type: 'test'
+  ...
+# Subtest: runtime null budgets retain default inheritance
+ok 149 - runtime null budgets retain default inheritance
+  ---
+  duration_ms: 1.9494
+  type: 'test'
+  ...
+# Subtest: runtime positive budgets limit inherited slots and allow remaining turns
+ok 150 - runtime positive budgets limit inherited slots and allow remaining turns
+  ---
+  duration_ms: 1.2246
+  type: 'test'
+  ...
+# Subtest: runtime positive turn budget expires at its configured depth
+ok 151 - runtime positive turn budget expires at its configured depth
+  ---
+  duration_ms: 0.9087
+  type: 'test'
+  ...
+# Subtest: dataset profiler detects the time field and data-driven roles
+ok 152 - dataset profiler detects the time field and data-driven roles
+  ---
+  duration_ms: 7.1457
+  type: 'test'
+  ...
+# Subtest: dataset profiler suggests aggregators that match the metric shape
+ok 153 - dataset profiler suggests aggregators that match the metric shape
+  ---
+  duration_ms: 1.0761
+  type: 'test'
+  ...
+# Subtest: dataset profiler derives the default time window from real MIN/MAX ranges
+ok 154 - dataset profiler derives the default time window from real MIN/MAX ranges
+  ---
+  duration_ms: 2.0323
+  type: 'test'
+  ...
+# Subtest: dataset profiler reports null when no time field can be found
+ok 155 - dataset profiler reports null when no time field can be found
+  ---
+  duration_ms: 0.6156
+  type: 'test'
+  ...
+# Subtest: dataset profiler degrades to field name and type without a sample
+ok 156 - dataset profiler degrades to field name and type without a sample
+  ---
+  duration_ms: 0.8936
+  type: 'test'
+  ...
+# Subtest: a non-degraded profile reports degraded=false
+ok 157 - a non-degraded profile reports degraded=false
+  ---
+  duration_ms: 0.6916
+  type: 'test'
+  ...
+# Subtest: profile selection is validated before it is persisted
+ok 158 - profile selection is validated before it is persisted
+  ---
+  duration_ms: 1.6921
+  type: 'test'
+  ...
+# (node:21116) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: datasource updates reject anonymous and analyst sessions including forged admin headers
+ok 159 - datasource updates reject anonymous and analyst sessions including forged admin headers
+  ---
+  duration_ms: 700.6332
+  type: 'test'
+  ...
+# Subtest: partial datasource edits preserve PostgreSQL configuration and empty passwords, replacing stale pools
+ok 160 - partial datasource edits preserve PostgreSQL configuration and empty passwords, replacing stale pools
+  ---
+  duration_ms: 557.7995
+  type: 'test'
+  ...
+# Subtest: datasource edits encrypt replacement passwords without exposing credentials or auditing them
+ok 161 - datasource edits encrypt replacement passwords without exposing credentials or auditing them
+  ---
+  duration_ms: 579.2912
+  type: 'test'
+  ...
+# Subtest: invalid datasource edits and missing ids produce explicit errors without mutation or audit
+ok 162 - invalid datasource edits and missing ids produce explicit errors without mutation or audit
+  ---
+  duration_ms: 693.4652
+  type: 'test'
+  ...
+# Subtest: datasource create and connection-test responses also omit password ciphertext
+ok 163 - datasource create and connection-test responses also omit password ciphertext
+  ---
+  duration_ms: 649.564
+  type: 'test'
+  ...
+# Subtest: a delayed update body preserves credentials changed while the body was being read
+ok 164 - a delayed update body preserves credentials changed while the body was being read
+  ---
+  duration_ms: 514.8942
+  type: 'test'
+  ...
+# Subtest: datasource picker changes PG defaults and saves TLS/CA without leaking options to MySQL
+ok 165 - datasource picker changes PG defaults and saves TLS/CA without leaking options to MySQL
+  ---
+  duration_ms: 2.6201
+  type: 'test'
+  ...
+# Subtest: datasource editing prefills PG settings, keeps custom options and leaves the password empty
+ok 166 - datasource editing prefills PG settings, keeps custom options and leaves the password empty
+  ---
+  duration_ms: 1.6998
+  type: 'test'
+  ...
+# Subtest: dataset source picker distinguishes PG database/schema and retains custom schemas
+ok 167 - dataset source picker distinguishes PG database/schema and retains custom schemas
+  ---
+  duration_ms: 0.39
+  type: 'test'
+  ...
+# (node:37316) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: changing a datasource code releases its original connection pool
+ok 168 - changing a datasource code releases its original connection pool
+  ---
+  duration_ms: 77.9249
+  type: 'test'
+  ...
+# Subtest: failed datasource saves retain the existing pool and connection test result
+ok 169 - failed datasource saves retain the existing pool and connection test result
+  ---
+  duration_ms: 25.6441
+  type: 'test'
+  ...
+# Subtest: connection updates without a code change replace the cached pool
+ok 170 - connection updates without a code change replace the cached pool
+  ---
+  duration_ms: 22.4696
+  type: 'test'
+  ...
+# Subtest: failed connection tests are also invalidated when the connection changes
+ok 171 - failed connection tests are also invalidated when the connection changes
+  ---
+  duration_ms: 16.6978
+  type: 'test'
+  ...
+# Subtest: changing datasource dbType clears the old connection test result
+ok 172 - changing datasource dbType clears the old connection test result
+  ---
+  duration_ms: 26.2427
+  type: 'test'
+  ...
+# Subtest: changing datasource host clears the old connection test result
+ok 173 - changing datasource host clears the old connection test result
+  ---
+  duration_ms: 19.8644
+  type: 'test'
+  ...
+# Subtest: changing datasource port clears the old connection test result
+ok 174 - changing datasource port clears the old connection test result
+  ---
+  duration_ms: 35.7056
+  type: 'test'
+  ...
+# Subtest: changing datasource databaseName clears the old connection test result
+ok 175 - changing datasource databaseName clears the old connection test result
+  ---
+  duration_ms: 22.3769
+  type: 'test'
+  ...
+# Subtest: changing datasource username clears the old connection test result
+ok 176 - changing datasource username clears the old connection test result
+  ---
+  duration_ms: 26.4724
+  type: 'test'
+  ...
+# Subtest: changing datasource encryptedPassword clears the old connection test result
+ok 177 - changing datasource encryptedPassword clears the old connection test result
+  ---
+  duration_ms: 27.0603
+  type: 'test'
+  ...
+# Subtest: changing datasource options clears the old connection test result
+ok 178 - changing datasource options clears the old connection test result
+  ---
+  duration_ms: 20.7978
+  type: 'test'
+  ...
+# Subtest: non-connection edits and an omitted password preserve the previous test result
+ok 179 - non-connection edits and an omitted password preserve the previous test result
+  ---
+  duration_ms: 27.0683
+  type: 'test'
+  ...
+# Subtest: an in-flight successful connection test cannot overwrite an edited configuration
+ok 180 - an in-flight successful connection test cannot overwrite an edited configuration
+  ---
+  duration_ms: 39.7603
+  type: 'test'
+  ...
+# Subtest: an in-flight failed connection test cannot overwrite an edited configuration
+ok 181 - an in-flight failed connection test cannot overwrite an edited configuration
+  ---
+  duration_ms: 26.0739
+  type: 'test'
+  ...
+# Subtest: an in-flight test remains valid when only the datasource name changes
+ok 182 - an in-flight test remains valid when only the datasource name changes
+  ---
+  duration_ms: 18.6191
+  type: 'test'
+  ...
+# Subtest: compose defaults to session auth on the loopback interface
+ok 183 - compose defaults to session auth on the loopback interface
+  ---
+  duration_ms: 1.4364
+  type: 'test'
+  ...
+# Subtest: derived metric compiler resolves structured ratio and growth formulas
+ok 184 - derived metric compiler resolves structured ratio and growth formulas
+  ---
+  duration_ms: 1.1207
+  type: 'test'
+  ...
+# Subtest: derived metric renderer computes columns without changing raw values
+ok 185 - derived metric renderer computes columns without changing raw values
+  ---
+  duration_ms: 0.3952
+  type: 'test'
+  ...
+# Subtest: derived metric filters run after derived values are calculated
+ok 186 - derived metric filters run after derived values are calculated
+  ---
+  duration_ms: 0.8065
+  type: 'test'
+  ...
+# Subtest: expression derived metrics support generic arithmetic trees
+ok 187 - expression derived metrics support generic arithmetic trees
+  ---
+  duration_ms: 0.4469
+  type: 'test'
+  ...
+# (node:7584) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MySQL, TiDB and Doris retain one dialect; PG aliases normalize at save time
+ok 188 - MySQL, TiDB and Doris retain one dialect; PG aliases normalize at save time
+  ---
+  duration_ms: 1.5228
+  type: 'test'
+  ...
+# Subtest: identifier quoting uses the same whitelist for both dialects
+ok 189 - identifier quoting uses the same whitelist for both dialects
+  ---
+  duration_ms: 0.3994
+  type: 'test'
+  ...
+# Subtest: all five MySQL time grains preserve their existing SQL
+ok 190 - all five MySQL time grains preserve their existing SQL
+  ---
+  duration_ms: 0.2449
+  type: 'test'
+  ...
+# Subtest: PostgreSQL time grains return the same string bucket keys including Monday weeks
+ok 191 - PostgreSQL time grains return the same string bucket keys including Monday weeks
+  ---
+  duration_ms: 0.1794
+  type: 'test'
+  ...
+# Subtest: PostgreSQL parameters preserve literals, identifiers and already-native placeholders
+ok 192 - PostgreSQL parameters preserve literals, identifiers and already-native placeholders
+  ---
+  duration_ms: 0.1837
+  type: 'test'
+  ...
+# Subtest: SQL compiler preserves scoped/global/HAVING parameter order and never interpolates values
+ok 193 - SQL compiler preserves scoped/global/HAVING parameter order and never interpolates values
+  ---
+  duration_ms: 2.8029
+  type: 'test'
+  ...
+# Subtest: SQL compiler numbers BETWEEN, null filters, conditional distinct and HAVING correctly
+ok 194 - SQL compiler numbers BETWEEN, null filters, conditional distinct and HAVING correctly
+  ---
+  duration_ms: 0.4221
+  type: 'test'
+  ...
+# Subtest: PostgreSQL metadata preserves camel-case aliases and schema-qualified discovery
+ok 195 - PostgreSQL metadata preserves camel-case aliases and schema-qualified discovery
+  ---
+  duration_ms: 0.3651
+  type: 'test'
+  ...
+# Subtest: PostgreSQL driver adapts timeouts, date strings, fields and precision without global parsers
+ok 196 - PostgreSQL driver adapts timeouts, date strings, fields and precision without global parsers
+  ---
+  duration_ms: 0.7254
+  type: 'test'
+  ...
+# Subtest: PostgreSQL SSL verifies certificates, with bounded/read-only connections
+ok 197 - PostgreSQL SSL verifies certificates, with bounded/read-only connections
+  ---
+  duration_ms: 0.5841
+  type: 'test'
+  ...
+# Subtest: PG sampling, profiling, distinct and execution use quoted source identifiers
+not ok 198 - PG sampling, profiling, distinct and execution use quoted source identifiers
+  ---
+  duration_ms: 1.6651
+  type: 'test'
+  location: 'D:\\workspace\\metric-ask-platform\\tests\\dialects.test.js:125:1'
+  failureType: 'testCodeFailure'
+  error: 'this.database.logDatasetQueryAsync is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    BusinessDatasetService.executeQuery (file:///D:/workspace/metric-ask-platform/src/businessDatasets.js:891:27)
+    async TestContext.<anonymous> (file:///D:/workspace/metric-ask-platform/tests/dialects.test.js:138:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: connection tests record driver/connection errors instead of throwing before the try block
+ok 199 - connection tests record driver/connection errors instead of throwing before the try block
+  ---
+  duration_ms: 0.3428
+  type: 'test'
+  ...
+# Subtest: PG datasource settings survive SQLite persistence without schema migrations or plaintext passwords
+ok 200 - PG datasource settings survive SQLite persistence without schema migrations or plaintext passwords
+  ---
+  duration_ms: 81.8674
+  type: 'test'
+  ...
+# (node:29712) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: disabled datasource rejects business queries before creating a connection
+not ok 201 - disabled datasource rejects business queries before creating a connection
+  ---
+  duration_ms: 60.899
+  type: 'test'
+  location: 'D:\\workspace\\metric-ask-platform\\tests\\disabledDatasource.test.js:46:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    undefined !== 403
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 403
+  operator: 'strictEqual'
+  stack: |-
+    Object.disabled (file:///D:/workspace/metric-ask-platform/tests/disabledDatasource.test.js:41:10)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///D:/workspace/metric-ask-platform/tests/disabledDatasource.test.js:48:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: disabling a cached datasource denies the next query and re-enabling restores it
+not ok 202 - disabling a cached datasource denies the next query and re-enabling restores it
+  ---
+  duration_ms: 28.7228
+  type: 'test'
+  location: 'D:\\workspace\\metric-ask-platform\\tests\\disabledDatasource.test.js:53:1'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of null (reading 'execute')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    PlatformLogRepository.logDatasetQueryAsync (file:///D:/workspace/metric-ask-platform/src/platformLogRepository.js:60:45)
+    PlatformDatabase.logDatasetQueryAsync (file:///D:/workspace/metric-ask-platform/src/database.js:2324:31)
+    BusinessDatasetService.executeQuery (file:///D:/workspace/metric-ask-platform/src/businessDatasets.js:891:27)
+    async TestContext.<anonymous> (file:///D:/workspace/metric-ask-platform/tests/disabledDatasource.test.js:55:21)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: disabled datasource denies schemas without connecting
+ok 203 - disabled datasource denies schemas without connecting
+  ---
+  duration_ms: 16.2356
+  type: 'test'
+  ...
+# Subtest: disabled datasource denies tables without connecting
+ok 204 - disabled datasource denies tables without connecting
+  ---
+  duration_ms: 18.899
+  type: 'test'
+  ...
+# Subtest: disabled datasource denies columns without connecting
+ok 205 - disabled datasource denies columns without connecting
+  ---
+  duration_ms: 20.4621
+  type: 'test'
+  ...
+# Subtest: disabled datasource denies samples without connecting
+ok 206 - disabled datasource denies samples without connecting
+  ---
+  duration_ms: 24.7283
+  type: 'test'
+  ...
+# Subtest: disabled datasource denies distinct values without connecting
+ok 207 - disabled datasource denies distinct values without connecting
+  ---
+  duration_ms: 19.5215
+  type: 'test'
+  ...
+# Subtest: disabled datasource denies profiling without connecting
+ok 208 - disabled datasource denies profiling without connecting
+  ---
+  duration_ms: 24.0401
+  type: 'test'
+  ...
+# Subtest: normal dataset discovery hides disabled sources while admin discovery retains them
+ok 209 - normal dataset discovery hides disabled sources while admin discovery retains them
+  ---
+  duration_ms: 16.0828
+  type: 'test'
+  ...
+# Subtest: admin connection tests remain available for disabled sources
+ok 210 - admin connection tests remain available for disabled sources
+  ---
+  duration_ms: 19.3049
+  type: 'test'
+  ...
+# Subtest: profiling rejects disablement during sampling instead of hiding the range-query denial
+ok 211 - profiling rejects disablement during sampling instead of hiding the range-query denial
+  ---
+  duration_ms: 20.5447
+  type: 'test'
+  ...
+# Subtest: Docker image supports sessions and preserves SQLite and encryption keys across recreation
+ok 212 - Docker image supports sessions and preserves SQLite and encryption keys across recreation # SKIP
+  ---
+  duration_ms: 0.9653
+  type: 'test'
+  ...
+# (node:33964) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: browser: eval shows degraded judges as pending and only valid judgments as completed
+ok 213 - browser: eval shows degraded judges as pending and only valid judgments as completed # SKIP
+  ---
+  duration_ms: 1.0013
+  type: 'test'
+  ...
+# Subtest: L3 keeps missing judgments pending while retaining deterministic fixture checks
+ok 214 - L3 keeps missing judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 5.5594
+  type: 'test'
+  ...
+# Subtest: L3 keeps throws judgments pending while retaining deterministic fixture checks
+ok 215 - L3 keeps throws judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.8804
+  type: 'test'
+  ...
+# Subtest: L3 keeps malformed judgments pending while retaining deterministic fixture checks
+ok 216 - L3 keeps malformed judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.4016
+  type: 'test'
+  ...
+# Subtest: L3 keeps empty judgments pending while retaining deterministic fixture checks
+ok 217 - L3 keeps empty judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.0053
+  type: 'test'
+  ...
+# Subtest: L3 keeps null response judgments pending while retaining deterministic fixture checks
+ok 218 - L3 keeps null response judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.3373
+  type: 'test'
+  ...
+# Subtest: L3 keeps unrelated JSON judgments pending while retaining deterministic fixture checks
+ok 219 - L3 keeps unrelated JSON judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.4221
+  type: 'test'
+  ...
+# Subtest: L3 keeps partial verdict judgments pending while retaining deterministic fixture checks
+ok 220 - L3 keeps partial verdict judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.0667
+  type: 'test'
+  ...
+# Subtest: L3 keeps string consistency judgments pending while retaining deterministic fixture checks
+ok 221 - L3 keeps string consistency judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 0.9161
+  type: 'test'
+  ...
+# Subtest: L3 keeps string replan judgments pending while retaining deterministic fixture checks
+ok 222 - L3 keeps string replan judgments pending while retaining deterministic fixture checks
+  ---
+  duration_ms: 1.1731
+  type: 'test'
+  ...
+# Subtest: a valid judge completes L3 judgments without masking a deterministic numeric failure
+ok 223 - a valid judge completes L3 judgments without masking a deterministic numeric failure
+  ---
+  duration_ms: 1.6013
+  type: 'test'
+  ...
+# Subtest: a no-data fixture skips judgment without becoming pending or attempted
+ok 224 - a no-data fixture skips judgment without becoming pending or attempted
+  ---
+  duration_ms: 0.3625
+  type: 'test'
+  ...
+# Subtest: valid negative judgments count as completed and still fail mismatching fixture expectations
+ok 225 - valid negative judgments count as completed and still fail mismatching fixture expectations
+  ---
+  duration_ms: 1.2903
+  type: 'test'
+  ...
+# Subtest: all-level report keeps fixture totals consistent while L3 judgments are pending
+ok 226 - all-level report keeps fixture totals consistent while L3 judgments are pending
+  ---
+  duration_ms: 84.9986
+  type: 'test'
+  ...
+# Subtest: execution details only expose stages that actually ran
+ok 227 - execution details only expose stages that actually ran
+  ---
+  duration_ms: 2.1069
+  type: 'test'
+  ...
+# Subtest: replan carry-forward preserves locked query evidence and result
+ok 228 - replan carry-forward preserves locked query evidence and result
+  ---
+  duration_ms: 1.327
+  type: 'test'
+  ...
+# Subtest: replan carry-forward refuses to invent grounding
+ok 229 - replan carry-forward refuses to invent grounding
+  ---
+  duration_ms: 0.2843
+  type: 'test'
+  ...
+# Subtest: semantic fast path accepts one policy metric and one resolved time window
+ok 230 - semantic fast path accepts one policy metric and one resolved time window
+  ---
+  duration_ms: 62.7783
+  type: 'test'
+  ...
+# Subtest: semantic fast path preserves configured policy filters
+ok 231 - semantic fast path preserves configured policy filters
+  ---
+  duration_ms: 4.0462
+  type: 'test'
+  ...
+# Subtest: semantic fast path defers dimension breakdowns to the full workflow
+ok 232 - semantic fast path defers dimension breakdowns to the full workflow
+  ---
+  duration_ms: 0.4906
+  type: 'test'
+  ...
+# Subtest: semantic fast path defers analytical and trend questions
+ok 233 - semantic fast path defers analytical and trend questions
+  ---
+  duration_ms: 1.6528
+  type: 'test'
+  ...
+# (node:41508) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: negative feedback feeds prompt hints and knowledge gaps
+ok 234 - negative feedback feeds prompt hints and knowledge gaps
+  ---
+  duration_ms: 375.3549
+  type: 'test'
+  ...
+# Subtest: session filename is summarized from the first core question
+ok 235 - session filename is summarized from the first core question
+  ---
+  duration_ms: 1.6024
+  type: 'test'
+  ...
+# Subtest: artifact title is a concise question summary
+ok 236 - artifact title is a concise question summary
+  ---
+  duration_ms: 1.2033
+  type: 'test'
+  ...
+# Subtest: artifact filename uses the concise result title
+ok 237 - artifact filename uses the concise result title
+  ---
+  duration_ms: 0.3195
+  type: 'test'
+  ...
+# Subtest: gate registry exposes rules by workflow phase
+ok 238 - gate registry exposes rules by workflow phase
+  ---
+  duration_ms: 2.1804
+  type: 'test'
+  ...
+# Subtest: gate registry decorates issues with owner and blocking metadata
+ok 239 - gate registry decorates issues with owner and blocking metadata
+  ---
+  duration_ms: 0.3706
+  type: 'test'
+  ...
+# Subtest: workflow stages advertise their registered gates
+ok 240 - workflow stages advertise their registered gates
+  ---
+  duration_ms: 0.2165
+  type: 'test'
+  ...
+# Subtest: gate summary counts blocking errors by phase
+ok 241 - gate summary counts blocking errors by phase
+  ---
+  duration_ms: 11.0084
+  type: 'test'
+  ...
+# Subtest: harness factory builds an agent-scoped model runtime
+ok 242 - harness factory builds an agent-scoped model runtime
+  ---
+  duration_ms: 26.4268
+  type: 'test'
+  ...
+# Subtest: harness factory decrypts a theme-scoped API key
+ok 243 - harness factory decrypts a theme-scoped API key
+  ---
+  duration_ms: 0.5425
+  type: 'test'
+  ...
+# Subtest: harness stops after a tool locks the first valid result
+ok 244 - harness stops after a tool locks the first valid result
+  ---
+  duration_ms: 0.6276
+  type: 'test'
+  ...
+# Subtest: harness stops immediately on a terminal configuration error
+ok 245 - harness stops immediately on a terminal configuration error
+  ---
+  duration_ms: 0.7297
+  type: 'test'
+  ...
+# Subtest: harness forwards an external cancellation signal to model requests
+ok 246 - harness forwards an external cancellation signal to model requests
+  ---
+  duration_ms: 1.8671
+  type: 'test'
+  ...
+# Subtest: provider failures are translated into actionable configuration guidance
+ok 247 - provider failures are translated into actionable configuration guidance
+  ---
+  duration_ms: 3.151
+  type: 'test'
+  ...
+# Subtest: provider mismatch errors explain model and endpoint compatibility
+ok 248 - provider mismatch errors explain model and endpoint compatibility
+  ---
+  duration_ms: 0.4816
+  type: 'test'
+  ...
+# Subtest: provider failures keep the HTML base-url diagnosis and truncate long details
+ok 249 - provider failures keep the HTML base-url diagnosis and truncate long details
+  ---
+  duration_ms: 0.862
+  type: 'test'
+  ...
+# (node:42480) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P0-8 route table round-trips params and honours numeric constraints
+ok 250 - P0-8 route table round-trips params and honours numeric constraints
+  ---
+  duration_ms: 2.9825
+  type: 'test'
+  ...
+# Subtest: P0-8 OpenAPI is generated from the route table and cannot drift
+ok 251 - P0-8 OpenAPI is generated from the route table and cannot drift
+  ---
+  duration_ms: 503.3559
+  type: 'test'
+  ...
+# Subtest: P0-8 middleware chain resolves auth errors through a single error boundary
+ok 252 - P0-8 middleware chain resolves auth errors through a single error boundary
+  ---
+  duration_ms: 0.7263
+  type: 'test'
+  ...
+# Subtest: P0-8 timeout middleware rejects slow handlers without leaking late failures
+ok 253 - P0-8 timeout middleware rejects slow handlers without leaking late failures
+  ---
+  duration_ms: 6.4802
+  type: 'test'
+  ...
+# Subtest: unconfigured Supersonic defaults to local HTTP reads and supports explicit mode changes
+ok 254 - unconfigured Supersonic defaults to local HTTP reads and supports explicit mode changes
+  ---
+  duration_ms: 524.5569
+  type: 'test'
+  ...
+# Subtest: explicitly enabled but unconfigured Supersonic serves the offline snapshot
+ok 255 - explicitly enabled but unconfigured Supersonic serves the offline snapshot
+  ---
+  duration_ms: 403.1901
+  type: 'test'
+  ...
+# Subtest: P0-8 HTTP contract is unchanged: errors, static fallback, NDJSON stream
+ok 256 - P0-8 HTTP contract is unchanged: errors, static fallback, NDJSON stream
+  ---
+  duration_ms: 511.5464
+  type: 'test'
+  ...
+# Subtest: dataset profiling API suggests and applies field roles without MySQL
+ok 257 - dataset profiling API suggests and applies field roles without MySQL
+  ---
+  duration_ms: 515.2099
+  type: 'test'
+  ...
+# Subtest: dataset profiling degrades gracefully when the datasource is unreachable
+ok 258 - dataset profiling degrades gracefully when the datasource is unreachable
+  ---
+  duration_ms: 366.1781
+  type: 'test'
+  ...
+# Subtest: dataset fields can be disabled and become unreachable in the query flow
+ok 259 - dataset fields can be disabled and become unreachable in the query flow
+  ---
+  duration_ms: 410.0021
+  type: 'test'
+  ...
+# Subtest: theme status toggle really enables and disables the agent
+ok 260 - theme status toggle really enables and disables the agent
+  ---
+  duration_ms: 401.7579
+  type: 'test'
+  ...
+# Subtest: roles are normalized and analysts only receive their granted scope
+ok 261 - roles are normalized and analysts only receive their granted scope
+  ---
+  duration_ms: 425.4004
+  type: 'test'
+  ...
+# Subtest: session mode requires login and issues a revocable cookie
+ok 262 - session mode requires login and issues a revocable cookie
+  ---
+  duration_ms: 451.0224
+  type: 'test'
+  ...
+# Subtest: disabled accounts cannot log in and password changes rotate the session
+ok 263 - disabled accounts cannot log in and password changes rotate the session
+  ---
+  duration_ms: 795.4962
+  type: 'test'
+  ...
+# Subtest: theme opening suggestions follow bindings, config, history and scope
+ok 264 - theme opening suggestions follow bindings, config, history and scope
+  ---
+  duration_ms: 307.5669
+  type: 'test'
+  ...
+# Subtest: Supersonic client normalizes indicator pages and forwards auth headers
+ok 265 - Supersonic client normalizes indicator pages and forwards auth headers
+  ---
+  duration_ms: 34.2395
+  type: 'test'
+  ...
+# Subtest: Supersonic client only sends semantic query fields to the metric endpoint
+ok 266 - Supersonic client only sends semantic query fields to the metric endpoint
+  ---
+  duration_ms: 32.6123
+  type: 'test'
+  ...
+# Subtest: Supersonic formatted query reuses the existing metric endpoint and format metadata
+ok 267 - Supersonic formatted query reuses the existing metric endpoint and format metadata
+  ---
+  duration_ms: 2.298
+  type: 'test'
+  ...
+# Subtest: Supersonic client loads dimension values for the default semantic domain
+ok 268 - Supersonic client loads dimension values for the default semantic domain
+  ---
+  duration_ms: 1.2805
+  type: 'test'
+  ...
+# Subtest: Supersonic client rejects application-level authentication failures
+ok 269 - Supersonic client rejects application-level authentication failures
+  ---
+  duration_ms: 1.3619
+  type: 'test'
+  ...
+# Subtest: Supersonic client reports an expired JWT before making a request
+ok 270 - Supersonic client reports an expired JWT before making a request
+  ---
+  duration_ms: 1.3894
+  type: 'test'
+  ...
+# Subtest: Supersonic client exchanges service credentials for a token
+ok 271 - Supersonic client exchanges service credentials for a token
+  ---
+  duration_ms: 1.4909
+  type: 'test'
+  ...
+# Subtest: Supersonic catalog falls back to the legacy list endpoint
+ok 272 - Supersonic catalog falls back to the legacy list endpoint
+  ---
+  duration_ms: 2.0001
+  type: 'test'
+  ...
+# Subtest: Supersonic client resolves recent dates before querying
+ok 273 - Supersonic client resolves recent dates before querying
+  ---
+  duration_ms: 1.8307
+  type: 'test'
+  ...
+# Subtest: business term normalization only compacts text
+ok 274 - business term normalization only compacts text
+  ---
+  duration_ms: 1.0945
+  type: 'test'
+  ...
+# Subtest: indicator ranking is stable and prefers the semantic match
+ok 275 - indicator ranking is stable and prefers the semantic match
+  ---
+  duration_ms: 14.3984
+  type: 'test'
+  ...
+# Subtest: synonym expansion is not hardcoded into indicator search
+ok 276 - synonym expansion is not hardcoded into indicator search
+  ---
+  duration_ms: 0.3838
+  type: 'test'
+  ...
+# (node:32240) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local file parsing detects delimiter, quotes, encoding and column types
+ok 277 - local file parsing detects delimiter, quotes, encoding and column types
+  ---
+  duration_ms: 4.0173
+  type: 'test'
+  ...
+# Subtest: GBK encoded CSV files decode without extra dependencies
+ok 278 - GBK encoded CSV files decode without extra dependencies
+  ---
+  duration_ms: 1.1454
+  type: 'test'
+  ...
+# Subtest: xlsx written with data descriptors is parsed
+ok 279 - xlsx written with data descriptors is parsed
+  ---
+  duration_ms: 10.84
+  type: 'test'
+  ...
+# Subtest: xlsx reader refuses an archive whose declared uncompressed size blows the budget
+ok 280 - xlsx reader refuses an archive whose declared uncompressed size blows the budget
+  ---
+  duration_ms: 5.621
+  type: 'test'
+  ...
+# Subtest: xlsx reader caps inflate output even when the declared size lies
+ok 281 - xlsx reader caps inflate output even when the declared size lies
+  ---
+  duration_ms: 44.6025
+  type: 'test'
+  ...
+# Subtest: xlsx reader keeps tolerating a damaged entry instead of failing the parse
+ok 282 - xlsx reader keeps tolerating a damaged entry instead of failing the parse
+  ---
+  duration_ms: 1.3969
+  type: 'test'
+  ...
+# Subtest: xlsx files are parsed without pandas or other dependencies
+ok 283 - xlsx files are parsed without pandas or other dependencies
+  ---
+  duration_ms: 4.5683
+  type: 'test'
+  ...
+# Subtest: upload parses xlsx into a table artifact with sheet name and dates
+ok 284 - upload parses xlsx into a table artifact with sheet name and dates
+  ---
+  duration_ms: 146.2237
+  type: 'test'
+  ...
+# Subtest: column names are normalized and duplicated headers stay addressable
+ok 285 - column names are normalized and duplicated headers stay addressable
+  ---
+  duration_ms: 0.6544
+  type: 'test'
+  ...
+# Subtest: upload writes original file, parsed table and process artifacts
+ok 286 - upload writes original file, parsed table and process artifacts
+  ---
+  duration_ms: 143.3246
+  type: 'test'
+  ...
+# Subtest: upload rejects unsupported, oversized, binary and session-less requests
+ok 287 - upload rejects unsupported, oversized, binary and session-less requests
+  ---
+  duration_ms: 87.1464
+  type: 'test'
+  ...
+# Subtest: rejected damaged.xlsx leaves no artifacts or versions and preserves upload quota
+ok 288 - rejected damaged.xlsx leaves no artifacts or versions and preserves upload quota
+  ---
+  duration_ms: 94.504
+  type: 'test'
+  ...
+# Subtest: rejected blank.csv leaves no artifacts or versions and preserves upload quota
+ok 289 - rejected blank.csv leaves no artifacts or versions and preserves upload quota
+  ---
+  duration_ms: 91.5179
+  type: 'test'
+  ...
+# Subtest: rejected invalid.json leaves no artifacts or versions and preserves upload quota
+ok 290 - rejected invalid.json leaves no artifacts or versions and preserves upload quota
+  ---
+  duration_ms: 109.2003
+  type: 'test'
+  ...
+# Subtest: rejected empty.json leaves no artifacts or versions and preserves upload quota
+ok 291 - rejected empty.json leaves no artifacts or versions and preserves upload quota
+  ---
+  duration_ms: 100.5486
+  type: 'test'
+  ...
+# Subtest: rejected blank.xls leaves no artifacts or versions and preserves upload quota
+ok 292 - rejected blank.xls leaves no artifacts or versions and preserves upload quota
+  ---
+  duration_ms: 95.2316
+  type: 'test'
+  ...
+# Subtest: upload enforces the per-session quota
+ok 293 - upload enforces the per-session quota
+  ---
+  duration_ms: 92.3164
+  type: 'test'
+  ...
+# Subtest: uploaded table is materialized into the analysis sandbox input
+ok 294 - uploaded table is materialized into the analysis sandbox input
+  ---
+  duration_ms: 745.3325
+  type: 'test'
+  ...
+# Subtest: analysis code cannot read files outside its run directory
+ok 295 - analysis code cannot read files outside its run directory
+  ---
+  duration_ms: 754.3062
+  type: 'test'
+  ...
+# Subtest: upload route requires login in session mode and returns artifacts in dev mode
+ok 296 - upload route requires login in session mode and returns artifacts in dev mode
+  ---
+  duration_ms: 798.1271
+  type: 'test'
+  ...
+# Subtest: legacy binary xls is stored and flagged instead of being guessed
+ok 297 - legacy binary xls is stored and flagged instead of being guessed
+  ---
+  duration_ms: 111.9964
+  type: 'test'
+  ...
+# Subtest: question attachments bind only own session files and are stored on the user message
+ok 298 - question attachments bind only own session files and are stored on the user message
+  ---
+  duration_ms: 111.0817
+  type: 'test'
+  ...
+# Subtest: uploaded mixed identifiers and blank amounts survive workspace XLSX export
+ok 299 - uploaded mixed identifiers and blank amounts survive workspace XLSX export
+  ---
+  duration_ms: 89.8096
+  type: 'test'
+  ...
+# (node:10776) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local indicator bindings intersect user grants and exclude disabled or deleted entries
+ok 300 - local indicator bindings intersect user grants and exclude disabled or deleted entries
+  ---
+  duration_ms: 912.2218
+  type: 'test'
+  ...
+# Subtest: revoked theme grants block catalogs, new queries and existing session access with HTTP 403
+ok 301 - revoked theme grants block catalogs, new queries and existing session access with HTTP 403
+  ---
+  duration_ms: 653.9633
+  type: 'test'
+  ...
+# Subtest: local metadata cannot execute indicator tools or fabricate business query results
+ok 302 - local metadata cannot execute indicator tools or fabricate business query results
+  ---
+  duration_ms: 681.994
+  type: 'test'
+  ...
+# (node:42348) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local indicator writes reject malformed payloads without changing catalog or audit history
+ok 303 - local indicator writes reject malformed payloads without changing catalog or audit history
+  ---
+  duration_ms: 967.6841
+  type: 'test'
+  ...
+# Subtest: local indicator lifecycle normalizes numeric statuses and enforces session ACL and online mode
+ok 304 - local indicator lifecycle normalizes numeric statuses and enforces session ACL and online mode
+  ---
+  duration_ms: 732.2642
+  type: 'test'
+  ...
+# Subtest: mounting an existing indicator only updates theme indicatorIds
+ok 305 - mounting an existing indicator only updates theme indicatorIds
+  ---
+  duration_ms: 638.6709
+  type: 'test'
+  ...
+# (node:29520) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: local indicator repository supports create, list, update and delete
+ok 306 - local indicator repository supports create, list, update and delete
+  ---
+  duration_ms: 175.032
+  type: 'test'
+  ...
+# Subtest: markdown renderer formats headings, lists, emphasis and tables safely
+ok 307 - markdown renderer formats headings, lists, emphasis and tables safely
+  ---
+  duration_ms: 2.4619
+  type: 'test'
+  ...
+# Subtest: markdown renderer escapes raw HTML and supports fenced code blocks
+ok 308 - markdown renderer escapes raw HTML and supports fenced code blocks
+  ---
+  duration_ms: 0.6082
+  type: 'test'
+  ...
+# Subtest: modeGate 按模式与 toolOverrides 控制可见性
+ok 309 - modeGate 按模式与 toolOverrides 控制可见性
+  ---
+  duration_ms: 4.106
+  type: 'test'
+  ...
+# Subtest: validateApiKey 仅接受带 mcp_ 前缀的哈希命中
+ok 310 - validateApiKey 仅接受带 mcp_ 前缀的哈希命中
+  ---
+  duration_ms: 1.3209
+  type: 'test'
+  ...
+# Subtest: getMcpConfig 五秒缓存
+ok 311 - getMcpConfig 五秒缓存
+  ---
+  duration_ms: 0.425
+  type: 'test'
+  ...
+# Subtest: 未启用 MCP 时 /mcp 返回 403
+ok 312 - 未启用 MCP 时 /mcp 返回 403
+  ---
+  duration_ms: 107.8522
+  type: 'test'
+  ...
+# Subtest: 缺少 API Key 时返回 401
+ok 313 - 缺少 API Key 时返回 401
+  ---
+  duration_ms: 19.958
+  type: 'test'
+  ...
+# Subtest: SDK 客户端可连接、列出 5 个工具并跑通 resolve→execute
+ok 314 - SDK 客户端可连接、列出 5 个工具并跑通 resolve→execute
+  ---
+  duration_ms: 173.3371
+  type: 'test'
+  ...
+# Subtest: execute_query 对不存在的契约返回错误内容
+ok 315 - execute_query 对不存在的契约返回错误内容
+  ---
+  duration_ms: 73.2013
+  type: 'test'
+  ...
+# Subtest: createZip 生成合法 ZIP 结构并可逐字节取回文件
+ok 316 - createZip 生成合法 ZIP 结构并可逐字节取回文件
+  ---
+  duration_ms: 0.8058
+  type: 'test'
+  ...
+# Subtest: buildConnectorPackage 打包 mcp-connector/ 且含关键文件
+ok 317 - buildConnectorPackage 打包 mcp-connector/ 且含关键文件
+  ---
+  duration_ms: 4.7232
+  type: 'test'
+  ...
+# Subtest: registered tools use replaced request identity for auditing and tenant scope
+ok 318 - registered tools use replaced request identity for auditing and tenant scope
+  ---
+  duration_ms: 20.1078
+  type: 'test'
+  ...
+# Subtest: stateless HTTP requests retain separate identity across overlapping tool awaits
+ok 319 - stateless HTTP requests retain separate identity across overlapping tool awaits
+  ---
+  duration_ms: 221.757
+  type: 'test'
+  ...
+# Subtest: stateful HTTP requests retain separate identity across overlapping tool awaits
+ok 320 - stateful HTTP requests retain separate identity across overlapping tool awaits
+  ---
+  duration_ms: 86.2625
+  type: 'test'
+  ...
+# Subtest: metric resolver prioritizes semantic policy aliases
+ok 321 - metric resolver prioritizes semantic policy aliases
+  ---
+  duration_ms: 1.6848
+  type: 'test'
+  ...
+# Subtest: metric resolver blocks similar candidates instead of guessing
+ok 322 - metric resolver blocks similar candidates instead of guessing
+  ---
+  duration_ms: 0.2731
+  type: 'test'
+  ...
+# Subtest: multi-turn context eval covers the required six conversation modes
+ok 323 - multi-turn context eval covers the required six conversation modes
+  ---
+  duration_ms: 1.5756
+  type: 'test'
+  ...
+# Subtest: multi-turn context eval passes every deterministic case
+ok 324 - multi-turn context eval passes every deterministic case
+  ---
+  duration_ms: 19.9976
+  type: 'test'
+  ...
+# Subtest: mysql platform store normalizes connection settings without touching business datasource settings
+ok 325 - mysql platform store normalizes connection settings without touching business datasource settings
+  ---
+  duration_ms: 1.3363
+  type: 'test'
+  ...
+# Subtest: mysql platform store requires platform database and user
+ok 326 - mysql platform store requires platform database and user
+  ---
+  duration_ms: 0.4221
+  type: 'test'
+  ...
+# Subtest: mysql init SQL parser splits generated DDL and migration statement markers
+ok 327 - mysql init SQL parser splits generated DDL and migration statement markers
+  ---
+  duration_ms: 0.4193
+  type: 'test'
+  ...
+# Subtest: MySQL platform store exposes the same async query/execute/transaction contract
+ok 328 - MySQL platform store exposes the same async query/execute/transaction contract
+  ---
+  duration_ms: 0.7842
+  type: 'test'
+  ...
+# Subtest: configured examples win and are only tagged with a capability group
+ok 329 - configured examples win and are only tagged with a capability group
+  ---
+  duration_ms: 2.5364
+  type: 'test'
+  ...
+# Subtest: capability classification covers the five opening groups
+ok 330 - capability classification covers the five opening groups
+  ---
+  duration_ms: 0.2418
+  type: 'test'
+  ...
+# Subtest: without configured examples the cards are composed from metrics and dimensions
+ok 331 - without configured examples the cards are composed from metrics and dimensions
+  ---
+  duration_ms: 1.4128
+  type: 'test'
+  ...
+# Subtest: cards degrade to generic platform examples when the theme has no metadata
+ok 332 - cards degrade to generic platform examples when the theme has no metadata
+  ---
+  duration_ms: 0.2046
+  type: 'test'
+  ...
+# Subtest: dimension cards are dropped when no dimension is available
+ok 333 - dimension cards are dropped when no dimension is available
+  ---
+  duration_ms: 0.1855
+  type: 'test'
+  ...
+# Subtest: duplicate and blank names never produce duplicate cards
+ok 334 - duplicate and blank names never produce duplicate cards
+  ---
+  duration_ms: 0.1876
+  type: 'test'
+  ...
+# (node:18548) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: theme scope intersects theme indicators with explicit user grants
+ok 335 - theme scope intersects theme indicators with explicit user grants
+  ---
+  duration_ms: 144.8954
+  type: 'test'
+  ...
+# Subtest: forced row policies override agent requested filters
+ok 336 - forced row policies override agent requested filters
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: row policies fail closed when no value can be resolved
+ok 337 - row policies fail closed when no value can be resolved
+  ---
+  duration_ms: 0.4924
+  type: 'test'
+  ...
+# Subtest: column policies hide or mask configured result columns
+ok 338 - column policies hide or mask configured result columns
+  ---
+  duration_ms: 0.4445
+  type: 'test'
+  ...
+# Subtest: row policy save guard accepts missing, default and padded operators
+ok 339 - row policy save guard accepts missing, default and padded operators
+  ---
+  duration_ms: 0.2174
+  type: 'test'
+  ...
+# Subtest: row policy save guard rejects unsupported operators as a 400 error
+ok 340 - row policy save guard rejects unsupported operators as a 400 error
+  ---
+  duration_ms: 0.2472
+  type: 'test'
+  ...
+# (node:13800) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: platform database config defaults to sqlite and keeps backend separate from datasource config
+ok 341 - platform database config defaults to sqlite and keeps backend separate from datasource config
+  ---
+  duration_ms: 1.5492
+  type: 'test'
+  ...
+# Subtest: SQLite platform database exposes the async query/execute/transaction contract
+ok 342 - SQLite platform database exposes the async query/execute/transaction contract
+  ---
+  duration_ms: 159.7231
+  type: 'test'
+  ...
+# Subtest: Knex SQLite store implements the shared async query and transaction contract
+ok 343 - Knex SQLite store implements the shared async query and transaction contract
+  ---
+  duration_ms: 37.9833
+  type: 'test'
+  ...
+# Subtest: platform database selects the matching init script for each backend
+ok 344 - platform database selects the matching init script for each backend
+  ---
+  duration_ms: 0.1711
+  type: 'test'
+  ...
+# Subtest: configured MySQL backend connects and executes its selected init script
+ok 345 - configured MySQL backend connects and executes its selected init script
+  ---
+  duration_ms: 0.3865
+  type: 'test'
+  ...
+# Subtest: mysql platform backend fails clearly until the async store migration is enabled
+ok 346 - mysql platform backend fails clearly until the async store migration is enabled
+  ---
+  duration_ms: 0.1817
+  type: 'test'
+  ...
+# Subtest: unknown platform database backend is rejected before opening a database
+ok 347 - unknown platform database backend is rejected before opening a database
+  ---
+  duration_ms: 0.185
+  type: 'test'
+  ...
+# Subtest: sqlite SQL compatibility migration upgrades an existing platform schema
+ok 348 - sqlite SQL compatibility migration upgrades an existing platform schema
+  ---
+  duration_ms: 86.3574
+  type: 'test'
+  ...
+# (node:13152) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: platform logs preserve trace correlation, joined names and JSON return fields
+ok 349 - platform logs preserve trace correlation, joined names and JSON return fields
+  ---
+  duration_ms: 66.8284
+  type: 'test'
+  ...
+# Subtest: log listing keeps newest-first ordering, limits, failure fields and explicit trace filters
+ok 350 - log listing keeps newest-first ordering, limits, failure fields and explicit trace filters
+  ---
+  duration_ms: 27.7983
+  type: 'test'
+  ...
+# Subtest: Knex-backed asynchronous log reads preserve the synchronous response shape
+ok 351 - Knex-backed asynchronous log reads preserve the synchronous response shape
+  ---
+  duration_ms: 22.69
+  type: 'test'
+  ...
+# Subtest: LLM log statistics, token budgets, digest bounds and damaged JSON remain compatible
+ok 352 - LLM log statistics, token budgets, digest bounds and damaged JSON remain compatible
+  ---
+  duration_ms: 20.9801
+  type: 'test'
+  ...
+# Subtest: live PG preserves bigint and numeric strings beyond Number precision
+ok 353 - live PG preserves bigint and numeric strings beyond Number precision # SKIP
+  ---
+  duration_ms: 8.2982
+  type: 'test'
+  ...
+# Subtest: live PG rejects bad credentials/database, cancels slow queries and remains usable
+ok 354 - live PG rejects bad credentials/database, cancels slow queries and remains usable # SKIP
+  ---
+  duration_ms: 0.1753
+  type: 'test'
+  ...
+# Subtest: live PG replaces an idle connection terminated by the server
+ok 355 - live PG replaces an idle connection terminated by the server # SKIP
+  ---
+  duration_ms: 0.1449
+  type: 'test'
+  ...
+# Subtest: live PG TLS verifies trusted CA and refuses an untrusted server certificate
+ok 356 - live PG TLS verifies trusted CA and refuses an untrusted server certificate # SKIP
+  ---
+  duration_ms: 0.18
+  type: 'test'
+  ...
+# (node:39496) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: browser: PostgreSQL datasource form, API persistence, connection test and dataset creation
+ok 357 - browser: PostgreSQL datasource form, API persistence, connection test and dataset creation # SKIP
+  ---
+  duration_ms: 0.9096
+  type: 'test'
+  ...
+# Subtest: live PostgreSQL: discover metadata, execute scoped aggregation, sample and profile
+ok 358 - live PostgreSQL: discover metadata, execute scoped aggregation, sample and profile # SKIP
+  ---
+  duration_ms: 1.6194
+  type: 'test'
+  ...
+# (node:34740) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: live PostgreSQL browser: admin setup, analyst chart and same-session permission revocation
+ok 359 - live PostgreSQL browser: admin setup, analyst chart and same-session permission revocation # SKIP
+  ---
+  duration_ms: 0.964
+  type: 'test'
+  ...
+# (node:35784) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: live PostgreSQL: authenticated Agent contract, row policy, audit and same-session revocation
+ok 360 - live PostgreSQL: authenticated Agent contract, row policy, audit and same-session revocation # SKIP
+  ---
+  duration_ms: 0.9795
+  type: 'test'
+  ...
+# (node:30088) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: user interface preferences persist in the platform database
+ok 361 - user interface preferences persist in the platform database
+  ---
+  duration_ms: 156.8414
+  type: 'test'
+  ...
+# (node:43948) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: 过程文件按工具环节生成，保留数据快照与血缘
+ok 362 - 过程文件按工具环节生成，保留数据快照与血缘
+  ---
+  duration_ms: 2.2884
+  type: 'test'
+  ...
+# Subtest: 没有可读数据表的环节不落过程文件
+ok 363 - 没有可读数据表的环节不落过程文件
+  ---
+  duration_ms: 0.2775
+  type: 'test'
+  ...
+# Subtest: 记录器按顺序串联上游过程文件并受步数上限约束
+ok 364 - 记录器按顺序串联上游过程文件并受步数上限约束
+  ---
+  duration_ms: 1.6613
+  type: 'test'
+  ...
+# Subtest: 过程文件写入工作区，并可作为 JSON 导出
+ok 365 - 过程文件写入工作区，并可作为 JSON 导出
+  ---
+  duration_ms: 129.3599
+  type: 'test'
+  ...
+# Subtest: detectInjection 命中英文指令覆盖类注入
+ok 366 - detectInjection 命中英文指令覆盖类注入
+  ---
+  duration_ms: 4.836
+  type: 'test'
+  ...
+# Subtest: detectInjection 命中中文指令覆盖类注入
+ok 367 - detectInjection 命中中文指令覆盖类注入
+  ---
+  duration_ms: 1.1906
+  type: 'test'
+  ...
+# Subtest: detectInjection 命中角色伪造与消息边界
+ok 368 - detectInjection 命中角色伪造与消息边界
+  ---
+  duration_ms: 0.1629
+  type: 'test'
+  ...
+# Subtest: sanitizeTable 中和单元格且保持数字类型、标记命中
+ok 369 - sanitizeTable 中和单元格且保持数字类型、标记命中
+  ---
+  duration_ms: 0.5204
+  type: 'test'
+  ...
+# Subtest: sanitizeTable 支持数组行并隔离注入短语
+ok 370 - sanitizeTable 支持数组行并隔离注入短语
+  ---
+  duration_ms: 0.821
+  type: 'test'
+  ...
+# Subtest: wrapUntrustedContent 用边界标记隔离
+ok 371 - wrapUntrustedContent 用边界标记隔离
+  ---
+  duration_ms: 0.2086
+  type: 'test'
+  ...
+# Subtest: sanitizeUntrustedContent 默认中和（控制字符与角色标签被剥离）
+ok 372 - sanitizeUntrustedContent 默认中和（控制字符与角色标签被剥离）
+  ---
+  duration_ms: 0.2345
+  type: 'test'
+  ...
+# Subtest: query contract and result hash are independent of input order
+ok 373 - query contract and result hash are independent of input order
+  ---
+  duration_ms: 16.8424
+  type: 'test'
+  ...
+# Subtest: ranking results are sorted by the requested metric deterministically
+ok 374 - ranking results are sorted by the requested metric deterministically
+  ---
+  duration_ms: 0.6742
+  type: 'test'
+  ...
+# Subtest: analysis pipeline keeps its projected column and row order
+ok 375 - analysis pipeline keeps its projected column and row order
+  ---
+  duration_ms: 0.6773
+  type: 'test'
+  ...
+# Subtest: complete result policies survive contract reconstruction
+ok 376 - complete result policies survive contract reconstruction
+  ---
+  duration_ms: 0.4165
+  type: 'test'
+  ...
+# Subtest: deterministic summary keeps the answer focused on the aggregate result
+ok 377 - deterministic summary keeps the answer focused on the aggregate result
+  ---
+  duration_ms: 13.4454
+  type: 'test'
+  ...
+# Subtest: grouped answers name the dimension values instead of only repeating a total
+ok 378 - grouped answers name the dimension values instead of only repeating a total
+  ---
+  duration_ms: 1.0965
+  type: 'test'
+  ...
+# Subtest: small grouped results list every dimension value instead of folding the rest
+ok 379 - small grouped results list every dimension value instead of folding the rest
+  ---
+  duration_ms: 2.0637
+  type: 'test'
+  ...
+# Subtest: monthly trend summary marks an incomplete final month
+ok 380 - monthly trend summary marks an incomplete final month
+  ---
+  duration_ms: 1.6142
+  type: 'test'
+  ...
+# Subtest: a single-month trend request explains the missing cross-month baseline
+ok 381 - a single-month trend request explains the missing cross-month baseline
+  ---
+  duration_ms: 1.4238
+  type: 'test'
+  ...
+# Subtest: weekly trend aggregates business dimensions and compares an incomplete week by daily average
+ok 382 - weekly trend aggregates business dimensions and compares an incomplete week by daily average
+  ---
+  duration_ms: 2.1042
+  type: 'test'
+  ...
+# Subtest: attribution summary ranks dimension changes for two aligned periods
+ok 383 - attribution summary ranks dimension changes for two aligned periods
+  ---
+  duration_ms: 2.1142
+  type: 'test'
+  ...
+# Subtest: attribution movement reports every dimension instead of only the first
+ok 384 - attribution movement reports every dimension instead of only the first
+  ---
+  duration_ms: 0.9134
+  type: 'test'
+  ...
+# Subtest: attribution movement closes the share sum with an other bucket
+ok 385 - attribution movement closes the share sum with an other bucket
+  ---
+  duration_ms: 7.3063
+  type: 'test'
+  ...
+# Subtest: validated sandbox analysis takes over the platform movement breakdown
+ok 386 - validated sandbox analysis takes over the platform movement breakdown
+  ---
+  duration_ms: 3.7301
+  type: 'test'
+  ...
+# Subtest: invalid sandbox analysis is dropped instead of being replaced by a platform guess
+ok 387 - invalid sandbox analysis is dropped instead of being replaced by a platform guess
+  ---
+  duration_ms: 3.3014
+  type: 'test'
+  ...
+# Subtest: period comparison summary leads with growth rate and top increasing dimensions
+ok 388 - period comparison summary leads with growth rate and top increasing dimensions
+  ---
+  duration_ms: 2.7375
+  type: 'test'
+  ...
+# Subtest: empty results explicitly report that the platform did not move the range
+ok 389 - empty results explicitly report that the platform did not move the range
+  ---
+  duration_ms: 1.1084
+  type: 'test'
+  ...
+# Subtest: public result projection hides formula dependency fields
+ok 390 - public result projection hides formula dependency fields
+  ---
+  duration_ms: 0.3048
+  type: 'test'
+  ...
+# Subtest: contract compiler requires a complete condition ledger
+ok 391 - contract compiler requires a complete condition ledger
+  ---
+  duration_ms: 55.4153
+  type: 'test'
+  ...
+# Subtest: the 分别 connector binds every requested breakdown dimension
+ok 392 - the 分别 connector binds every requested breakdown dimension
+  ---
+  duration_ms: 5.2012
+  type: 'test'
+  ...
+# Subtest: month-to-date wording binds into the compiled time window
+ok 393 - month-to-date wording binds into the compiled time window
+  ---
+  duration_ms: 3.4829
+  type: 'test'
+  ...
+# Subtest: platform completes trend and ranking semantics from the question
+ok 394 - platform completes trend and ranking semantics from the question
+  ---
+  duration_ms: 7.1763
+  type: 'test'
+  ...
+# Subtest: cross trends keep the complete business-by-time result set
+ok 395 - cross trends keep the complete business-by-time result set
+  ---
+  duration_ms: 2.2964
+  type: 'test'
+  ...
+# Subtest: model-owned semantic categories cannot be silently omitted
+ok 396 - model-owned semantic categories cannot be silently omitted
+  ---
+  duration_ms: 5.6285
+  type: 'test'
+  ...
+# Subtest: theme semantic policy injects a domain-configured formula before compilation
+ok 397 - theme semantic policy injects a domain-configured formula before compilation
+  ---
+  duration_ms: 4.7601
+  type: 'test'
+  ...
+# Subtest: trend intent binds a monthly time dimension without becoming a calculation
+ok 398 - trend intent binds a monthly time dimension without becoming a calculation
+  ---
+  duration_ms: 3.8005
+  type: 'test'
+  ...
+# Subtest: attribution intent derives an aligned comparison and prompt-based breakdown
+ok 399 - attribution intent derives an aligned comparison and prompt-based breakdown
+  ---
+  duration_ms: 3.6994
+  type: 'test'
+  ...
+# Subtest: contract compiler adds a recognized missing comparison window
+ok 400 - contract compiler adds a recognized missing comparison window
+  ---
+  duration_ms: 3.8825
+  type: 'test'
+  ...
+# Subtest: contract compiler blocks rankings without a business dimension
+ok 401 - contract compiler blocks rankings without a business dimension
+  ---
+  duration_ms: 2.7208
+  type: 'test'
+  ...
+# Subtest: contract compiler blocks business filters without traceable prompt rules
+ok 402 - contract compiler blocks business filters without traceable prompt rules
+  ---
+  duration_ms: 1.7595
+  type: 'test'
+  ...
+# Subtest: contract compiler does not block a query because of an export request
+ok 403 - contract compiler does not block a query because of an export request
+  ---
+  duration_ms: 1.0171
+  type: 'test'
+  ...
+# Subtest: contract compiler supports prompt-defined no-filter scope modifiers
+ok 404 - contract compiler supports prompt-defined no-filter scope modifiers
+  ---
+  duration_ms: 1.269
+  type: 'test'
+  ...
+# Subtest: contract compiler requires policy approval for fuzzy dataset field mappings
+ok 405 - contract compiler requires policy approval for fuzzy dataset field mappings
+  ---
+  duration_ms: 2.2796
+  type: 'test'
+  ...
+# Subtest: contract compiler resolves approximate enum values from the default domain
+ok 406 - contract compiler resolves approximate enum values from the default domain
+  ---
+  duration_ms: 2.0921
+  type: 'test'
+  ...
+# Subtest: contract compiler accepts explicit prompt-defined enum groups outside a partial domain
+ok 407 - contract compiler accepts explicit prompt-defined enum groups outside a partial domain
+  ---
+  duration_ms: 2.7131
+  type: 'test'
+  ...
+# Subtest: separate wording promotes an enum filter field to a breakdown dimension
+ok 408 - separate wording promotes an enum filter field to a breakdown dimension
+  ---
+  duration_ms: 1.7215
+  type: 'test'
+  ...
+# Subtest: contract compiler blocks ambiguous enum values instead of guessing
+ok 409 - contract compiler blocks ambiguous enum values instead of guessing
+  ---
+  duration_ms: 1.5757
+  type: 'test'
+  ...
+# Subtest: contract compiler normalizes dataset post-processing fields
+ok 410 - contract compiler normalizes dataset post-processing fields
+  ---
+  duration_ms: 1.5662
+  type: 'test'
+  ...
+# Subtest: dataset trend contracts use the canonical sales date instead of a model-selected timestamp
+ok 411 - dataset trend contracts use the canonical sales date instead of a model-selected timestamp
+  ---
+  duration_ms: 2.717
+  type: 'test'
+  ...
+# Subtest: contract compiler normalizes LIKE patterns and aggregate filter scope
+ok 412 - contract compiler normalizes LIKE patterns and aggregate filter scope
+  ---
+  duration_ms: 1.5862
+  type: 'test'
+  ...
+# Subtest: contract compiler accepts structured derived metrics and auto-binds base fields
+ok 413 - contract compiler accepts structured derived metrics and auto-binds base fields
+  ---
+  duration_ms: 9.0709
+  type: 'test'
+  ...
+# Subtest: contract compiler supports filtered numerator and unfiltered denominator ratio scopes
+ok 414 - contract compiler supports filtered numerator and unfiltered denominator ratio scopes
+  ---
+  duration_ms: 6.2113
+  type: 'test'
+  ...
+# Subtest: contract compiler rejects a missing aggregate threshold filter
+ok 415 - contract compiler rejects a missing aggregate threshold filter
+  ---
+  duration_ms: 2.3295
+  type: 'test'
+  ...
+# Subtest: contract compiler accepts a generic multi-stage analysis pipeline
+ok 416 - contract compiler accepts a generic multi-stage analysis pipeline
+  ---
+  duration_ms: 3.113
+  type: 'test'
+  ...
+# (node:32152) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: authenticated streaming contracts keep explicit date ranges intact and apply row policy
+ok 417 - authenticated streaming contracts keep explicit date ranges intact and apply row policy
+  ---
+  duration_ms: 964.0339
+  type: 'test'
+  ...
+# Subtest: multi-turn slot answers are resolved through structured slots, not raw history
+ok 418 - multi-turn slot answers are resolved through structured slots, not raw history
+  ---
+  duration_ms: 20.2057
+  type: 'test'
+  ...
+# Subtest: a self-contained short question does not inherit unrelated prior filters
+ok 419 - a self-contained short question does not inherit unrelated prior filters
+  ---
+  duration_ms: 1.0592
+  type: 'test'
+  ...
+# Subtest: a complete unrelated question starts a new topic
+ok 420 - a complete unrelated question starts a new topic
+  ---
+  duration_ms: 1.2829
+  type: 'test'
+  ...
+# Subtest: result operations explicitly become follow-up context
+ok 421 - result operations explicitly become follow-up context
+  ---
+  duration_ms: 0.6161
+  type: 'test'
+  ...
+# Subtest: prompt-owned filters stay out of deterministic compiler defaults
+ok 422 - prompt-owned filters stay out of deterministic compiler defaults
+  ---
+  duration_ms: 2.4454
+  type: 'test'
+  ...
+# Subtest: dataset intent uses prompt/model metrics and exact field labels
+ok 423 - dataset intent uses prompt/model metrics and exact field labels
+  ---
+  duration_ms: 0.8525
+  type: 'test'
+  ...
+# Subtest: indicator intent keeps total requests aggregated without a date dimension
+ok 424 - indicator intent keeps total requests aggregated without a date dimension
+  ---
+  duration_ms: 0.5083
+  type: 'test'
+  ...
+# Subtest: time grain recognizes each-month and each-week wording
+ok 425 - time grain recognizes each-month and each-week wording
+  ---
+  duration_ms: 0.1385
+  type: 'test'
+  ...
+# Subtest: monthly trend wording is recognised before a concrete month range
+ok 426 - monthly trend wording is recognised before a concrete month range
+  ---
+  duration_ms: 0.3261
+  type: 'test'
+  ...
+# Subtest: attribution questions are classified separately and clarify at most once
+ok 427 - attribution questions are classified separately and clarify at most once
+  ---
+  duration_ms: 0.6515
+  type: 'test'
+  ...
+# Subtest: artifact reuse policy blocks fresh queries for result follow-ups
+ok 428 - artifact reuse policy blocks fresh queries for result follow-ups
+  ---
+  duration_ms: 0.359
+  type: 'test'
+  ...
+# (node:40240) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: P0-8 rateLimit:chat buckets per user and rejects with a 429 envelope
+ok 429 - P0-8 rateLimit:chat buckets per user and rejects with a 429 envelope
+  ---
+  duration_ms: 490.2355
+  type: 'test'
+  ...
+# Subtest: token bucket evicts fully refilled entries so the map stays bounded
+ok 430 - token bucket evicts fully refilled entries so the map stays bounded
+  ---
+  duration_ms: 17.6164
+  type: 'test'
+  ...
+# Subtest: token bucket never evicts a bucket that is still limiting
+ok 431 - token bucket never evicts a bucket that is still limiting
+  ---
+  duration_ms: 0.3217
+  type: 'test'
+  ...
+# Subtest: token bucket keeps classic allow-then-deny semantics
+ok 432 - token bucket keeps classic allow-then-deny semantics
+  ---
+  duration_ms: 0.1478
+  type: 'test'
+  ...
+# Subtest: schema helpers never return Infinity or NaN shares
+ok 433 - schema helpers never return Infinity or NaN shares
+  ---
+  duration_ms: 2.5535
+  type: 'test'
+  ...
+# Subtest: additive decomposition is exact and sums contributions to total delta
+ok 434 - additive decomposition is exact and sums contributions to total delta
+  ---
+  duration_ms: 1.8592
+  type: 'test'
+  ...
+# Subtest: additive decomposition aggregates repeated rows per driver
+ok 435 - additive decomposition aggregates repeated rows per driver
+  ---
+  duration_ms: 0.4856
+  type: 'test'
+  ...
+# Subtest: additive decomposition folds rows without dimension value into an unattributed bucket
+ok 436 - additive decomposition folds rows without dimension value into an unattributed bucket
+  ---
+  duration_ms: 0.5437
+  type: 'test'
+  ...
+# Subtest: topN truncation keeps exactness through an explicit other bucket
+ok 437 - topN truncation keeps exactness through an explicit other bucket
+  ---
+  duration_ms: 2.9765
+  type: 'test'
+  ...
+# Subtest: additive decomposition rejects non-additive metrics and aggregators
+ok 438 - additive decomposition rejects non-additive metrics and aggregators
+  ---
+  duration_ms: 0.512
+  type: 'test'
+  ...
+# Subtest: additive decomposition refuses to guess periods from row order
+ok 439 - additive decomposition refuses to guess periods from row order
+  ---
+  duration_ms: 1.2031
+  type: 'test'
+  ...
+# Subtest: growth contribution splits the growth rate into exact percentage points
+ok 440 - growth contribution splits the growth rate into exact percentage points
+  ---
+  duration_ms: 0.6143
+  type: 'test'
+  ...
+# Subtest: growth contribution handles a zero base without inventing rates
+ok 441 - growth contribution handles a zero base without inventing rates
+  ---
+  duration_ms: 0.5268
+  type: 'test'
+  ...
+# Subtest: multiplicative decomposition is exact for every interaction policy
+ok 442 - multiplicative decomposition is exact for every interaction policy
+  ---
+  duration_ms: 1.4287
+  type: 'test'
+  ...
+# Subtest: multiplicative decomposition validates policies and factor counts
+ok 443 - multiplicative decomposition validates policies and factor counts
+  ---
+  duration_ms: 0.313
+  type: 'test'
+  ...
+# Subtest: multiplicative decomposition reports declared total mismatch honestly
+ok 444 - multiplicative decomposition reports declared total mismatch honestly
+  ---
+  duration_ms: 0.2771
+  type: 'test'
+  ...
+# Subtest: attribution tree stays additive at every level
+ok 445 - attribution tree stays additive at every level
+  ---
+  duration_ms: 1.5526
+  type: 'test'
+  ...
+# Subtest: pruneTree keeps the tree exact while collapsing small branches
+ok 446 - pruneTree keeps the tree exact while collapsing small branches
+  ---
+  duration_ms: 0.9796
+  type: 'test'
+  ...
+# Subtest: decomposeAttribution dispatches registered methods and rejects unknown codes
+ok 447 - decomposeAttribution dispatches registered methods and rejects unknown codes
+  ---
+  duration_ms: 0.4705
+  type: 'test'
+  ...
+# Subtest: REFLECTION_VERSION is defined
+ok 448 - REFLECTION_VERSION is defined
+  ---
+  duration_ms: 1.6339
+  type: 'test'
+  ...
+# Subtest: ① answerable passes when data present and answer is substantive
+ok 449 - ① answerable passes when data present and answer is substantive
+  ---
+  duration_ms: 0.6254
+  type: 'test'
+  ...
+# Subtest: ① answerable fails when model declines despite having data
+ok 450 - ① answerable fails when model declines despite having data
+  ---
+  duration_ms: 0.2116
+  type: 'test'
+  ...
+# Subtest: ① answerable is a no-op (pass) when there is no data
+ok 451 - ① answerable is a no-op (pass) when there is no data
+  ---
+  duration_ms: 1.0368
+  type: 'test'
+  ...
+# Subtest: ② numeric passes when headline matches locked result magnitude
+ok 452 - ② numeric passes when headline matches locked result magnitude
+  ---
+  duration_ms: 1.1398
+  type: 'test'
+  ...
+# Subtest: ② numeric fails when headline is wildly off (fabrication / unit error)
+ok 453 - ② numeric fails when headline is wildly off (fabrication / unit error)
+  ---
+  duration_ms: 0.192
+  type: 'test'
+  ...
+# Subtest: ② numeric passes when answer has no significant numbers
+ok 454 - ② numeric passes when answer has no significant numbers
+  ---
+  duration_ms: 0.2748
+  type: 'test'
+  ...
+# Subtest: ② numeric accepts a headline expressed in the display scale
+ok 455 - ② numeric accepts a headline expressed in the display scale
+  ---
+  duration_ms: 0.3165
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades (no replan) when no judge supplied
+ok 456 - ③ strategy sound degrades (no replan) when no judge supplied
+  ---
+  duration_ms: 0.8746
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound uses judge verdict (needsReplan triggers hint)
+ok 457 - ③ strategy sound uses judge verdict (needsReplan triggers hint)
+  ---
+  duration_ms: 1.1668
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades when the judge exceeds its latency budget
+ok 458 - ③ strategy sound degrades when the judge exceeds its latency budget
+  ---
+  duration_ms: 17.4934
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is missing
+ok 459 - ③ strategy sound degrades without replanning when answersQuestion is missing
+  ---
+  duration_ms: 0.4869
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is null
+ok 460 - ③ strategy sound degrades without replanning when answersQuestion is null
+  ---
+  duration_ms: 0.1233
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is string true
+ok 461 - ③ strategy sound degrades without replanning when answersQuestion is string true
+  ---
+  duration_ms: 0.0964
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is string false
+ok 462 - ③ strategy sound degrades without replanning when answersQuestion is string false
+  ---
+  duration_ms: 0.0872
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is number
+ok 463 - ③ strategy sound degrades without replanning when answersQuestion is number
+  ---
+  duration_ms: 0.1267
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is object
+ok 464 - ③ strategy sound degrades without replanning when answersQuestion is object
+  ---
+  duration_ms: 0.0852
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when answersQuestion is array
+ok 465 - ③ strategy sound degrades without replanning when answersQuestion is array
+  ---
+  duration_ms: 0.2227
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is missing
+ok 466 - ③ strategy sound degrades without replanning when consistentWithData is missing
+  ---
+  duration_ms: 0.229
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is null
+ok 467 - ③ strategy sound degrades without replanning when consistentWithData is null
+  ---
+  duration_ms: 0.0949
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is string true
+ok 468 - ③ strategy sound degrades without replanning when consistentWithData is string true
+  ---
+  duration_ms: 0.0758
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is string false
+ok 469 - ③ strategy sound degrades without replanning when consistentWithData is string false
+  ---
+  duration_ms: 0.0625
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is number
+ok 470 - ③ strategy sound degrades without replanning when consistentWithData is number
+  ---
+  duration_ms: 0.0553
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is object
+ok 471 - ③ strategy sound degrades without replanning when consistentWithData is object
+  ---
+  duration_ms: 0.0545
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when consistentWithData is array
+ok 472 - ③ strategy sound degrades without replanning when consistentWithData is array
+  ---
+  duration_ms: 0.0478
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is missing
+ok 473 - ③ strategy sound degrades without replanning when needsReplan is missing
+  ---
+  duration_ms: 0.0695
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is null
+ok 474 - ③ strategy sound degrades without replanning when needsReplan is null
+  ---
+  duration_ms: 0.153
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is string true
+ok 475 - ③ strategy sound degrades without replanning when needsReplan is string true
+  ---
+  duration_ms: 0.6763
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is string false
+ok 476 - ③ strategy sound degrades without replanning when needsReplan is string false
+  ---
+  duration_ms: 0.0936
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is number
+ok 477 - ③ strategy sound degrades without replanning when needsReplan is number
+  ---
+  duration_ms: 0.0686
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is object
+ok 478 - ③ strategy sound degrades without replanning when needsReplan is object
+  ---
+  duration_ms: 0.1447
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound degrades without replanning when needsReplan is array
+ok 479 - ③ strategy sound degrades without replanning when needsReplan is array
+  ---
+  duration_ms: 0.0709
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound accepts a complete boolean verdict: positive without optional text
+ok 480 - ③ strategy sound accepts a complete boolean verdict: positive without optional text
+  ---
+  duration_ms: 0.2052
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound accepts a complete boolean verdict: negative without optional text
+ok 481 - ③ strategy sound accepts a complete boolean verdict: negative without optional text
+  ---
+  duration_ms: 0.0665
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound accepts a complete boolean verdict: fenced JSON with prose, optional text and extra properties
+ok 482 - ③ strategy sound accepts a complete boolean verdict: fenced JSON with prose, optional text and extra properties
+  ---
+  duration_ms: 0.2302
+  type: 'test'
+  ...
+# Subtest: ③ strategy sound accepts a complete boolean verdict: optional text coercion
+ok 483 - ③ strategy sound accepts a complete boolean verdict: optional text coercion
+  ---
+  duration_ms: 0.0809
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: malformed judge retains numeric failure without triggering a strategy replan
+ok 484 - reflectOnAnswer: malformed judge retains numeric failure without triggering a strategy replan
+  ---
+  duration_ms: 0.6882
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: malformed judge retains refusal-with-data replanning
+ok 485 - reflectOnAnswer: malformed judge retains refusal-with-data replanning
+  ---
+  duration_ms: 0.4934
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: clean answer passes without replan (no judge)
+ok 486 - reflectOnAnswer: clean answer passes without replan (no judge)
+  ---
+  duration_ms: 0.2055
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: numeric mismatch is recorded (failed) but does not auto-replan without a judge
+ok 487 - reflectOnAnswer: numeric mismatch is recorded (failed) but does not auto-replan without a judge
+  ---
+  duration_ms: 0.1638
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: judge needsReplan drives replan with hint
+ok 488 - reflectOnAnswer: judge needsReplan drives replan with hint
+  ---
+  duration_ms: 0.2458
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: refusal-with-data triggers replan even without a judge
+ok 489 - reflectOnAnswer: refusal-with-data triggers replan even without a judge
+  ---
+  duration_ms: 0.2313
+  type: 'test'
+  ...
+# Subtest: reflectOnAnswer: no-data clarification does not trigger replan
+ok 490 - reflectOnAnswer: no-data clarification does not trigger replan
+  ---
+  duration_ms: 0.1919
+  type: 'test'
+  ...
+# Subtest: createHarnessJudge returns null for local-rule harness
+ok 491 - createHarnessJudge returns null for local-rule harness
+  ---
+  duration_ms: 0.2478
+  type: 'test'
+  ...
+# Subtest: createHarnessJudge wraps a real harness via side-effect-free chat
+ok 492 - createHarnessJudge wraps a real harness via side-effect-free chat
+  ---
+  duration_ms: 0.408
+  type: 'test'
+  ...
+# Subtest: result analyst produces totals, topN, trend and anomalies
+ok 493 - result analyst produces totals, topN, trend and anomalies
+  ---
+  duration_ms: 13.5096
+  type: 'test'
+  ...
+# Subtest: result analyst does not sum percentage columns
+ok 494 - result analyst does not sum percentage columns
+  ---
+  duration_ms: 0.304
+  type: 'test'
+  ...
+# Subtest: result analyst renders totals with the presentation contract
+ok 495 - result analyst renders totals with the presentation contract
+  ---
+  duration_ms: 10.2764
+  type: 'test'
+  ...
+# Subtest: presentation evidence preserves raw data and only carries online evidence
+ok 496 - presentation evidence preserves raw data and only carries online evidence
+  ---
+  duration_ms: 2.0216
+  type: 'test'
+  ...
+# Subtest: presentation planner always asks the model and validates the returned contract
+ok 497 - presentation planner always asks the model and validates the returned contract
+  ---
+  duration_ms: 3.1365
+  type: 'test'
+  ...
+# Subtest: presentation planner keeps online formatting when the model response is invalid
+ok 498 - presentation planner keeps online formatting when the model response is invalid
+  ---
+  duration_ms: 0.5982
+  type: 'test'
+  ...
+# Subtest: presentation planner falls back to the theme prompt without online metadata
+ok 499 - presentation planner falls back to the theme prompt without online metadata
+  ---
+  duration_ms: 23.67
+  type: 'test'
+  ...
+# Subtest: theme presentation rules override conflicting model metadata
+ok 500 - theme presentation rules override conflicting model metadata
+  ---
+  duration_ms: 0.929
+  type: 'test'
+  ...
+# Subtest: session decimal directives survive final result normalization
+ok 501 - session decimal directives survive final result normalization
+  ---
+  duration_ms: 0.985
+  type: 'test'
+  ...
+# Subtest: presentation planner reuses a valid model contract for identical evidence
+ok 502 - presentation planner reuses a valid model contract for identical evidence
+  ---
+  duration_ms: 0.6699
+  type: 'test'
+  ...
+# Subtest: deterministic renderer projects amount and percentage values
+ok 503 - deterministic renderer projects amount and percentage values
+  ---
+  duration_ms: 0.6186
+  type: 'test'
+  ...
+# Subtest: aggregated metric aliases inherit presentation rules from their source field
+ok 504 - aggregated metric aliases inherit presentation rules from their source field
+  ---
+  duration_ms: 0.6372
+  type: 'test'
+  ...
+# Subtest: presentation planner reads percentage rules declared in the theme prompt
+ok 505 - presentation planner reads percentage rules declared in the theme prompt
+  ---
+  duration_ms: 1.2292
+  type: 'test'
+  ...
+# Subtest: presentation planner ignores a malformed theme presentation block
+ok 506 - presentation planner ignores a malformed theme presentation block
+  ---
+  duration_ms: 0.5969
+  type: 'test'
+  ...
+# Subtest: presentation planner leaves fields untouched when the theme declares nothing
+ok 507 - presentation planner leaves fields untouched when the theme declares nothing
+  ---
+  duration_ms: 0.1372
+  type: 'test'
+  ...
+# Subtest: xlsx projection respects column types and preserves missing values
+ok 508 - xlsx projection respects column types and preserves missing values
+  ---
+  duration_ms: 0.3016
+  type: 'test'
+  ...
+# Subtest: result post-processing groups values, compares periods and pivots totals
+ok 509 - result post-processing groups values, compares periods and pivots totals
+  ---
+  duration_ms: 2.8139
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: POSTGRESQL
+ok 510 - dataset plan and evidence label the actual source: POSTGRESQL
+  ---
+  duration_ms: 3.2843
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: PG
+ok 511 - dataset plan and evidence label the actual source: PG
+  ---
+  duration_ms: 0.2779
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: MYSQL
+ok 512 - dataset plan and evidence label the actual source: MYSQL
+  ---
+  duration_ms: 0.2356
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: TIDB
+ok 513 - dataset plan and evidence label the actual source: TIDB
+  ---
+  duration_ms: 0.1377
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: DORIS
+ok 514 - dataset plan and evidence label the actual source: DORIS
+  ---
+  duration_ms: 1.2973
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: legacy
+ok 515 - dataset plan and evidence label the actual source: legacy
+  ---
+  duration_ms: 0.161
+  type: 'test'
+  ...
+# Subtest: dataset plan and evidence label the actual source: unknown
+ok 516 - dataset plan and evidence label the actual source: unknown
+  ---
+  duration_ms: 0.2286
+  type: 'test'
+  ...
+# Subtest: dataset plan preserves attribution-scale row limits
+ok 517 - dataset plan preserves attribution-scale row limits
+  ---
+  duration_ms: 0.1863
+  type: 'test'
+  ...
+# Subtest: semantic compiler validates and binds query plans
+ok 518 - semantic compiler validates and binds query plans
+  ---
+  duration_ms: 1.7524
+  type: 'test'
+  ...
+# Subtest: semantic compiler rejects fields outside the indicator whitelist
+ok 519 - semantic compiler rejects fields outside the indicator whitelist
+  ---
+  duration_ms: 0.7127
+  type: 'test'
+  ...
+# Subtest: semantic compiler allows count distinct on an identifier dataset field
+ok 520 - semantic compiler allows count distinct on an identifier dataset field
+  ---
+  duration_ms: 0.7213
+  type: 'test'
+  ...
+# Subtest: semantic compiler validates filters by dimension aliases
+ok 521 - semantic compiler validates filters by dimension aliases
+  ---
+  duration_ms: 0.2156
+  type: 'test'
+  ...
+# Subtest: dataset domain sources use Doris and never include Supersonic metadata
+ok 522 - dataset domain sources use Doris and never include Supersonic metadata
+  ---
+  duration_ms: 1.2138
+  type: 'test'
+  ...
+# Subtest: indicator domain policies default to theme and manual sources only
+ok 523 - indicator domain policies default to theme and manual sources only
+  ---
+  duration_ms: 2.0238
+  type: 'test'
+  ...
+# Subtest: legacy source markers map to the governed origin taxonomy
+ok 524 - legacy source markers map to the governed origin taxonomy
+  ---
+  duration_ms: 0.5594
+  type: 'test'
+  ...
+# Subtest: candidate merging preserves the highest authority origin
+ok 525 - candidate merging preserves the highest authority origin
+  ---
+  duration_ms: 0.6874
+  type: 'test'
+  ...
+# Subtest: policy candidate extraction is configuration-driven
+ok 526 - policy candidate extraction is configuration-driven
+  ---
+  duration_ms: 0.3374
+  type: 'test'
+  ...
+# Subtest: permission scope signature is stable and input-order independent
+ok 527 - permission scope signature is stable and input-order independent
+  ---
+  duration_ms: 10.8081
+  type: 'test'
+  ...
+# Subtest: semantic policy overrides conflicting model mappings with configured formulas
+ok 528 - semantic policy overrides conflicting model mappings with configured formulas
+  ---
+  duration_ms: 3.4328
+  type: 'test'
+  ...
+# Subtest: semantic policy excludes more specific business terminology
+ok 529 - semantic policy excludes more specific business terminology
+  ---
+  duration_ms: 0.6097
+  type: 'test'
+  ...
+# Subtest: semantic policy prompt is generated from configuration only
+ok 530 - semantic policy prompt is generated from configuration only
+  ---
+  duration_ms: 0.6796
+  type: 'test'
+  ...
+# Subtest: semantic policy prompt gives an explicit dimension resolution ladder without hardcoded terms
+ok 531 - semantic policy prompt gives an explicit dimension resolution ladder without hardcoded terms
+  ---
+  duration_ms: 0.2526
+  type: 'test'
+  ...
+# Subtest: semantic policy does not duplicate equivalent model filters
+ok 532 - semantic policy does not duplicate equivalent model filters
+  ---
+  duration_ms: 0.6425
+  type: 'test'
+  ...
+# Subtest: semantic registry resolves configured field aliases and value aliases
+ok 533 - semantic registry resolves configured field aliases and value aliases
+  ---
+  duration_ms: 3.1262
+  type: 'test'
+  ...
+# Subtest: semantic coverage reports unresolved spans instead of raw residual strings
+ok 534 - semantic coverage reports unresolved spans instead of raw residual strings
+  ---
+  duration_ms: 3.9562
+  type: 'test'
+  ...
+# Subtest: generic analysis wrappers do not become unresolved semantic spans
+ok 535 - generic analysis wrappers do not become unresolved semantic spans
+  ---
+  duration_ms: 0.6991
+  type: 'test'
+  ...
+# Subtest: generic analysis prose is stripped before semantic coverage is evaluated
+ok 536 - generic analysis prose is stripped before semantic coverage is evaluated
+  ---
+  duration_ms: 1.1112
+  type: 'test'
+  ...
+# Subtest: question text is not treated as its own semantic answer
+ok 537 - question text is not treated as its own semantic answer
+  ---
+  duration_ms: 0.4807
+  type: 'test'
+  ...
+# (node:40336) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: semantic value extraction reads descriptions and prompt aliases
+ok 538 - semantic value extraction reads descriptions and prompt aliases
+  ---
+  duration_ms: 3.7332
+  type: 'test'
+  ...
+# Subtest: semantic value resolver supports exact, alias and unique fuzzy matching
+ok 539 - semantic value resolver supports exact, alias and unique fuzzy matching
+  ---
+  duration_ms: 2.0747
+  type: 'test'
+  ...
+# Subtest: semantic value resolver reports only plausible candidates
+ok 540 - semantic value resolver reports only plausible candidates
+  ---
+  duration_ms: 0.5807
+  type: 'test'
+  ...
+# Subtest: semantic value registry initializes fields and persists the default domain
+ok 541 - semantic value registry initializes fields and persists the default domain
+  ---
+  duration_ms: 155.0578
+  type: 'test'
+  ...
+# Subtest: semantic value registry loads source values when metadata has no enum list
+ok 542 - semantic value registry loads source values when metadata has no enum list
+  ---
+  duration_ms: 105.7893
+  type: 'test'
+  ...
+# Subtest: indicator value domains do not consume Supersonic description metadata
+ok 543 - indicator value domains do not consume Supersonic description metadata
+  ---
+  duration_ms: 100.8282
+  type: 'test'
+  ...
+# Subtest: dataset value domains cache complete source snapshots without re-scanning
+ok 544 - dataset value domains cache complete source snapshots without re-scanning
+  ---
+  duration_ms: 73.3512
+  type: 'test'
+  ...
+# Subtest: prefer-stored domains are refreshed until real source values are initialized
+ok 545 - prefer-stored domains are refreshed until real source values are initialized
+  ---
+  duration_ms: 77.8216
+  type: 'test'
+  ...
+# Subtest: semantic value config can disable fields and source discovery per agent
+ok 546 - semantic value config can disable fields and source discovery per agent
+  ---
+  duration_ms: 74.5321
+  type: 'test'
+  ...
+# Subtest: semantic value domains are isolated per theme agent
+ok 547 - semantic value domains are isolated per theme agent
+  ---
+  duration_ms: 87.9675
+  type: 'test'
+  ...
+# Subtest: theme source changes prune stale semantic value config and domains
+ok 548 - theme source changes prune stale semantic value config and domains
+  ---
+  duration_ms: 81.7683
+  type: 'test'
+  ...
+# (node:29900) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: theme API stores model keys encrypted and never returns plaintext
+ok 549 - theme API stores model keys encrypted and never returns plaintext
+  ---
+  duration_ms: 482.3655
+  type: 'test'
+  ...
+# Subtest: theme semantic value API persists field switches independently per agent
+ok 550 - theme semantic value API persists field switches independently per agent
+  ---
+  duration_ms: 403.0614
+  type: 'test'
+  ...
+# Subtest: system settings can disable Supersonic and switch the agent to direct LLM mode
+ok 551 - system settings can disable Supersonic and switch the agent to direct LLM mode
+  ---
+  duration_ms: 317.7049
+  type: 'test'
+  ...
+# Subtest: model management persists multiple models and theme default selection
+ok 552 - model management persists multiple models and theme default selection
+  ---
+  duration_ms: 295.3842
+  type: 'test'
+  ...
+# Subtest: model management can test a saved model connection without exposing the key
+ok 553 - model management can test a saved model connection without exposing the key
+  ---
+  duration_ms: 329.368
+  type: 'test'
+  ...
+# Subtest: model connection test turns an HTML upstream error into a readable message
+ok 554 - model connection test turns an HTML upstream error into a readable message
+  ---
+  duration_ms: 300.3359
+  type: 'test'
+  ...
+# (node:32576) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: standard SKILL.md metadata and phase guidance are parsed
+ok 555 - standard SKILL.md metadata and phase guidance are parsed
+  ---
+  duration_ms: 9.6348
+  type: 'test'
+  ...
+# Subtest: skill registry syncs SKILL.md files and binds them per theme
+ok 556 - skill registry syncs SKILL.md files and binds them per theme
+  ---
+  duration_ms: 158.0496
+  type: 'test'
+  ...
+# Subtest: missing frontmatter falls back to the skill directory name
+ok 557 - missing frontmatter falls back to the skill directory name
+  ---
+  duration_ms: 89.5467
+  type: 'test'
+  ...
+# Subtest: external skill documents cannot claim tools or reserved core identities
+ok 558 - external skill documents cannot claim tools or reserved core identities
+  ---
+  duration_ms: 0.6704
+  type: 'test'
+  ...
+# (node:39408) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: browser: Skill upload/update/toggle/delete, HTML escaping and analyst boundary
+ok 559 - browser: Skill upload/update/toggle/delete, HTML escaping and analyst boundary # SKIP
+  ---
+  duration_ms: 1.2159
+  type: 'test'
+  ...
+# (node:9056) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Skill HTTP management rejects anonymous, analysts and forged admin headers without mutations
+ok 560 - Skill HTTP management rejects anonymous, analysts and forged admin headers without mutations
+  ---
+  duration_ms: 811.045
+  type: 'test'
+  ...
+# Subtest: uploaded Skill is active in phase guidance, pause/resume preserves binding, deletion clears references
+ok 561 - uploaded Skill is active in phase guidance, pause/resume preserves binding, deletion clears references
+  ---
+  duration_ms: 493.7031
+  type: 'test'
+  ...
+# Subtest: invalid Skill uploads/status values are rejected with no partial catalog writes
+ok 562 - invalid Skill uploads/status values are rejected with no partial catalog writes
+  ---
+  duration_ms: 625.882
+  type: 'test'
+  ...
+# Subtest: repeat uploads update content without duplicating, re-enabling or losing theme bindings
+ok 563 - repeat uploads update content without duplicating, re-enabling or losing theme bindings
+  ---
+  duration_ms: 438.6118
+  type: 'test'
+  ...
+# Subtest: plain Markdown upload uses its filename instead of colliding under unnamed-skill
+ok 564 - plain Markdown upload uses its filename instead of colliding under unnamed-skill
+  ---
+  duration_ms: 424.235
+  type: 'test'
+  ...
+# (node:26000) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: core tool labels cover every required tool
+ok 565 - core tool labels cover every required tool
+  ---
+  duration_ms: 1.7536
+  type: 'test'
+  ...
+# Subtest: catalog lists core tools and public skills with usage
+ok 566 - catalog lists core tools and public skills with usage
+  ---
+  duration_ms: 184.0191
+  type: 'test'
+  ...
+# Subtest: disabling a public skill removes it from every theme
+ok 567 - disabling a public skill removes it from every theme
+  ---
+  duration_ms: 111.6021
+  type: 'test'
+  ...
+# Subtest: builtin skills can be disabled but not deleted
+ok 568 - builtin skills can be disabled but not deleted
+  ---
+  duration_ms: 116.5251
+  type: 'test'
+  ...
+# Subtest: external skills are removable and report their references
+ok 569 - external skills are removable and report their references
+  ---
+  duration_ms: 113.8035
+  type: 'test'
+  ...
+# Subtest: uploaded skills survive an external SKILL_MD sync
+ok 570 - uploaded skills survive an external SKILL_MD sync
+  ---
+  duration_ms: 123.2309
+  type: 'test'
+  ...
+# Subtest: uploading the same skill twice updates instead of duplicating
+ok 571 - uploading the same skill twice updates instead of duplicating
+  ---
+  duration_ms: 107.8303
+  type: 'test'
+  ...
+# Subtest: upload rejects empty content and oversized documents
+ok 572 - upload rejects empty content and oversized documents
+  ---
+  duration_ms: 82.7818
+  type: 'test'
+  ...
+# (node:11464) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: HTTP acceptance fixture closes resources when initialization fails before the test callback
+ok 573 - HTTP acceptance fixture closes resources when initialization fails before the test callback
+  ---
+  duration_ms: 383.5966
+  type: 'test'
+  ...
+# Subtest: Skill upload size boundary counts UTF-8 bytes and accepts exactly 200KiB
+ok 574 - Skill upload size boundary counts UTF-8 bytes and accepts exactly 200KiB
+  ---
+  duration_ms: 5.2221
+  type: 'test'
+  ...
+# Subtest: Skill upload handles BOM/CRLF and normalizes explicit phases
+ok 575 - Skill upload handles BOM/CRLF and normalizes explicit phases
+  ---
+  duration_ms: 2.0857
+  type: 'test'
+  ...
+# Subtest: Skill fallback identity strips directory components and uses the file basename
+ok 576 - Skill fallback identity strips directory components and uses the file basename
+  ---
+  duration_ms: 0.7107
+  type: 'test'
+  ...
+# (node:23864) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: skill registry selects agent instructions and keeps required tools
+ok 577 - skill registry selects agent instructions and keeps required tools
+  ---
+  duration_ms: 152.8798
+  type: 'test'
+  ...
+# Subtest: theme skill assignments can be replaced independently
+ok 578 - theme skill assignments can be replaced independently
+  ---
+  duration_ms: 92.4276
+  type: 'test'
+  ...
+# Subtest: agent model, dataset and example configuration persist on the theme
+ok 579 - agent model, dataset and example configuration persist on the theme
+  ---
+  duration_ms: 92.8246
+  type: 'test'
+  ...
+# Subtest: core resolver skills can be hot-plugged without changing the agent contract
+ok 580 - core resolver skills can be hot-plugged without changing the agent contract
+  ---
+  duration_ms: 115.3879
+  type: 'test'
+  ...
+# Subtest: removing a core skill from a theme disables its resolver
+ok 581 - removing a core skill from a theme disables its resolver
+  ---
+  duration_ms: 90.7501
+  type: 'test'
+  ...
+# Subtest: core resolver requires the declared skill to match the trusted executor
+ok 582 - core resolver requires the declared skill to match the trusted executor
+  ---
+  duration_ms: 74.6391
+  type: 'test'
+  ...
+# Subtest: explicit new question clears prior result from task state, prompt and execution contract
+ok 583 - explicit new question clears prior result from task state, prompt and execution contract
+  ---
+  duration_ms: 13.4711
+  type: 'test'
+  ...
+# Subtest: forced task reset clears prior result from task state, prompt and execution contract
+ok 584 - forced task reset clears prior result from task state, prompt and execution contract
+  ---
+  duration_ms: 13.0832
+  type: 'test'
+  ...
+# Subtest: zero inheritance budget clears prior result from task state, prompt and execution contract
+ok 585 - zero inheritance budget clears prior result from task state, prompt and execution contract
+  ---
+  duration_ms: 1.1766
+  type: 'test'
+  ...
+# Subtest: elapsed history budget clears prior result from task state, prompt and execution contract
+ok 586 - elapsed history budget clears prior result from task state, prompt and execution contract
+  ---
+  duration_ms: 0.9135
+  type: 'test'
+  ...
+# Subtest: 那按渠道拆开呢 preserves the eligible result and its lineage
+ok 587 - 那按渠道拆开呢 preserves the eligible result and its lineage
+  ---
+  duration_ms: 1.0598
+  type: 'test'
+  ...
+# Subtest: 导出Excel preserves the eligible result and its lineage
+ok 588 - 导出Excel preserves the eligible result and its lineage
+  ---
+  duration_ms: 0.5763
+  type: 'test'
+  ...
+# Subtest: 上述结果按渠道拆开 preserves the eligible result and its lineage
+ok 589 - 上述结果按渠道拆开 preserves the eligible result and its lineage
+  ---
+  duration_ms: 1.4488
+  type: 'test'
+  ...
+# Subtest: prompt semantics block compiles into a semantic policy
+ok 590 - prompt semantics block compiles into a semantic policy
+  ---
+  duration_ms: 4.076
+  type: 'test'
+  ...
+# Subtest: prompt semantics rules win over stored rules with the same concept
+ok 591 - prompt semantics rules win over stored rules with the same concept
+  ---
+  duration_ms: 0.9572
+  type: 'test'
+  ...
+# Subtest: malformed lines are reported instead of silently dropped
+ok 592 - malformed lines are reported instead of silently dropped
+  ---
+  duration_ms: 0.3424
+  type: 'test'
+  ...
+# Subtest: a prompt without the block keeps the stored policy
+ok 593 - a prompt without the block keeps the stored policy
+  ---
+  duration_ms: 0.1424
+  type: 'test'
+  ...
+# Subtest: parseFormula rejects unknown aggregators
+ok 594 - parseFormula rejects unknown aggregators
+  ---
+  duration_ms: 0.5153
+  type: 'test'
+  ...
+# Subtest: weekly grouping language is parsed as a structured time grain
+ok 595 - weekly grouping language is parsed as a structured time grain
+  ---
+  duration_ms: 1.3744
+  type: 'test'
+  ...
+# Subtest: daily metric rows are aggregated into Monday-based weekly buckets
+ok 596 - daily metric rows are aggregated into Monday-based weekly buckets
+  ---
+  duration_ms: 15.1378
+  type: 'test'
+  ...
+# Subtest: aggregation keeps metric columns when only column semantics are available
+ok 597 - aggregation keeps metric columns when only column semantics are available
+  ---
+  duration_ms: 1.7873
+  type: 'test'
+  ...
+# Subtest: average aggregation is driven by lexicon profile hints
+ok 598 - average aggregation is driven by lexicon profile hints
+  ---
+  duration_ms: 0.5478
+  type: 'test'
+  ...
+# Subtest: time semantics resolves recent days against business T-1
+ok 599 - time semantics resolves recent days against business T-1
+  ---
+  duration_ms: 28.3483
+  type: 'test'
+  ...
+# Subtest: time semantics resolves yesterday and current month
+ok 600 - time semantics resolves yesterday and current month
+  ---
+  duration_ms: 22.8086
+  type: 'test'
+  ...
+# Subtest: time semantics resolves explicit dates and months
+ok 601 - time semantics resolves explicit dates and months
+  ---
+  duration_ms: 1.7117
+  type: 'test'
+  ...
+# Subtest: attribution windows align the previous period by the same number of days
+ok 602 - attribution windows align the previous period by the same number of days
+  ---
+  duration_ms: 0.822
+  type: 'test'
+  ...
+# Subtest: recent date resolver supports week, month and year periods
+ok 603 - recent date resolver supports week, month and year periods
+  ---
+  duration_ms: 0.4942
+  type: 'test'
+  ...
+# Subtest: time semantics supports project-specific Chinese period formats
+ok 604 - time semantics supports project-specific Chinese period formats
+  ---
+  duration_ms: 1.9059
+  type: 'test'
+  ...
+# Subtest: time semantics covers common period-to-date and relative ranges
+ok 605 - time semantics covers common period-to-date and relative ranges
+  ---
+  duration_ms: 8.8574
+  type: 'test'
+  ...
+# Subtest: time semantics extracts every comparison window from one question
+ok 606 - time semantics extracts every comparison window from one question
+  ---
+  duration_ms: 1.0532
+  type: 'test'
+  ...
+# Subtest: time semantics treats a year-month range as one window
+ok 607 - time semantics treats a year-month range as one window
+  ---
+  duration_ms: 0.5416
+  type: 'test'
+  ...
+# Subtest: 未配置预算时放行（enforced=false）
+ok 608 - 未配置预算时放行（enforced=false）
+  ---
+  duration_ms: 1.2779
+  type: 'test'
+  ...
+# Subtest: 环境变量设置全局默认预算并能拦截
+ok 609 - 环境变量设置全局默认预算并能拦截
+  ---
+  duration_ms: 1.7077
+  type: 'test'
+  ...
+# Subtest: 已超预算时 ok=false
+ok 610 - 已超预算时 ok=false
+  ---
+  duration_ms: 0.6942
+  type: 'test'
+  ...
+# Subtest: 主题级预算优先于用户默认
+ok 611 - 主题级预算优先于用户默认
+  ---
+  duration_ms: 0.3351
+  type: 'test'
+  ...
+# Subtest: tokenBudgetError 携带 429 状态码
+ok 612 - tokenBudgetError 携带 429 状态码
+  ---
+  duration_ms: 0.378
+  type: 'test'
+  ...
+# Subtest: explicit time slots preserve the complete date expression: 2026年1月1日至2026年3月31日
+ok 613 - explicit time slots preserve the complete date expression: 2026年1月1日至2026年3月31日
+  ---
+  duration_ms: 5.0185
+  type: 'test'
+  ...
+# Subtest: explicit time slots preserve the complete date expression: 2026-01-01 至 2026-03-31
+ok 614 - explicit time slots preserve the complete date expression: 2026-01-01 至 2026-03-31
+  ---
+  duration_ms: 0.9242
+  type: 'test'
+  ...
+# Subtest: explicit time slots preserve the complete date expression: 2026年1月1日至3月31日
+ok 615 - explicit time slots preserve the complete date expression: 2026年1月1日至3月31日
+  ---
+  duration_ms: 0.244
+  type: 'test'
+  ...
+# Subtest: explicit time slots preserve the complete date expression: 2026年1月1日
+ok 616 - explicit time slots preserve the complete date expression: 2026年1月1日
+  ---
+  duration_ms: 0.1136
+  type: 'test'
+  ...
+# Subtest: two distinct explicit date ranges remain separate time slots
+ok 617 - two distinct explicit date ranges remain separate time slots
+  ---
+  duration_ms: 0.4536
+  type: 'test'
+  ...
+# Subtest: an ISO date clarification fills time without replacing the inherited region filter
+ok 618 - an ISO date clarification fills time without replacing the inherited region filter
+  ---
+  duration_ms: 3.638
+  type: 'test'
+  ...
+# Subtest: followups inherit full date ranges and filters while a time revision replaces only time
+ok 619 - followups inherit full date ranges and filters while a time revision replaces only time
+  ---
+  duration_ms: 7.9831
+  type: 'test'
+  ...
+# Subtest: continuations keep the task id, advance the turn id and inherit field by field
+ok 620 - continuations keep the task id, advance the turn id and inherit field by field
+  ---
+  duration_ms: 4.7873
+  type: 'test'
+  ...
+# Subtest: analysis wording is not captured as a dimension
+ok 621 - analysis wording is not captured as a dimension
+  ---
+  duration_ms: 0.6785
+  type: 'test'
+  ...
+# Subtest: dimension separators and the adverb 分别 are not captured as fields
+ok 622 - dimension separators and the adverb 分别 are not captured as fields
+  ---
+  duration_ms: 0.8327
+  type: 'test'
+  ...
+# Subtest: complex analysis questions expose their breakdown dimensions
+ok 623 - complex analysis questions expose their breakdown dimensions
+  ---
+  duration_ms: 3.0108
+  type: 'test'
+  ...
+# Subtest: inheritance budget caps both fields and consecutive turns
+ok 624 - inheritance budget caps both fields and consecutive turns
+  ---
+  duration_ms: 1.1376
+  type: 'test'
+  ...
+# Subtest: forceNewTask ignores structured history even when the previous task is recent
+ok 625 - forceNewTask ignores structured history even when the previous task is recent
+  ---
+  duration_ms: 0.3849
+  type: 'test'
+  ...
+# Subtest: memory defaults fill only relevant fields and never override explicit conditions
+ok 626 - memory defaults fill only relevant fields and never override explicit conditions
+  ---
+  duration_ms: 0.7083
+  type: 'test'
+  ...
+# Subtest: explicit dimensions still bind normally when memory also defines them
+ok 627 - explicit dimensions still bind normally when memory also defines them
+  ---
+  duration_ms: 1.7392
+  type: 'test'
+  ...
+# Subtest: completed task state keeps identifiers and result lineage for the next turn
+ok 628 - completed task state keeps identifiers and result lineage for the next turn
+  ---
+  duration_ms: 0.473
+  type: 'test'
+  ...
+# Subtest: a unit preference is an instruction, not a data query
+ok 629 - a unit preference is an instruction, not a data query
+  ---
+  duration_ms: 2.5213
+  type: 'test'
+  ...
+# Subtest: a unit phrase inside a real question stays in the query lane
+ok 630 - a unit phrase inside a real question stays in the query lane
+  ---
+  duration_ms: 0.943
+  type: 'test'
+  ...
+# Subtest: a decimal precision follow-up is an instruction with no inherited query slots
+ok 631 - a decimal precision follow-up is an instruction with no inherited query slots
+  ---
+  duration_ms: 0.6464
+  type: 'test'
+  ...
+# Subtest: instructions never inherit slots and are skipped when finding the previous task
+ok 632 - instructions never inherit slots and are skipped when finding the previous task
+  ---
+  duration_ms: 0.6267
+  type: 'test'
+  ...
+# Subtest: low-confidence context uses the model only as a structured router
+ok 633 - low-confidence context uses the model only as a structured router
+  ---
+  duration_ms: 8.5021
+  type: 'test'
+  ...
+# Subtest: a rule-only runtime requires confirmation instead of inventing a route
+ok 634 - a rule-only runtime requires confirmation instead of inventing a route
+  ---
+  duration_ms: 0.7666
+  type: 'test'
+  ...
+# Subtest: a failed router degrades to confirmation without business output
+ok 635 - a failed router degrades to confirmation without business output
+  ---
+  duration_ms: 0.4655
+  type: 'test'
+  ...
+# Subtest: the model router preserves the configured inheritance budget
+ok 636 - the model router preserves the configured inheritance budget
+  ---
+  duration_ms: 0.6013
+  type: 'test'
+  ...
+# Subtest: model-classified output instructions never fall back to result processing
+ok 637 - model-classified output instructions never fall back to result processing
+  ---
+  duration_ms: 1.1097
+  type: 'test'
+  ...
+# (node:19240) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: long-term memory keeps one handbook per user × scope, versioned and scoped
+ok 638 - long-term memory keeps one handbook per user × scope, versioned and scoped
+  ---
+  duration_ms: 92.2136
+  type: 'test'
+  ...
+# Subtest: notes are append-only, deduped per scope and can be archived or revived
+ok 639 - notes are append-only, deduped per scope and can be archived or revived
+  ---
+  duration_ms: 73.2322
+  type: 'test'
+  ...
+# Subtest: context injection sends only the summary and counts usage; paused documents are skipped
+ok 640 - context injection sends only the summary and counts usage; paused documents are skipped
+  ---
+  duration_ms: 68.2408
+  type: 'test'
+  ...
+# Subtest: memory search returns located hits for the handbook body
+ok 641 - memory search returns located hits for the handbook body
+  ---
+  duration_ms: 64.3107
+  type: 'test'
+  ...
+# Subtest: legacy row memories migrate into notes exactly once
+ok 642 - legacy row memories migrate into notes exactly once
+  ---
+  duration_ms: 71.8023
+  type: 'test'
+  ...
+# Subtest: distiller extracts explicit remembers without a model
+ok 643 - distiller extracts explicit remembers without a model
+  ---
+  duration_ms: 98.6253
+  type: 'test'
+  ...
+# Subtest: distiller prefers model output and still keeps explicit remembers
+ok 644 - distiller prefers model output and still keeps explicit remembers
+  ---
+  duration_ms: 85.612
+  type: 'test'
+  ...
+# Subtest: consolidation rewrites the handbook, marks notes merged and stays idempotent
+ok 645 - consolidation rewrites the handbook, marks notes merged and stays idempotent
+  ---
+  duration_ms: 113.7742
+  type: 'test'
+  ...
+# Subtest: consolidation without a model appends notes verbatim instead of inventing content
+ok 646 - consolidation without a model appends notes verbatim instead of inventing content
+  ---
+  duration_ms: 128.0795
+  type: 'test'
+  ...
+# Subtest: memory tool lists scopes and searches the handbook on demand
+ok 647 - memory tool lists scopes and searches the handbook on demand
+  ---
+  duration_ms: 85.0305
+  type: 'test'
+  ...
+# Subtest: long-term memory api scopes普通用户到本人、管理员到全部用户
+ok 648 - long-term memory api scopes普通用户到本人、管理员到全部用户
+  ---
+  duration_ms: 398.2908
+  type: 'test'
+  ...
+# Subtest: auto compaction shortens an over-budget handbook and keeps a rollback version
+ok 649 - auto compaction shortens an over-budget handbook and keeps a rollback version
+  ---
+  duration_ms: 82.6335
+  type: 'test'
+  ...
+# Subtest: auto compaction refuses to grow, over-compress or run without a model
+ok 650 - auto compaction refuses to grow, over-compress or run without a model
+  ---
+  duration_ms: 68.626
+  type: 'test'
+  ...
+# Subtest: maintain folds notes in and compresses in one automatic pass
+ok 651 - maintain folds notes in and compresses in one automatic pass
+  ---
+  duration_ms: 69.9825
+  type: 'test'
+  ...
+# Subtest: auto consolidation respects the batch threshold and cooldown
+ok 652 - auto consolidation respects the batch threshold and cooldown
+  ---
+  duration_ms: 76.2171
+  type: 'test'
+  ...
+# Subtest: maintenance sweep walks scopes with pending notes or oversized handbooks
+ok 653 - maintenance sweep walks scopes with pending notes or oversized handbooks
+  ---
+  duration_ms: 95.2859
+  type: 'test'
+  ...
+# Subtest: collectValueCandidates keeps only value-resolution issues
+ok 654 - collectValueCandidates keeps only value-resolution issues
+  ---
+  duration_ms: 5.2933
+  type: 'test'
+  ...
+# Subtest: value clarification offers the candidate values themselves as options
+ok 655 - value clarification offers the candidate values themselves as options
+  ---
+  duration_ms: 1.4147
+  type: 'test'
+  ...
+# Subtest: single candidate is phrased as a confirmation instead of a pick list
+ok 656 - single candidate is phrased as a confirmation instead of a pick list
+  ---
+  duration_ms: 0.5263
+  type: 'test'
+  ...
+# Subtest: value clarification is skipped when asking is not allowed or the field is unknown
+ok 657 - value clarification is skipped when asking is not allowed or the field is unknown
+  ---
+  duration_ms: 0.2276
+  type: 'test'
+  ...
+# Subtest: selected value option expands into a confirmed filter condition
+ok 658 - selected value option expands into a confirmed filter condition
+  ---
+  duration_ms: 0.328
+  type: 'test'
+  ...
+# Subtest: plain-choice option carries the picked label without a filter condition
+ok 659 - plain-choice option carries the picked label without a filter condition
+  ---
+  duration_ms: 0.131
+  type: 'test'
+  ...
+# Subtest: model clarification renders its question and options into a pick list
+ok 660 - model clarification renders its question and options into a pick list
+  ---
+  duration_ms: 0.4292
+  type: 'test'
+  ...
+# Subtest: model clarification is skipped without a question, fewer than two options, or when asking is not allowed
+ok 661 - model clarification is skipped without a question, fewer than two options, or when asking is not allowed
+  ---
+  duration_ms: 0.148
+  type: 'test'
+  ...
+# Subtest: model clarification caps the option list and always keeps the cancel option
+ok 662 - model clarification caps the option list and always keeps the cancel option
+  ---
+  duration_ms: 1.093
+  type: 'test'
+  ...
+# Subtest: semantic span clarification batches indexed candidates
+ok 663 - semantic span clarification batches indexed candidates
+  ---
+  duration_ms: 4.6224
+  type: 'test'
+  ...
+# Subtest: semantic span clarification reports a capability gap when no candidate exists
+ok 664 - semantic span clarification reports a capability gap when no candidate exists
+  ---
+  duration_ms: 0.3386
+  type: 'test'
+  ...
+# Subtest: workflow keeps discarded attempts while exposing the adopted stage
+ok 665 - workflow keeps discarded attempts while exposing the adopted stage
+  ---
+  duration_ms: 4.3007
+  type: 'test'
+  ...
+# Subtest: workflow stage duration is measured from its explicit start
+ok 666 - workflow stage duration is measured from its explicit start
+  ---
+  duration_ms: 24.3427
+  type: 'test'
+  ...
+# (node:39868) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: workspace persists result artifacts and transformation versions
+ok 667 - workspace persists result artifacts and transformation versions
+  ---
+  duration_ms: 119.722
+  type: 'test'
+  ...
+# Subtest: workspace enforces user ownership
+ok 668 - workspace enforces user ownership
+  ---
+  duration_ms: 63.2364
+  type: 'test'
+  ...
+# Subtest: xlsx writer creates a two-level workbook buffer
+ok 669 - xlsx writer creates a two-level workbook buffer
+  ---
+  duration_ms: 2.63
+  type: 'test'
+  ...
+# Subtest: xlsx writer writes projected display magnitude and percentage ratios
+ok 670 - xlsx writer writes projected display magnitude and percentage ratios
+  ---
+  duration_ms: 1.0017
+  type: 'test'
+  ...
+# Subtest: xlsx writer does not infer a format from a field name without a contract
+ok 671 - xlsx writer does not infer a format from a field name without a contract
+  ---
+  duration_ms: 1.7757
+  type: 'test'
+  ...
+# Subtest: xlsx writer preserves text identifiers and omits blank numeric cells
+ok 672 - xlsx writer preserves text identifiers and omits blank numeric cells
+  ---
+  duration_ms: 6.1765
+  type: 'test'
+  ...
+1..672
+# tests 672
+# suites 0
+# pass 657
+# fail 3
+# cancelled 0
+# skipped 12
+# todo 0
+# duration_ms 9682.1815

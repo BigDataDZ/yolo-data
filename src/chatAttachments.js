@@ -5,11 +5,28 @@
 const MAX_ATTACHMENTS_PER_QUESTION = 20;
 
 // 只接受当前用户、当前会话下、状态正常的 FILE 产物；其余一律忽略而不是报错。
-function resolveQuestionAttachments({ workspace, userId, sessionId, artifactIds }) {
-  const ids = [...new Set((artifactIds ?? [])
-    .map((item) => String(item ?? '').trim())
-    .filter(Boolean))]
+function attachmentIds(artifactIds) {
+  return [...new Set((artifactIds ?? []).map((item) => String(item ?? '').trim()).filter(Boolean))]
     .slice(0, MAX_ATTACHMENTS_PER_QUESTION);
+}
+
+function projectAttachment(artifact, sessionId) {
+  if (!artifact || artifact.artifactType !== 'FILE' || Number(artifact.sessionId) !== Number(sessionId)) return null;
+  const source = artifact.metadata?.source ?? {};
+  return { artifactId: artifact.id, artifactType: artifact.artifactType, title: artifact.title, name: source.name ?? artifact.title, extension: source.extension ?? null, size: source.size ?? null, sha256: source.sha256 ?? null };
+}
+
+function resolveQuestionAttachments({ workspace, userId, sessionId, artifactIds }) {
+  const ids = attachmentIds(artifactIds);
+  if (ids.length === 0 || !workspace) return [];
+  return ids.flatMap((artifactId) => {
+    try { return projectAttachment(workspace.getArtifact({ artifactId, userId }), sessionId) ?? []; }
+    catch { return []; }
+  });
+}
+
+async function resolveQuestionAttachmentsAsync({ workspace, userId, sessionId, artifactIds }) {
+  const ids = attachmentIds(artifactIds);
   if (ids.length === 0 || !workspace) {
     return [];
   }
@@ -18,23 +35,14 @@ function resolveQuestionAttachments({ workspace, userId, sessionId, artifactIds 
   for (const artifactId of ids) {
     let artifact = null;
     try {
-      artifact = workspace.getArtifact({ artifactId, userId });
+      artifact = workspace.getArtifactAsync
+        ? await workspace.getArtifactAsync({ artifactId, userId })
+        : workspace.getArtifact({ artifactId, userId });
     } catch {
       continue;
     }
-    if (!artifact || artifact.artifactType !== 'FILE' || Number(artifact.sessionId) !== session) {
-      continue;
-    }
-    const source = artifact.metadata?.source ?? {};
-    attachments.push({
-      artifactId: artifact.id,
-      artifactType: artifact.artifactType,
-      title: artifact.title,
-      name: source.name ?? artifact.title,
-      extension: source.extension ?? null,
-      size: source.size ?? null,
-      sha256: source.sha256 ?? null,
-    });
+    const projected = projectAttachment(artifact, session);
+    if (projected) attachments.push(projected);
   }
   return attachments;
 }
@@ -65,14 +73,31 @@ export function appendUserQuestionWithAttachments({
       question,
     },
   );
-  if (attachments.length > 0 && typeof workspace?.bindArtifactsToMessage === 'function') {
-    workspace.bindArtifactsToMessage({
+  if (attachments.length > 0 && workspace) {
+    const input = {
       artifactIds: attachments.map((item) => item.artifactId),
       userId: user.id,
       messageId: message.id,
-    });
+    };
+    if (workspace.bindArtifactsToMessage) workspace.bindArtifactsToMessage(input);
   }
   return { message, attachments };
 }
 
-export { resolveQuestionAttachments, MAX_ATTACHMENTS_PER_QUESTION };
+export async function appendUserQuestionWithAttachmentsAsync(args) {
+  const attachments = await resolveQuestionAttachmentsAsync({ workspace: args.workspace, userId: args.user.id, sessionId: args.session.id, artifactIds: args.artifactIds });
+  const message = await args.memory.appendUserMessageAsync(
+    args.session.id,
+    args.user.id,
+    String(args.displayQuestion ?? '').trim() || args.question,
+    { attachments, question: args.question },
+  );
+  if (attachments.length > 0 && args.workspace) {
+    const input = { artifactIds: attachments.map((item) => item.artifactId), userId: args.user.id, messageId: message.id };
+    if (args.workspace.bindArtifactsToMessageAsync) await args.workspace.bindArtifactsToMessageAsync(input);
+    else if (args.workspace.bindArtifactsToMessage) args.workspace.bindArtifactsToMessage(input);
+  }
+  return { message, attachments };
+}
+
+export { resolveQuestionAttachments, resolveQuestionAttachmentsAsync, MAX_ATTACHMENTS_PER_QUESTION };

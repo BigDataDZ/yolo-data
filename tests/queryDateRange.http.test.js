@@ -29,7 +29,7 @@ test('authenticated streaming contracts keep explicit date ranges intact and app
       businessDatasetIds: [dataset.id], primaryBusinessDatasetId: dataset.id,
       semanticPolicy: {}, systemPrompt: 'amount 为销售额，使用 SUM；day 为日期，region 为区域。',
     }, 1);
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const statements = [];
     // Keep auth, context, compiler, SQL generation and audit real; replace only database I/O.
     application.businessDatasets.getPoolById = () => ({ query: async (config) => {

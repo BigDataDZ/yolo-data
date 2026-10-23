@@ -88,7 +88,7 @@ async function renderQueryPage(root) {
   const selectedModelId = currentModelSelection(theme, session?.modelId);
   const canSwitchModel = state.chatMessages.length === 0;
   if (canSwitchModel) {
-    await loadOpeningSuggestions(theme?.id);
+    state.openingSuggestions = null;
   }
   const questionAxis = renderQuestionAxis();
 
@@ -185,21 +185,54 @@ async function renderQueryPage(root) {
   bindChatActions();
   mountChatCharts();
   scrollChatToBottom(false);
+  if (canSwitchModel && theme?.id) {
+    // Suggestions are useful decoration, not a prerequisite for entering a
+    // question. Load them after the composer is interactive.
+    void loadOpeningSuggestions(theme.id).then((suggestions) => {
+      if (!suggestions || Number(state.selectedThemeId) !== Number(theme.id)
+        || state.chatMessages.length > 0) return;
+      const timeline = document.getElementById('chatTimeline');
+      if (timeline) timeline.innerHTML = renderChatTimeline();
+      bindExampleQuestions();
+      const questionInput = document.getElementById('questionInput');
+      if (questionInput && document.activeElement !== questionInput) {
+        questionInput.placeholder = composerPlaceholder();
+      }
+      startWelcomePlaceholderRotation();
+    });
+  }
 }
 
-async function ensureChatLoaded() {
-  if (state.chatLoaded) {
-    return;
-  }
-  state.chatSessions = await api('/api/chat/sessions');
-  state.chatLoaded = true;
-  if (!state.activeSessionId && state.chatSessions.length > 0) {
-    const latest = state.chatSessions[0];
-    state.activeSessionId = latest.id;
-    state.selectedThemeId = latest.themeId;
-    state.selectedModelId = latest.modelId ?? null;
-    state.chatMessages = await api(`/api/chat/sessions/${latest.id}/messages`);
-  }
+let chatSessionsLoadPromise = null;
+
+function ensureChatLoaded() {
+  if (state.chatLoaded || chatSessionsLoadPromise) return;
+  // Session history is not needed to draw the composer. Fetch it in the
+  // background so a slow history query cannot delay entering the query page.
+  chatSessionsLoadPromise = (async () => {
+    try {
+      const sessions = await api('/api/chat/sessions');
+      state.chatSessions = sessions;
+      state.chatLoaded = true;
+      if (state.activeSessionId || sessions.length === 0) {
+        refreshSessionList();
+        return;
+      }
+      const latest = sessions[0];
+      state.activeSessionId = latest.id;
+      state.selectedThemeId = latest.themeId;
+      state.selectedModelId = latest.modelId ?? null;
+      state.chatMessages = await api(`/api/chat/sessions/${latest.id}/messages`);
+      if (state.page === 'query' && Number(state.activeSessionId) === Number(latest.id)) {
+        renderPage();
+      }
+    } catch {
+      // Keep the new-chat composer usable if history temporarily fails.
+      state.chatLoaded = true;
+    } finally {
+      chatSessionsLoadPromise = null;
+    }
+  })();
 }
 
 // 开场建议由后端按主题绑定关系生成：主题配置优先，其次按指标/维度自动拼装，

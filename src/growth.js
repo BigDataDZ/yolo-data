@@ -9,16 +9,25 @@ export class GrowthService {
     source = 'ASK',
     context = {},
   }) {
-    return this.database.recordKnowledgeGap({
+    const input = {
       term,
       kind,
       source,
       context,
-    });
+    };
+    return this.database.isAsyncPlatformStore
+      ? this.database.recordKnowledgeGapAsync(input)
+      : this.database.recordKnowledgeGap(input);
   }
 
   list({ includeClosed = false, limit = 200 } = {}) {
     return this.database.listKnowledgeGaps({ includeClosed, limit });
+  }
+
+  listAsync(options = {}) {
+    return this.database.isAsyncPlatformStore
+      ? this.database.listKnowledgeGapsAsync(options)
+      : this.list(options);
   }
 
   dismiss(id, resolution = {}) {
@@ -41,5 +50,11 @@ export class GrowthService {
       resolved: false,
       resolution: {},
     });
+  }
+
+  updateAsync(id, patch) {
+    return this.database.isAsyncPlatformStore
+      ? this.database.updateKnowledgeGapAsync(id, patch)
+      : this.database.updateKnowledgeGap(id, patch);
   }
 }

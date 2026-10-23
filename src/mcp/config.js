@@ -66,6 +66,24 @@ export function setMcpConfig(database, patch) {
   return next;
 }
 
+export async function getMcpConfigAsync(database) {
+  if (typeof database.getPlatformSettingAsync !== 'function') return getMcpConfig(database);
+  const now = Date.now();
+  if (cache.value && now - cache.at < CACHE_TTL) return cache.value;
+  const record = await database.getPlatformSettingAsync('mcp', null);
+  const cfg = coerce(record?.value);
+  cache = { value: cfg, at: now };
+  return cfg;
+}
+
+export async function setMcpConfigAsync(database, patch) {
+  if (typeof database.savePlatformSettingAsync !== 'function') return setMcpConfig(database, patch);
+  const next = coerce(patch && typeof patch === 'object' ? patch : {});
+  await database.savePlatformSettingAsync('mcp', next);
+  cache = { value: next, at: Date.now() };
+  return next;
+}
+
 // 仅用于测试或进程内重置，避免缓存陈旧。
 export function _resetMcpConfigCache() {
   cache = { value: null, at: 0 };

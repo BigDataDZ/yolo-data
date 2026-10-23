@@ -1,15 +1,15 @@
 import {
   assertPasswordUsable,
-  checkUserPassword,
+  checkUserPasswordAsync,
   clearSessionCookie,
-  createSession,
-  deleteSession,
-  deleteUserSessions,
+  createSessionAsync,
+  deleteSessionAsync,
+  deleteUserSessionsAsync,
   readSessionToken,
   resolveAuthMode,
-  resolveSession,
+  resolveSessionAsync,
   sessionCookie,
-  setUserPassword,
+  setUserPasswordAsync,
 } from '../../auth.js';
 
 export function registerAuthRoutes(table) {
@@ -22,7 +22,7 @@ export function registerAuthRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, config, sendJson } = ctx;
       const token = readSessionToken(request);
-      const user = token ? resolveSession(database, token) : null;
+      const user = token ? await resolveSessionAsync(database, token) : null;
       sendJson(response, 200, {
         authenticated: Boolean(user),
         user,
@@ -47,19 +47,19 @@ export function registerAuthRoutes(table) {
       if (!username || !password) {
         throw Object.assign(new Error('请输入用户名和密码'), { statusCode: 400 });
       }
-      const user = database.getUserByUsername(username);
-      if (!user || !checkUserPassword(database, user, password)) {
+      const user = await database.userRepository.getUserByUsernameAsync(username);
+      if (!user || !await checkUserPasswordAsync(database, user, password)) {
         throw Object.assign(new Error('用户名或密码不正确'), { statusCode: 401 });
       }
       if (Number(user.status ?? 1) === 0) {
         throw Object.assign(new Error('账号已停用，请联系管理员'), { statusCode: 403 });
       }
-      const session = createSession(database, user.id, config.sessionTtlHours);
+      const session = await createSessionAsync(database, user.id, config.sessionTtlHours);
       response.setHeader('Set-Cookie', sessionCookie(session.token, {
         maxAgeSeconds: session.maxAgeSeconds,
         secure: Boolean(config.secureCookies),
       }));
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'USER_LOGIN',
         detail: { username: user.username },
@@ -81,13 +81,13 @@ export function registerAuthRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, config, sendJson } = ctx;
       const token = readSessionToken(request);
-      const user = token ? resolveSession(database, token) : null;
-      deleteSession(database, token);
+      const user = token ? await resolveSessionAsync(database, token) : null;
+      await deleteSessionAsync(database, token);
       response.setHeader('Set-Cookie', clearSessionCookie({
         secure: Boolean(config.secureCookies),
       }));
       if (user) {
-        database.addAuditLog({ userId: user.id, action: 'USER_LOGOUT', detail: {} });
+        await database.addAuditLogAsync({ userId: user.id, action: 'USER_LOGOUT', detail: {} });
       }
       sendJson(response, 200, { ok: true });
     },
@@ -104,12 +104,12 @@ export function registerAuthRoutes(table) {
       const { request, response, database, readJson, sendJson, user } = ctx;
       const body = await readJson(request);
       const newPassword = assertPasswordUsable(body.newPassword);
-      if (!checkUserPassword(database, user, body.currentPassword)) {
+      if (!await checkUserPasswordAsync(database, user, body.currentPassword)) {
         throw Object.assign(new Error('当前密码不正确'), { statusCode: 400 });
       }
-      setUserPassword(database, user.id, newPassword);
-      deleteUserSessions(database, user.id, readSessionToken(request));
-      database.addAuditLog({ userId: user.id, action: 'USER_PASSWORD_CHANGE', detail: {} });
+      await setUserPasswordAsync(database, user.id, newPassword);
+      await deleteUserSessionsAsync(database, user.id, readSessionToken(request));
+      await database.addAuditLogAsync({ userId: user.id, action: 'USER_PASSWORD_CHANGE', detail: {} });
       sendJson(response, 200, { ok: true });
     },
   });

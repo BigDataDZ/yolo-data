@@ -14,7 +14,7 @@ function testConfig() {
     port: 0,
     dbPath: path.join(directory, 'test.db'),
     datasourceSecretKeyPath: path.join(directory, '.key'),
-    supersonic: { baseUrl: '', token: '', timeoutMs: 5_000 },
+    本地指标目录: { baseUrl: '', token: '', timeoutMs: 5_000 },
     deepseek: {
       baseUrl: 'https://api.deepseek.com/v1',
       apiKey: '',
@@ -463,7 +463,7 @@ test(`agent routes and labels the authorized ${dbType} dataset executor`, async 
   }).catch((error) => assert.match(error.message, /execution label fixture failure/));
   assert.ok(failures.some((gap) => gap.kind === 'DATASET_EXECUTION' && gap.source === `${dbType}_DATASET`));
   await application.businessDatasets.close();
-  application.database.close();
+  await application.database.closeAsync();
 });
 }
 
@@ -503,7 +503,7 @@ test('agent does not execute a guessed aggregate when the model only clarifies',
       }),
     }),
   };
-  application.indicatorClient.mode = 'unconfigured';
+  application.indicatorService.mode = 'unconfigured';
 
   const answer = await application.agent.answer({
     userId: user.id,

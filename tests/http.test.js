@@ -13,7 +13,7 @@ function testConfig(directory, overrides = {}) {
     projectRoot: process.cwd(),
     port: 0,
     dbPath: path.join(directory, 'test.db'),
-    supersonic: { baseUrl: '', token: '', timeoutMs: 5_000 },
+    本地指标目录: { baseUrl: '', token: '', timeoutMs: 5_000 },
     deepseek: {
       baseUrl: 'https://api.deepseek.com/v1',
       apiKey: '',
@@ -40,7 +40,7 @@ async function withServer(run, overrides = {}) {
     return await run({ baseUrl, application });
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 }
 
@@ -106,7 +106,7 @@ test('P0-8 middleware chain resolves auth errors through a single error boundary
   const ctx = {
     request: { url: '/x', headers: {} },
     response,
-    database: { getUser: () => null },
+    database: { userRepository: { getUserAsync: async () => null } },
   };
   const route = {
     middleware: ['auth'],
@@ -134,15 +134,15 @@ test('P0-8 timeout middleware rejects slow handlers without leaking late failure
   });
 });
 
-test('unconfigured Supersonic defaults to local HTTP reads and supports explicit mode changes', async () => {
+test('unconfigured 本地指标目录 defaults to local HTTP reads and supports explicit mode changes', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-local-'));
   const { server, application } = await startServer(testConfig(directory), null);
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   const headers = { 'x-user-id': '1', 'content-type': 'application/json' };
   try {
     const settings = await (await fetch(`${baseUrl}/api/settings`, { headers })).json();
-    assert.equal(settings.supersonic.enabled, false);
-    assert.equal(settings.supersonic.localIndicatorManagement, true);
+    assert.equal(settings.本地指标目录.enabled, false);
+    assert.equal(settings.本地指标目录.localIndicatorManagement, true);
     const indicators = await (await fetch(`${baseUrl}/api/indicators`, { headers })).json();
     assert.equal(indicators.localMode, true);
     assert.equal(indicators.source.source, 'LOCAL');
@@ -153,35 +153,35 @@ test('unconfigured Supersonic defaults to local HTTP reads and supports explicit
     assert.equal(scoped.localMode, true);
     assert.equal(scoped.source.source, 'LOCAL');
     for (const enabled of [true, false]) {
-      const response = await fetch(`${baseUrl}/api/settings/supersonic`, {
+      const response = await fetch(`${baseUrl}/api/settings/本地指标目录`, {
         method: 'PUT', headers, body: JSON.stringify({ enabled }),
       });
       assert.equal(response.status, 200);
       const body = await response.json();
-      assert.equal(body.supersonic.enabled, enabled);
+      assert.equal(body.本地指标目录.enabled, enabled);
       assert.equal(body.health.source.enabled, enabled);
       assert.equal(body.health.source.mode, enabled ? 'unconfigured' : 'direct-llm');
-      assert.equal(application.agent.isSupersonicEnabled(), enabled);
+      assert.equal(application.agent.is本地指标目录Enabled(), enabled);
       const current = await (await fetch(`${baseUrl}/api/settings`, { headers })).json();
-      assert.equal(current.supersonic.enabled, enabled);
+      assert.equal(current.本地指标目录.enabled, enabled);
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test('explicitly enabled but unconfigured Supersonic serves the offline snapshot', async () => {
+test('explicitly enabled but unconfigured 本地指标目录 serves the offline snapshot', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-offline-'));
   const { server, application } = await startServer(testConfig(directory), null);
-  application.database.savePlatformSetting('supersonic.enabled', true);
+  application.database.savePlatformSetting('本地指标目录.enabled', true);
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
   const admin = { 'x-user-id': '1' };
   const analyst = { 'x-user-id': '2' };
   try {
     // Admin global list is what the theme/permission editors load; it used to
-    // return 400 when Supersonic was enabled but unconfigured.
+    // return 400 when 本地指标目录 was enabled but unconfigured.
     const empty = await fetch(`${baseUrl}/api/indicators?limit=2000`, { headers: admin });
     assert.equal(empty.status, 200);
     const emptyBody = await empty.json();
@@ -205,7 +205,7 @@ test('explicitly enabled but unconfigured Supersonic serves the offline snapshot
     assert.equal(sync.status, 200);
     const syncBody = await sync.json();
     assert.equal(syncBody.skipped, true);
-    assert.equal(syncBody.reason, 'SUPERSONIC_NOT_CONFIGURED');
+    assert.equal(syncBody.reason, '本地指标目录_NOT_CONFIGURED');
 
     // Management writes are not blocked by the missing indicator platform.
     const themeSave = await fetch(`${baseUrl}/api/themes/1`, {
@@ -214,6 +214,18 @@ test('explicitly enabled but unconfigured Supersonic serves the offline snapshot
       body: JSON.stringify({ name: '经营总览', description: '离线可编辑' }),
     });
     assert.equal(themeSave.status, 200);
+
+    const relationSave = await fetch(`${baseUrl}/api/indicators/offline-metric/themes`, {
+      method: 'PUT',
+      headers: { ...admin, 'content-type': 'application/json' },
+      body: JSON.stringify({ themeIds: [1, 999999] }),
+    });
+    assert.equal(relationSave.status, 200);
+    assert.deepEqual(await relationSave.json(), {
+      indicatorId: 'offline-metric',
+      themeIds: [1],
+    });
+    assert.deepEqual(application.database.listThemeIndicatorIds(1), ['offline-metric']);
 
     // Once a snapshot exists it is served with an explicit SNAPSHOT marker.
     application.database.syncIndicators([
@@ -241,7 +253,7 @@ test('explicitly enabled but unconfigured Supersonic serves the offline snapshot
     });
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -667,7 +679,7 @@ test('roles are normalized and analysts only receive their granted scope', async
     assert.deepEqual(analyst.models, []);
     assert.deepEqual(analyst.dataSources, []);
     assert.deepEqual(analyst.indicatorTypes, []);
-    assert.equal(analyst.users.length, 1);
+    assert.equal(Object.hasOwn(analyst, 'users'), false);
     assert.equal(analyst.themes.length > 0, true);
     assert.equal(analyst.themes.every((theme) => theme.canManage === false), true);
 

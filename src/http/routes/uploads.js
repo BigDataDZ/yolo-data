@@ -12,16 +12,23 @@ export function registerUploadRoutes(table) {
       const {
         request, response, database, uploads, getRequestUser, readJson, sendJson,
       } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       const maxBytes = Number(uploads?.limits?.maxBytes) || 8 * 1024 * 1024;
       // base64 体积约为原始字节的 4/3，这里按上限放宽本次读体限制。
       const body = await readJson(request, Math.ceil((maxBytes * 4) / 3) + 4096);
-      const result = uploads.upload({
+      const result = uploads.uploadAsync
+        ? await uploads.uploadAsync({
         userId: user.id,
         sessionId: Number(body.sessionId),
         name: body.name,
         contentBase64: body.contentBase64,
-      });
+        })
+        : uploads.upload({
+          userId: user.id,
+          sessionId: Number(body.sessionId),
+          name: body.name,
+          contentBase64: body.contentBase64,
+        });
       sendJson(response, 200, result);
     },
   });

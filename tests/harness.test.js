@@ -251,6 +251,16 @@ test('provider failures are translated into actionable configuration guidance', 
   assert.match(await chatErrorMessage(503, '{}'), /暂时不可用/);
 });
 
+test('provider mismatch errors explain model and endpoint compatibility', async () => {
+  const message = await chatErrorMessage(
+    400,
+    JSON.stringify({ error: { message: 'Model id : deepseek-ai/DeepSeek-V4.1-Flash , has no provider supported' } }),
+  );
+  assert.match(message, /没有可用的该模型 provider/);
+  assert.match(message, /Base URL/);
+  assert.match(message, /工具调用/);
+});
+
 test('provider failures keep the HTML base-url diagnosis and truncate long details', async () => {
   const html = await chatErrorMessage(404, '<!DOCTYPE html><html><body>gateway</body></html>');
   assert.match(html, /HTML 页面/);

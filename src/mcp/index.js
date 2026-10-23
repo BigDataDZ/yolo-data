@@ -4,9 +4,9 @@
 import { randomUUID } from 'node:crypto';
 import { createMcpSessionManager } from './transport.js';
 import { createMcpServer } from './server.js';
-import { getMcpConfig } from './config.js';
+import { getMcpConfig, getMcpConfigAsync } from './config.js';
 import { createMcpRateLimiter } from './rateLimit.js';
-import { validateApiKey, isOriginAllowed } from './auth.js';
+import { validateApiKey, validateApiKeyAsync, isOriginAllowed } from './auth.js';
 import { MCP_ERROR, auditToolCall } from './audit.js';
 
 function jsonRpcError(res, status, code, message) {
@@ -54,13 +54,13 @@ export function createMcpModule(application) {
   }
 
   async function handle(ctx) {
-    const cfg = getMcpConfig(database);
+    const cfg = await getMcpConfigAsync(database);
     if (!cfg.enabled) {
       return jsonRpcError(ctx.response, 403, MCP_ERROR.NOT_OPEN, 'MCP 服务未启用');
     }
     const authHeader = ctx.request.headers['authorization'] ?? '';
     const rawKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    const keyInfo = rawKey ? validateApiKey(database, rawKey) : null;
+    const keyInfo = rawKey ? await validateApiKeyAsync(database, rawKey) : null;
     if (!keyInfo) {
       return jsonRpcError(ctx.response, 401, MCP_ERROR.UNAUTHENTICATED, '无效或缺失的 API Key');
     }

@@ -61,7 +61,7 @@ export async function auditToolCall(database, meta, fn) {
     throw error;
   } finally {
     try {
-      database.addAuditLog({
+      const entry = {
         userId: null,
         themeId: null,
         action: `MCP_${meta.toolName}`,
@@ -77,7 +77,12 @@ export async function auditToolCall(database, meta, fn) {
           durationMs: Date.now() - start,
           resultSummary,
         },
-      });
+      };
+      if (typeof database.addAuditLogAsync === 'function') {
+        await database.addAuditLogAsync(entry);
+      } else if (typeof database.addAuditLog === 'function') {
+        database.addAuditLog(entry);
+      }
     } catch {
       // 审计失败绝不影响工具调用本身
     }

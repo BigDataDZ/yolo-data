@@ -37,7 +37,9 @@ export function registerGetSnapshot(server, ctx) {
     return auditToolCall(database, buildMeta('get_snapshot', requestContext, args), async () => {
       let artifact;
       try {
-        artifact = await workspace.getArtifact({ artifactId: args.artifactId, userId: args.userId });
+        artifact = workspace.getArtifactAsync
+          ? await workspace.getArtifactAsync({ artifactId: args.artifactId, userId: args.userId })
+          : await workspace.getArtifact({ artifactId: args.artifactId, userId: args.userId });
       } catch (error) {
         throw fail(MCP_ERROR.CONTRACT_NOT_FOUND, '产物不存在或无权限访问');
       }

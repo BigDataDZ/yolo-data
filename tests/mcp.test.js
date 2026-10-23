@@ -89,8 +89,8 @@ function makeFakeAgent() {
       source: 'LOCAL',
       scope: {},
     }),
-    indicatorClient: {
-      mode: 'supersonic',
+    indicatorService: {
+      mode: '本地指标目录',
       getIndicator: async (id) => ({ id, name: id, dimensions: [{ field: 'region' }] }),
       queryIndicator: async () => ({ columns: [{ name: '销售额' }], resultList: [{ 销售额: 100 }] }),
     },

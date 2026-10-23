@@ -2,10 +2,10 @@
 data/*
 !data/.gitkeep
 
-# Local secrets and environment overrides.
+# Legacy dotenv files. The platform no longer reads them (config lives in yolo-conf.yaml);
+# kept ignored so a leftover file with real credentials can never be committed by accident.
 .env
 .env.*
-!.env.example
 
 node_modules/
 .venv/

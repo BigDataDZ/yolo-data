@@ -135,10 +135,7 @@ async function renderThemeEditorPage(root, theme) {
     return;
   }
   root.innerHTML = '<div class="loading-state"><span class="spinner"></span>正在加载智能体配置</div>';
-  const allIndicators = (await api('/api/indicators?limit=2000')).items ?? [];
-  const indicatorSource = state.bootstrap?.health?.source?.indicatorSource ?? null;
   const models = await api('/api/models');
-  const selectedIds = new Set(theme?.indicatorIds ?? []);
   const selectedSkillCodes = new Set(
     theme?.skillCodes
       ?? state.skills.filter((skill) => skill.defaultEnabled).map((skill) => skill.code),
@@ -146,6 +143,7 @@ async function renderThemeEditorPage(root, theme) {
   const selectedBusinessDatasetIds = new Set(
     (theme?.businessDatasetIds ?? []).map((id) => String(id)),
   );
+  const configuredIndicatorIds = new Set((theme?.indicatorIds ?? []).map(String));
   const selectedModelIds = new Set(
     (theme?.modelIds ?? []).map((id) => String(id)),
   );
@@ -329,21 +327,6 @@ async function renderThemeEditorPage(root, theme) {
           </header>
           <div class="form-grid">
             <div class="form-field span-2">
-              <label>主题指标</label>
-              <div class="check-grid">
-                ${allIndicators.length === 0
-                  ? `<div class="muted">${indicatorSource === 'UNAVAILABLE'
-                    ? '未接入指标平台，且本地无指标快照，暂无可选指标；智能体仍可正常编辑和保存。'
-                    : '暂无可选指标。'}</div>`
-                  : allIndicators.map((indicator) => `
-                  <label class="check-item">
-                    <input type="checkbox" name="themeIndicator" value="${escapeAttr(indicator.id)}"${selectedIds.has(String(indicator.id)) ? ' checked' : ''} />
-                    <span>${escapeHtml(indicator.name)}<small class="muted"> ${escapeHtml(indicator.typeName ?? '')}</small></span>
-                  </label>
-                `).join('')}
-              </div>
-            </div>
-            <div class="form-field span-2">
               <label>智能体 Skills</label>
               <div class="check-grid">
                 ${state.skills.map((skill) => `
@@ -406,10 +389,7 @@ async function renderThemeEditorPage(root, theme) {
   const semanticValueFields = modal.querySelector('#themeSemanticValueFields');
   let semanticValueFieldsLoaded = false;
   const selectedSemanticSourceScope = () => {
-    const indicatorIds = new Set(
-      [...modal.querySelectorAll('[name="themeIndicator"]:checked')]
-        .map((input) => String(input.value)),
-    );
+    const indicatorIds = new Set(configuredIndicatorIds);
     const businessDatasetIds = new Set(
       [...modal.querySelectorAll('[name="themeBusinessDataset"]:checked')]
         .map((input) => String(input.value)),
@@ -575,7 +555,7 @@ async function renderThemeEditorPage(root, theme) {
     clearTimeout(semanticPreviewTimer);
     semanticPreviewTimer = setTimeout(loadSemanticValuePreview, delay);
   };
-  modal.querySelectorAll('[name="themeIndicator"], [name="themeBusinessDataset"]')
+  modal.querySelectorAll('[name="themeBusinessDataset"]')
     .forEach((input) => input.addEventListener('change', () => scheduleSemanticValuePreview()));
   const refreshThemeDatasetFieldCount = async (datasetId) => {
     const node = modal.querySelector(`[data-theme-dataset-field-count="${datasetId}"]`);
@@ -630,10 +610,9 @@ async function renderThemeEditorPage(root, theme) {
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean),
-      indicatorIds: [...modal.querySelectorAll('[name="themeIndicator"]:checked')]
-        .map((input) => input.value),
       businessDatasetIds: [...modal.querySelectorAll('[name="themeBusinessDataset"]:checked')]
         .map((input) => Number(input.value)),
+      primaryBusinessDatasetId: null,
       modelIds: [...modal.querySelectorAll('[name="themeModel"]:checked')]
         .map((input) => Number(input.value)),
       defaultModelId: Number(modal.querySelector('#themeDefaultModel').value),

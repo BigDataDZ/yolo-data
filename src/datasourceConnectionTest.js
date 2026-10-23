@@ -5,12 +5,11 @@ function connectionFields(source) {
     source.username, source.encryptedPassword, source.options];
 }
 
+// Legacy synchronous facade; active request paths use the repository's async method.
 export function saveDataSourceTest(database, id, { ok, message }, testedSource = null) {
   const current = database.getDataSource(id);
   if (!current || (testedSource && !isDeepStrictEqual(connectionFields(current), connectionFields(testedSource)))) return current;
   const timestamp = new Date().toISOString();
-  // Compare the persisted connection too, so another process cannot attach a
-  // result to a configuration changed between this read and the UPDATE.
   database.db.prepare(`
     UPDATE data_sources
     SET last_test_at = ?, last_test_ok = ?, last_test_message = ?, updated_at = ?
@@ -20,4 +19,14 @@ export function saveDataSourceTest(database, id, { ok, message }, testedSource =
     current.dbType, current.host, current.port, current.databaseName,
     current.username, current.encryptedPassword, current.optionsJson);
   return database.getDataSource(id);
+}
+
+export async function saveDataSourceTestAsync(database, id, result, testedSource = null) {
+  const repository = database.dataSourceRepository;
+  if (repository?.updateDataSourceTestAsync) {
+    const current = await repository.getDataSourceAsync(id);
+    if (!current || (testedSource && !isDeepStrictEqual(connectionFields(current), connectionFields(testedSource)))) return current;
+    return repository.updateDataSourceTestAsync(id, result, current);
+  }
+  return saveDataSourceTest(database, id, result, testedSource);
 }

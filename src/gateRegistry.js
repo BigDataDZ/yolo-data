@@ -64,7 +64,7 @@ const GATES = [
     layer: 'SEMANTIC',
     name: '语义对象实时发现',
     description: '指标和数据集必须来自当前实时授权目录。',
-    owner: 'indicatorClient.js / businessDatasets.js',
+    owner: 'indicatorService.js / businessDatasets.js',
     blocking: true,
     skillBypassAllowed: false,
   },

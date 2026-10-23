@@ -87,18 +87,10 @@ export function openIndicatorManager({
         [...modal.querySelectorAll('[name="indicatorTheme"]:checked')]
           .map((input) => String(input.value)),
       );
-      await Promise.all(themes.map((theme) => {
-        const indicatorIds = new Set((theme.indicatorIds ?? []).map(String));
-        if (selected.has(String(theme.id))) {
-          indicatorIds.add(String(indicator.id));
-        } else {
-          indicatorIds.delete(String(indicator.id));
-        }
-        return api(`/api/themes/${theme.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ indicatorIds: [...indicatorIds] }),
-        });
-      }));
+      await api(`/api/indicators/${encodeURIComponent(indicator.id)}/themes`, {
+        method: 'PUT',
+        body: JSON.stringify({ themeIds: [...selected].map(Number) }),
+      });
       toast('指标挂载关系已更新');
       closeModal();
       await loadBootstrap(state.currentUser.id);

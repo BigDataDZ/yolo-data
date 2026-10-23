@@ -222,7 +222,7 @@ function valueFor(metricName, dimensions, row) {
 // Synthetic indicator source used only by automated tests.
 export class FakeIndicatorClient {
   constructor() {
-    this.mode = 'supersonic';
+    this.mode = '本地指标目录';
   }
 
   async health() {

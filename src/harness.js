@@ -50,8 +50,12 @@ function providerErrorMessage(status, payload, responseText) {
     ?? (Number(status) >= 500
       ? '上游模型服务暂时不可用，请稍后重试。'
       : '请检查「模型管理」中的模型配置。');
+  const providerMismatch = /has no provider supported|no (?:endpoint|provider)s? found|provider supported/i.test(cleaned);
+  const actionableHint = providerMismatch
+    ? '当前 Base URL 没有可用的该模型 provider；请使用模型服务商提供的 Base URL 和完整模型标识，并确认该模型支持工具调用。'
+    : hint;
   const suffix = cleaned ? `（上游返回：${truncate(cleaned, 160)}）` : '';
-  return `模型服务请求失败（HTTP ${status}）：${hint}${suffix}`;
+  return `模型服务请求失败（HTTP ${status}）：${actionableHint}${suffix}`;
 }
 
 function normalizeMatchText(value) {
@@ -290,7 +294,7 @@ export class OpenAICompatibleDeepSeekHarness {
       if (!response.ok) {
         throw new Error(providerErrorMessage(response.status, payload, text));
       }
-      this.onCall?.({
+      await this.onCall?.({
         ...metadata,
         callType: metadata.callType ?? 'AGENT_TOOL_ROUND',
         provider: this.provider,
@@ -306,7 +310,7 @@ export class OpenAICompatibleDeepSeekHarness {
       });
       return payload;
     } catch (error) {
-      this.onCall?.({
+      await this.onCall?.({
         ...metadata,
         callType: metadata.callType ?? 'AGENT_TOOL_ROUND',
         provider: this.provider,
@@ -370,7 +374,7 @@ export class RuleBasedHarness {
         ?? (metadata.preferBusinessDatasets ? null : catalog?.datasets?.[0]);
       if (metadata.preferBusinessDatasets && !dataset) {
         const content = '指标平台尚未配置，当前已接入的业务数据集无法回答该问题。请配置指标平台，或补充相关业务数据集。';
-        this.onCall?.({
+        await this.onCall?.({
           ...metadata,
           callType: 'AGENT_RULE_FALLBACK',
           provider: 'local-rule',
@@ -418,7 +422,7 @@ export class RuleBasedHarness {
         ).map((field) => field.name ?? field.fieldName).filter(Boolean);
         if (metricFields.length === 0) {
           const content = '本地规则运行时未找到与问题明确匹配的指标字段，且不会按相似名称猜测。请配置主题大模型或业务语义包后重试。';
-          this.onCall?.({
+          await this.onCall?.({
             ...metadata,
             callType: 'AGENT_RULE_FALLBACK',
             provider: 'local-rule',
@@ -493,7 +497,7 @@ export class RuleBasedHarness {
           summary: summarizeToolResult(result),
         });
         const content = result.summary || `已完成「${dataset.name}」业务数据查询。`;
-        this.onCall?.({
+        await this.onCall?.({
           ...metadata,
           callType: 'AGENT_RULE_FALLBACK',
           provider: 'local-rule',
@@ -520,10 +524,10 @@ export class RuleBasedHarness {
     }
     if (
       metadata.sourceMode
-      && !['supersonic'].includes(String(metadata.sourceMode))
+      && !['local', 'direct-llm'].includes(String(metadata.sourceMode))
     ) {
-      const content = '指标平台尚未配置，无法执行真实指标查询。请配置指标平台后重试。';
-      this.onCall?.({
+      const content = '当前没有可执行的业务数据集查询配置，请先配置数据集后重试。';
+      await this.onCall?.({
         ...metadata,
         callType: 'AGENT_RULE_FALLBACK',
         provider: 'local-rule',
@@ -557,7 +561,7 @@ export class RuleBasedHarness {
     });
 
     if (!candidates?.indicators?.length) {
-      this.onCall?.({
+      await this.onCall?.({
         ...metadata,
         callType: 'AGENT_RULE_FALLBACK',
         provider: 'local-rule',
@@ -612,7 +616,7 @@ export class RuleBasedHarness {
     });
 
     const content = result.summary || `已完成「${indicator.name}」查询。`;
-    this.onCall?.({
+    await this.onCall?.({
       ...metadata,
       callType: 'AGENT_RULE_FALLBACK',
       provider: 'local-rule',

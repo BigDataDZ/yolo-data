@@ -9,12 +9,12 @@ import {
   VALUE_ORIGINS,
 } from '../src/semanticDomain.js';
 
-test('dataset domain sources use Doris and never include Supersonic metadata', () => {
+test('dataset domain sources use Doris and never include 本地指标目录 metadata', () => {
   const policy = fieldPolicyConfig(true, 'DATASET');
   assert.ok(policy.sources.includes(VALUE_ORIGINS.DORIS_DISTINCT));
   assert.ok(policy.sources.includes(VALUE_ORIGINS.THEME_SEMANTIC_POLICY));
-  assert.equal(policy.sources.includes('SUPERSONIC_METADATA'), false);
-  assert.equal(policy.sources.includes('SUPERSONIC_DIMENSION'), false);
+  assert.equal(policy.sources.includes('本地指标目录_METADATA'), false);
+  assert.equal(policy.sources.includes('本地指标目录_DIMENSION'), false);
 });
 
 test('indicator domain policies default to theme and manual sources only', () => {

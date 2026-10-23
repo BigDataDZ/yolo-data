@@ -1,4 +1,5 @@
 import { serializeTaskForContract } from './turnContext.js';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 
 export function buildUnderstandingContext(memory, sessionId, userId) {
   const session = memory.getSession(sessionId, userId);
@@ -29,6 +30,31 @@ export function buildUnderstandingContext(memory, sessionId, userId) {
     historyMessageCount: messages.length,
     themeId: session.themeId,
   };
+}
+
+export async function buildUnderstandingContextAsync(memory, sessionId, userId) {
+  const session = await memory.getSessionAsync(sessionId, userId);
+  const rows = await callPlatformDatabase(memory.database, 'listChatMessagesAsync', 'listChatMessages', sessionId, userId, memory.contextLimit);
+  const turns = rows.map((message) => {
+    const taskState = message.result?.taskState ?? null;
+    return {
+      id: message.id,
+      role: message.role,
+      content: String(message.content ?? ''),
+      question: message.result?.question ?? String(message.content ?? ''),
+      taskState,
+      artifactId: message.result?.artifactId ?? null,
+      messageId: message.id,
+    };
+  });
+  const messages = turns.map(({ role, content }) => ({ role, content }));
+  const memoryMessage = memory.userMemories?.buildContextMessageAsync
+    ? await memory.userMemories.buildContextMessageAsync(userId, session.themeId)
+    : memory.database.isAsyncPlatformStore
+      ? null
+      : memory.userMemories?.buildContextMessage(userId, session.themeId) ?? null;
+  const lastTaskState = [...turns].reverse().find((message) => message.taskState)?.taskState ?? null;
+  return { messages, turns, memoryMessage, lastTaskState, historyMessageCount: messages.length, themeId: session.themeId };
 }
 
 export function buildExecutionContext({ taskState = null, question = '' } = {}) {
@@ -65,4 +91,11 @@ export function updateInitialTitle(memory, sessionId, content) {
   }
   const title = String(content ?? '').trim().replace(/\s+/g, ' ').slice(0, 24) || '新会话';
   return memory.database.updateChatSession(sessionId, { title });
+}
+
+export async function updateInitialTitleAsync(memory, sessionId, content) {
+  const session = await callPlatformDatabase(memory.database, 'getChatSessionAsync', 'getChatSession', sessionId);
+  if (!session || session.title !== '新会话') return session;
+  const title = String(content ?? '').trim().replace(/\s+/g, ' ').slice(0, 24) || '新会话';
+  return callPlatformDatabase(memory.database, 'updateChatSessionAsync', 'updateChatSession', sessionId, { title });
 }

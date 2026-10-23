@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { validateLocalIndicator } from './localIndicatorValidation.js';
+import { attachSqliteAsyncStore } from './sqliteAsyncStore.js';
 function nowIso() {
   return new Date().toISOString();
 }
@@ -16,34 +17,14 @@ function parseJson(value, fallback) {
 }
 
 export class LocalIndicatorRepository {
-  constructor(db) {
+  constructor(db, asyncStore = db) {
     this.db = db;
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS local_indicators (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        biz_name TEXT NOT NULL,
-        type_id TEXT NOT NULL DEFAULT '',
-        type_name TEXT NOT NULL DEFAULT '通用指标',
-        indicator_level TEXT NOT NULL DEFAULT 'ATOMIC',
-        business_caliber TEXT NOT NULL DEFAULT '',
-        description TEXT NOT NULL DEFAULT '',
-        owner TEXT NOT NULL DEFAULT '',
-        department TEXT NOT NULL DEFAULT '',
-        status INTEGER NOT NULL DEFAULT 1,
-        metrics_json TEXT NOT NULL DEFAULT '[]',
-        dimensions_json TEXT NOT NULL DEFAULT '[]',
-        models_json TEXT NOT NULL DEFAULT '[]',
-        raw_json TEXT NOT NULL DEFAULT '{}',
-        synced_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_local_indicators_name ON local_indicators(name);
-      CREATE INDEX IF NOT EXISTS idx_local_indicators_type ON local_indicators(type_id);
-    `);
+    this.asyncStore = typeof asyncStore.query === 'function'
+      ? asyncStore
+      : attachSqliteAsyncStore({}, db);
   }
 
-  save(payload, id = null) {
+  async save(payload, id = null) {
     payload = validateLocalIndicator(payload);
     const indicatorId = id
       ? String(id).trim()
@@ -74,7 +55,20 @@ export class LocalIndicatorRepository {
         localManaged: true,
       },
     };
-    this.db.prepare(`
+    const upsertSql = this.asyncStore.backend === 'mysql' ? `
+      INSERT INTO local_indicators (
+        id, name, biz_name, type_id, type_name, indicator_level,
+        business_caliber, description, owner, department, status,
+        metrics_json, dimensions_json, models_json, raw_json, synced_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        name = VALUES(name), biz_name = VALUES(biz_name), type_id = VALUES(type_id),
+        type_name = VALUES(type_name), indicator_level = VALUES(indicator_level),
+        business_caliber = VALUES(business_caliber), description = VALUES(description),
+        owner = VALUES(owner), department = VALUES(department), status = VALUES(status),
+        metrics_json = VALUES(metrics_json), dimensions_json = VALUES(dimensions_json),
+        models_json = VALUES(models_json), raw_json = VALUES(raw_json), updated_at = VALUES(updated_at)
+    ` : `
       INSERT INTO local_indicators (
         id, name, biz_name, type_id, type_name, indicator_level,
         business_caliber, description, owner, department, status,
@@ -96,7 +90,8 @@ export class LocalIndicatorRepository {
         models_json = excluded.models_json,
         raw_json = excluded.raw_json,
         updated_at = excluded.updated_at
-    `).run(
+    `;
+    await this.asyncStore.execute(upsertSql, [
       indicatorId,
       indicator.name,
       indicator.bizName,
@@ -114,12 +109,12 @@ export class LocalIndicatorRepository {
       JSON.stringify(indicator.raw),
       timestamp,
       timestamp,
-    );
-    return this.get(indicatorId);
+    ]);
+    return this.getAsync(indicatorId);
   }
 
-  get(id) {
-    return this.mapRow(this.db.prepare(`
+  async getAsync(id) {
+    const [row] = await this.asyncStore.query(`
       SELECT id, name, biz_name AS bizName, type_id AS typeId,
              type_name AS typeName, indicator_level AS indicatorLevel,
              business_caliber AS businessCaliber, description, owner, department,
@@ -127,60 +122,43 @@ export class LocalIndicatorRepository {
              models_json AS modelsJson, raw_json AS rawJson,
              synced_at AS syncedAt, updated_at AS updatedAt
       FROM local_indicators WHERE id = ?
-    `).get(String(id)));
+    `, [String(id)]);
+    return this.mapRow(row);
   }
 
-  delete(id) {
-    const result = this.db.prepare(
-      'DELETE FROM local_indicators WHERE id = ?',
-    ).run(String(id));
-    return Number(result.changes ?? 0) > 0;
+  async deleteAsync(id) {
+    const result = await this.asyncStore.execute('DELETE FROM local_indicators WHERE id = ?', [String(id)]);
+    return Number(result.affectedRows) > 0;
   }
 
-  list({ keyword = '', typeId = '', limit = 500, enabledOnly = false } = {}) {
+  async listAsync({ keyword = '', typeId = '', limit = 500, enabledOnly = false } = {}) {
     const normalizedKeyword = String(keyword).trim().toLowerCase();
     const normalizedTypeId = String(typeId ?? '').trim();
-    const rows = this.db.prepare(`
-      SELECT id, name, biz_name AS bizName, type_id AS typeId,
-             type_name AS typeName, indicator_level AS indicatorLevel,
-             business_caliber AS businessCaliber, description, owner, department,
-             status, metrics_json AS metricsJson, dimensions_json AS dimensionsJson,
-             models_json AS modelsJson, raw_json AS rawJson,
-             synced_at AS syncedAt, updated_at AS updatedAt
-      FROM local_indicators WHERE (? = 0 OR status = 1) ORDER BY name
-    `).all(enabledOnly ? 1 : 0).map((row) => this.mapRow(row));
-    return rows
+    const rows = await this.asyncStore.query(`SELECT id, name, biz_name AS bizName,
+      type_id AS typeId, type_name AS typeName, indicator_level AS indicatorLevel,
+      business_caliber AS businessCaliber, description, owner, department, status,
+      metrics_json AS metricsJson, dimensions_json AS dimensionsJson,
+      models_json AS modelsJson, raw_json AS rawJson, synced_at AS syncedAt,
+      updated_at AS updatedAt FROM local_indicators WHERE (? = 0 OR status = 1) ORDER BY name`, [enabledOnly ? 1 : 0]);
+    return rows.map((row) => this.mapRow(row))
       .filter((item) => !normalizedTypeId || String(item.typeId) === normalizedTypeId)
-      .filter((item) => !normalizedKeyword || [
-        item.name,
-        item.bizName,
-        item.description,
-        item.businessCaliber,
-        item.typeName,
-      ].some((value) => String(value ?? '').toLowerCase().includes(normalizedKeyword)))
+      .filter((item) => !normalizedKeyword || [item.name, item.bizName, item.description,
+        item.businessCaliber, item.typeName].some((value) => String(value ?? '').toLowerCase().includes(normalizedKeyword)))
       .slice(0, Math.max(1, Math.min(Number(limit) || 500, 2000)));
   }
 
-  listTypes() {
+  async listTypesAsync() {
     const byId = new Map();
-    for (const indicator of this.list({ limit: 2000 })) {
+    for (const indicator of await this.listAsync({ limit: 2000 })) {
       const id = String(indicator.typeId || indicator.typeName);
-      if (id && !byId.has(id)) {
-        byId.set(id, {
-          id,
-          name: indicator.typeName || id,
-          code: '',
-          parentId: '',
-        });
-      }
+      if (id && !byId.has(id)) byId.set(id, { id, name: indicator.typeName || id, code: '', parentId: '' });
     }
     return [...byId.values()];
   }
 
-  count() {
-    return Number(this.db.prepare(
-      'SELECT COUNT(*) AS count FROM local_indicators',
-    ).get()?.count ?? 0);
+  async countAsync() {
+    const [row] = await this.asyncStore.query('SELECT COUNT(*) AS count FROM local_indicators');
+    return Number(row?.count ?? 0);
   }
 
   mapRow(row) {

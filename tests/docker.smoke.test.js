@@ -73,7 +73,7 @@ test('Docker image supports sessions and preserves SQLite and encryption keys ac
         assert.equal(new DatasourceCrypto({ keyFilePath }).decrypt(row.password), '${SOURCE_PASSWORD}');
         console.log(JSON.stringify({ ciphertext: row.password,
           keyHash: crypto.createHash('sha256').update(fs.readFileSync(keyFilePath)).digest('hex') }));
-      } finally { database.close(); }
+      } finally { await database.closeAsync(); }
     `));
   }
 
