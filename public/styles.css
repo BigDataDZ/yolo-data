@@ -2324,6 +2324,14 @@ body.workspace-open .app-shell {
   align-items: start;
 }
 
+.two-column.permissions-layout {
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+}
+
+.permissions-layout > * {
+  min-width: 0;
+}
+
 .list-pane {
   border: 1px solid #e2ebf3;
   border-radius: var(--radius);
@@ -2354,6 +2362,74 @@ body.workspace-open .app-shell {
 .user-list {
   max-height: 620px;
   overflow: auto;
+}
+
+.permission-user-search-wrap {
+  padding: 12px 14px;
+  border-bottom: 1px solid #eef3f7;
+}
+
+.permission-user-search-wrap .field {
+  width: 100%;
+}
+
+.permission-users-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.permission-users-table {
+  min-width: 850px;
+}
+
+.permission-users-table th,
+.permission-users-table td {
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.permission-user-row {
+  cursor: pointer;
+}
+
+.permission-user-row.is-active td {
+  background: #edf5ff;
+}
+
+.permission-user-row:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+.permission-user-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permission-user-name .user-avatar {
+  width: 27px;
+  height: 27px;
+}
+
+.permission-users-pagination {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid #eef3f7;
+}
+
+.permission-users-pagination .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.permission-users-empty {
+  padding: 28px 14px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .user-item {
