@@ -1,6 +1,6 @@
 [简体中文](README.md) | English
 
-# YOLO Data | Enterprise Conversational Analytics Platform
+# YOLO Data Agent| Enterprise Conversational Analytics Platform
 
 Make data analysis as simple as a conversation and its results as trustworthy as a governed process.
 
