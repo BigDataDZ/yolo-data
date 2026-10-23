@@ -52,12 +52,12 @@ skills:
   directories: []
 
 models:
-  # OpenAI-compatible API endpoint / OpenAI 兼容接口地址
-  baseUrl: https://api-inference.modelscope.cn/v1
-  # API credential (secret); blank uses local-rule / API 密钥（机密）；留空使用本地规则模型
-  apiKey: "ms-2f3dba7d-22c6-47e6-9dee-d6edbfa844b5"
+  # OpenAI-compatible API endpoint / OpenAI 兼容接口地址，生产环境请切换为自己的大模型API和Key
+  baseUrl: https://open.bigmodel.cn/api/paas/v4
+  # API credential (secret); blank uses local-rule / API 密钥（机密）；有频次限制，并发数1，生产环境请切换为自己的大模型API和Key
+  apiKey: "ENC:/bszXtHZ7XnHkcMg:gwPywjcEmRiC0Cn0faoqMg==:KvPhaz+DQlu+Jx/ng56YhSt9XPwN4/ssYOP6OYIkgUxNd7jAZEcM3Csuz7vGsObZNA=="
   # Model identifier / 模型标识
-  model: deepseek-ai/DeepSeek-V4.1-Flash-1017
+  model: GLM-4.7-Flash
   # Sampling temperature / 采样温度
   temperature: 0
   # Maximum output tokens; 0 uses provider default / 最大输出 Token 数；0 使用服务商默认值

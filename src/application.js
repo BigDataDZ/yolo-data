@@ -163,6 +163,9 @@ export async function createApplication(config = loadConfig()) {
       ?? path.resolve(config.projectRoot ?? process.cwd(), 'data', '.datasource-key'),
     secretKey: config.datasourceSecretKey,
   });
+  if (String(config.deepseek.apiKey ?? '').startsWith('ENC:')) {
+    config.deepseek.apiKey = datasourceCrypto.decrypt(config.deepseek.apiKey);
+  }
   const businessDatasets = new BusinessDatasetService({
     database,
     crypto: datasourceCrypto,
