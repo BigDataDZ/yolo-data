@@ -8,7 +8,17 @@ import test from 'node:test';
 import { createMcpModule } from '../src/mcp/index.js';
 import { createZip, buildConnectorPackage } from '../src/mcp/connectorPackage.js';
 import { getMcpConfig, setMcpConfig, _resetMcpConfigCache } from '../src/mcp/config.js';
-import { generateApiKey, validateApiKey } from '../src/mcp/auth.js';
+import { createRouteTable } from '../src/http/router.js';
+import { registerMcpAdminRoutes } from '../src/http/routes/mcpAdmin.js';
+import {
+  generateApiKey,
+  generateApiKeyAsync,
+  listApiKeys,
+  listApiKeysAsync,
+  revokeApiKeyAsync,
+  validateApiKey,
+  validateApiKeyAsync,
+} from '../src/mcp/auth.js';
 import { createModeGate } from '../src/mcp/modeGate.js';
 
 const FULL_CONFIG = {
@@ -186,6 +196,56 @@ test('validateApiKey 仅接受带 mcp_ 前缀的哈希命中', async () => {
   assert.equal(info.tenantId, 'acme');
   assert.equal(validateApiKey(db, 'wrong'), null);
   assert.equal(validateApiKey(db, 'mcp_xxxx'), null);
+});
+
+test('async-only platform store supports the complete MCP API key lifecycle', async () => {
+  const keys = new Map();
+  const database = {
+    isAsyncPlatformStore: true,
+    createMcpApiKeyAsync: async (input) => {
+      keys.set(input.keyId, { ...input, revoked: 0 });
+      return { keyId: input.keyId, name: input.name ?? 'mcp', tenantId: input.tenantId ?? 'default' };
+    },
+    getMcpApiKeyByHashAsync: async (keyHash) => {
+      const record = [...keys.values()].find((key) => key.keyHash === keyHash && !key.revoked);
+      return record ? { ...record, scopes: record.scopes ?? 'mcp' } : null;
+    },
+    listMcpApiKeysAsync: async () => [...keys.values()].map(({ keyHash, ...key }) => key),
+    revokeMcpApiKeyAsync: async (keyId) => {
+      const key = keys.get(keyId);
+      if (!key || key.revoked) return false;
+      key.revoked = 1;
+      return true;
+    },
+  };
+
+  const created = await generateApiKeyAsync(database, { name: 'async test', tenantId: 'acme', createdBy: 7 });
+  assert.match(created.rawKey, /^mcp_[a-f0-9]{48}$/);
+  assert.equal((await validateApiKeyAsync(database, created.rawKey)).tenantId, 'acme');
+  assert.equal((await listApiKeys(database)).length, 1);
+  assert.equal((await listApiKeysAsync(database)).length, 1);
+  assert.equal(await revokeApiKeyAsync(database, created.keyId), true);
+  assert.equal(await validateApiKeyAsync(database, created.rawKey), null);
+  assert.equal(await revokeApiKeyAsync(database, created.keyId), false);
+});
+
+test('MCP API key list route uses the async-only platform database contract', async () => {
+  const table = createRouteTable();
+  registerMcpAdminRoutes(table);
+  const route = table.match('GET', '/admin/mcp/keys').route;
+  const expected = [{ keyId: 'key_async', name: 'test', tenantId: 'default', scopes: 'mcp' }];
+  const database = {
+    isAsyncPlatformStore: true,
+    listMcpApiKeysAsync: async () => expected,
+    listMcpApiKeys() { throw new Error('sync MCP key API must not be used'); },
+  };
+  let response;
+  await route.handler({
+    database,
+    response: {},
+    sendJson: (_response, status, body) => { response = { status, body }; },
+  });
+  assert.deepEqual(response, { status: 200, body: expected });
 });
 
 test('getMcpConfig 五秒缓存', async () => {

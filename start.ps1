@@ -22,9 +22,7 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$NodeReady = $false
-& node -e "Promise.all([import('@modelcontextprotocol/sdk'),import('mysql2/promise'),import('knex'),import('yaml'),import('zod')]).catch(()=>process.exit(1))" 2>$null
-$NodeReady = $LASTEXITCODE -eq 0
+$NodeReady = (Test-Path (Join-Path $ProjectRoot 'node_modules'))
 $VenvPython = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 $PythonReady = $false
 if (Test-Path $VenvPython) {
@@ -32,18 +30,43 @@ if (Test-Path $VenvPython) {
     $PythonReady = $LASTEXITCODE -eq 0
 }
 
-if (-not $NodeReady -or -not $PythonReady) {
-    Write-Host '首次启动或检测到依赖缺失，需要初始化运行环境。'
+if ($NodeReady -and $PythonReady) {
+    Write-Host '项目已初始化，跳过依赖安装。'
+} else {
+    Write-Host '首次启动或检测到运行环境未就绪，需要初始化。'
     $NpmChoice = Read-Host 'npm registry (Enter keeps current setting; m selects npmmirror)'
     if ($NpmChoice -match '^[mM]$') { $env:npm_config_registry = 'https://registry.npmmirror.com' }
     $PipChoice = Read-Host 'Python package index (Enter keeps current setting; a selects Aliyun mirror)'
     if ($PipChoice -match '^[aA]$') { $env:PIP_INDEX_URL = 'https://mirrors.aliyun.com/pypi/simple/' }
     & npm run setup
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-} else {
-    Write-Host '运行依赖已就绪，跳过安装。'
 }
 
 Write-Host '正在启动……'
-& npm run dev
-exit $LASTEXITCODE
+$DevProcess = Start-Process -FilePath 'node' -ArgumentList @('scripts/dev.mjs') -WorkingDirectory $ProjectRoot -NoNewWindow -PassThru
+$Port = 8088
+try {
+    $PortConfig = Get-Content -LiteralPath (Join-Path $ProjectRoot 'yolo-conf.yaml') -Raw
+    if ($PortConfig -match '(?m)^\s*port:\s*(\d+)\s*(?:#.*)?$') { $Port = [int]$Matches[1] }
+} catch { }
+if ($env:PORT -match '^\d+$') { $Port = [int]$env:PORT }
+$Url = "http://127.0.0.1:$Port"
+$Started = $false
+for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
+    if ($DevProcess.HasExited) {
+        Write-Error "启动进程已退出，退出码：$($DevProcess.ExitCode)"
+        exit $DevProcess.ExitCode
+    }
+    try {
+        $Health = Invoke-RestMethod -Uri "$Url/api/health" -TimeoutSec 2
+        if ($Health.status -eq 'ok') { $Started = $true; break }
+    } catch { }
+    Start-Sleep -Seconds 1
+}
+if (-not $Started) {
+    Write-Error "等待服务启动超时，请检查启动日志（端口 $Port）。"
+    exit 1
+}
+Write-Host "Project start success: $Url"
+Wait-Process -Id $DevProcess.Id
+exit $DevProcess.ExitCode

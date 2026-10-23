@@ -67,3 +67,17 @@ bootstrapDatasource:
 
 想改客户 / 商品维度，改 `config/demo/salesDemoData.mjs` 顶部的 `CUSTOMERS`、`GOODS` 两个池子即可，
 表结构变更则只改 `ads_sale_detail.schema.json`，DDL、CSV、字段语义会一起跟着变。
+
+## 平台配置初始化快照
+
+MySQL 平台库首次初始化时，会导入 `config/bootstrap/platform-seed.json` 中的配置数据。
+重新从当前平台库生成快照：
+
+```bash
+npm run db:config:export
+```
+
+空库也可手动运行 `npm run db:config:seed`；若配置表已有数据，脚本会跳过，不覆盖现存配置。
+快照包含用户资料、主题、模型定义、Skills、数据源/数据集与字段、权限及语义配置；不包含
+`ads_sale_detail`、会话/工作区/审计/调用日志，也会移除密码哈希、API Key 与数据源密码。
+新环境初始化后需通过环境变量或管理界面重新配置模型 Key、数据源密码和用户口令。

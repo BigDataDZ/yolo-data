@@ -171,7 +171,9 @@ export function loadConfig(env = process.env) {
         dbType: String(env.DEMO_DB_TYPE ?? 'MYSQL').trim().toUpperCase(),
         host: String(env.DEMO_DB_HOST ?? '').trim(),
         port: readInt(env.DEMO_DB_PORT, 3306),
-        schemaName: String(env.DEMO_DB_DATABASE ?? env.PLATFORM_DB_NAME ?? '').trim(),
+        // Blank demo database means reuse the platform database. The config
+        // file loader materializes blank values as empty strings, so use ||.
+        schemaName: String(env.DEMO_DB_DATABASE || env.PLATFORM_DB_NAME || '').trim(),
         username: String(env.DEMO_DB_USER ?? '').trim(),
         password: String(env.DEMO_DB_PASSWORD ?? ''),
       },
