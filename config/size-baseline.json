@@ -158,7 +158,7 @@
   "src/platformBootstrap.js": 94,
   "src/platformBackend.js": 31,
   "src/platformDatabase.js": 61,
-  "src/platformLogRepository.js": 241,
+  "src/platformLogRepository.js": 215,
   "src/presentationFallbacks.js": 63,
   "src/processArtifacts.js": 173,
   "src/promptSanitizer.js": 123,
@@ -217,5 +217,6 @@
   "src/workspaceRepository.js": 287,
   "src/xlsx.js": 369,
   "src/xlsxReader.js": 480,
-  "src/skillAudits.js": 119
+  "src/skillAudits.js": 119,
+  "src/platformAsyncLogRepository.js": 168
 }
