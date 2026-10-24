@@ -92,7 +92,7 @@
   "src/distributedLock.js": 121,
   "src/executionRecovery.js": 61,
   "src/fastQueryPath.js": 116,
-  "src/feedback.js": 76,
+  "src/feedback.js": 45,
   "src/fileName.js": 96,
   "src/fileParsing.js": 320,
   "src/gateRegistry.js": 447,
@@ -220,5 +220,6 @@
   "src/skillAudits.js": 119,
   "src/platformAsyncLogRepository.js": 168,
   "src/dataSourceRow.js": 25,
-  "src/mcp/configValues.js": 44
+  "src/mcp/configValues.js": 44,
+  "src/feedbackSubmission.js": 69
 }
