@@ -73,13 +73,34 @@ import os from 'node:os';
 import path from 'node:path';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
+async function workerMessage(child, stderr) {
+  const exited = new AbortController();
+  const onExit = () => exited.abort();
+  child.once('exit', onExit);
+  if (child.exitCode !== null || child.signalCode !== null) exited.abort();
+  try {
+    const [message] = await once(child, 'message', {
+      signal: AbortSignal.any([AbortSignal.timeout(30_000), exited.signal]),
+    });
+    return message;
+  } catch (error) {
+    throw new Error(`Upload worker ${child.pid} failed to reply: ${stderr()}`, { cause: error });
+  } finally { child.off('exit', onExit); }
+}
+
+async function stopWorker(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, 'exit', { signal: AbortSignal.timeout(5_000) });
+  child.kill();
+  await exited;
+}
+
 for (const quota of [{ maxFilesPerSession: 1 }, { maxTotalBytesPerSession: Buffer.from(contentBase64, 'base64').length }]) {
   test(`independent SQLite processes serialize first-workspace admission (${Object.keys(quota)[0]})`, async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'upload-admission-'));
     const filename = path.join(directory, 'platform.db');
     const database = new PlatformDatabase(filename);
     const children = [];
-    const exits = [];
     try {
       const user = database.getUserByUsername('admin');
       const session = database.createChatSession({ userId: user.id, themeId: database.listThemes()[0].id });
@@ -87,10 +108,12 @@ for (const quota of [{ maxFilesPerSession: 1 }, { maxTotalBytesPerSession: Buffe
       for (let i = 0; i < 2; i++) {
         const child = fork(new URL('./fixtures/uploadAdmissionWorker.mjs', import.meta.url), [filename, String(user.id), String(session.id), JSON.stringify(quota)], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
         children.push(child);
-        exits.push(once(child, 'exit'));
-        const ready = await once(child, 'message');
-        assert.equal(ready[0].ready, true);
-        completions.push(once(child, 'message').then(([message]) => message));
+        let stderr = '';
+        child.stderr.on('data', chunk => { stderr += chunk; });
+        const ready = await workerMessage(child, () => stderr);
+        assert.equal(ready.ready, true);
+        // Observe failures immediately, even while the next worker starts.
+        completions.push(workerMessage(child, () => stderr).catch(error => ({ status: 'worker-error', message: error.message })));
       }
       children.forEach(child => child.send('go'));
       const results = await Promise.all(completions);
@@ -99,10 +122,14 @@ for (const quota of [{ maxFilesPerSession: 1 }, { maxTotalBytesPerSession: Buffe
       const rows = database.db.prepare('SELECT metadata_json AS metadataJson FROM workspace_artifacts WHERE session_id=?').all(session.id);
       assert.equal(rows.filter(row => JSON.parse(row.metadataJson).source?.type === 'UPLOAD').length, 1);
     } finally {
-      children.forEach(child => child.kill());
-      await Promise.all(exits);
-      database.close();
-      fs.rmSync(directory, { recursive: true, force: true });
+      try {
+        const stopped = await Promise.allSettled(children.map(stopWorker));
+        const failure = stopped.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+      } finally {
+        database.close();
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
     }
   });
 }
