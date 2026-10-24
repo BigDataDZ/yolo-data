@@ -55,3 +55,38 @@ test('Docker acceptance environment overrides packaged database and demo setting
     assert.equal(target.DEFAULT_USER_PASSWORD, password);
   }
 });
+
+test('Docker acceptance boots with packaged configuration and a fresh encryption key', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-docker-boot-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const args = dockerEnvironmentArgs('docker-acceptance-password');
+  const environment = Object.fromEntries(args.filter((_, index) => index % 2 === 1)
+    .map(value => { const index = value.indexOf('='); return [value.slice(0, index), value.slice(index + 1)]; }));
+  execFileSync(process.execPath, ['--input-type=module', '-e', `
+    import assert from 'node:assert/strict';
+    import path from 'node:path';
+    import { loadConfig } from './src/config.js';
+    import { createApplication } from './src/application.js';
+    globalThis.fetch = () => { throw new Error('Docker acceptance must not call an external API'); };
+    const config = loadConfig();
+    config.datasourceSecretKeyPath = path.join(path.dirname(config.dbPath), '.datasource-key');
+    const application = await createApplication(config);
+    try {
+      await application.init();
+      assert.equal(config.platformDatabase.seedResources, false);
+      assert.equal(config.deepseek.apiKey, 'docker-acceptance-unused');
+      assert.equal(config.deepseek.baseUrl, 'http://127.0.0.1:9/v1');
+      assert.deepEqual(await application.businessDatasets.listDataSourcesAsync(), []);
+      assert.equal((await application.currentHealth()).status, 'ok');
+    } finally {
+      application.memoryMaintenance.stop();
+      await application.database.closeAsync();
+    }
+  `], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)), encoding: 'utf8', timeout: 20_000,
+    env: { ...process.env, ...environment,
+      PLATFORM_DB_PATH: path.join(directory, 'platform.db'),
+      YOLO_CONF_FILE: fileURLToPath(new URL('../yolo-conf.yaml', import.meta.url)),
+    },
+  });
+});
