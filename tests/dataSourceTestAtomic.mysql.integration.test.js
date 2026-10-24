@@ -47,4 +47,3 @@ test('live MySQL rejects stale connection results including case-only credential
     assert.ok(fresh.lastTestAt, field);
   }
 });
-
