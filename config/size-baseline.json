@@ -160,7 +160,7 @@
   "src/platformDatabase.js": 61,
   "src/platformLogRepository.js": 215,
   "src/presentationFallbacks.js": 63,
-  "src/processArtifacts.js": 173,
+  "src/processArtifacts.js": 89,
   "src/promptSanitizer.js": 123,
   "src/queryContract.js": 358,
   "src/queryContractCompiler.js": 2285,
@@ -221,5 +221,6 @@
   "src/platformAsyncLogRepository.js": 168,
   "src/dataSourceRow.js": 25,
   "src/mcp/configValues.js": 44,
-  "src/feedbackSubmission.js": 69
+  "src/feedbackSubmission.js": 69,
+  "src/processArtifactDraft.js": 119
 }
