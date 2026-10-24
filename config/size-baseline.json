@@ -129,7 +129,7 @@
   "src/localIndicatorValidation.js": 38,
   "src/mcp/audit.js": 103,
   "src/mcp/auth.js": 54,
-  "src/mcp/config.js": 73,
+  "src/mcp/config.js": 57,
   "src/mcp/connectorPackage.js": 115,
   "src/mcp/index.js": 93,
   "src/mcp/modeGate.js": 46,
@@ -218,5 +218,6 @@
   "src/xlsx.js": 369,
   "src/xlsxReader.js": 480,
   "src/skillAudits.js": 119,
-  "src/platformAsyncLogRepository.js": 168
+  "src/platformAsyncLogRepository.js": 168,
+  "src/mcp/configValues.js": 45
 }
