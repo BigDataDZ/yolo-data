@@ -145,6 +145,26 @@ test('workspace enforces user ownership', () => {
   );
 });
 
+function createTransformService(database, mode) {
+  const calls = { reads: 0, writes: 0 };
+  if (mode === 'sync') return { service: new WorkspaceService(database), calls };
+  const service = new WorkspaceService({
+    isAsyncPlatformStore: true,
+    async getWorkspaceArtifactAsync(...args) {
+      calls.reads += 1;
+      return database.getWorkspaceArtifact(...args);
+    },
+    async createWorkspaceArtifactAsync(...args) {
+      calls.writes += 1;
+      return database.createWorkspaceArtifact(...args);
+    },
+    getWorkspaceArtifact() { throw new Error('sync artifact read must not be called'); },
+    createWorkspaceArtifact() { throw new Error('sync artifact write must not be called'); },
+  });
+  service.transformArtifact = () => { throw new Error('sync transform must not be called'); };
+  return { service, calls };
+}
+
 for (const mode of ['sync', 'async']) {
   test(`workspace ${mode} transforms preserve source, numeric coercion and derived lineage`, async (t) => {
     const context = createContext();
@@ -170,13 +190,15 @@ for (const mode of ['sync', 'async']) {
         ],
       } },
     });
-    const transform = (artifactId, operation, params) => context.workspace[
+    const { service, calls } = createTransformService(context.database, mode);
+    const transform = (artifactId, operation, params) => service[
       mode === 'async' ? 'transformArtifactAsync' : 'transformArtifact'
     ]({ artifactId, userId: context.user.id, operation, params });
     const ratio = await transform(source.id, 'add_ratio_column', {
       numerator: 'value', denominator: 'base', field: 'share',
     });
     assert.deepEqual(ratio.payload.data.rows.map((row) => row.share), [0, 0, 200, null, null]);
+    if (mode === 'async') assert.deepEqual(calls, { reads: 1, writes: 1 });
     const summary = await transform(ratio.id, 'add_summary_row', { position: 'bottom' });
     assert.deepEqual(summary.payload.data.rows.at(-1), { label: '汇总', value: 10, base: 9, share: 200 });
     const sorted = await transform(ratio.id, 'sort', { field: 'share', direction: 'DESC' });
@@ -199,6 +221,8 @@ for (const mode of ['sync', 'async']) {
     assert.deepEqual(limited.metadata.operationParams, { limit: 1 });
     assert.deepEqual(context.workspace.getArtifact({ artifactId: source.id, userId: context.user.id }), source);
     assert.equal(context.workspace.listArtifacts({ workspaceId: workspace.id, userId: context.user.id }).length, 8);
+    assert.equal(context.database.countRows('artifact_versions'), 8);
+    if (mode === 'async') assert.deepEqual(calls, { reads: 7, writes: 7 });
   });
 
   test(`workspace ${mode} rejected transforms leave artifact history unchanged`, async (t) => {
@@ -211,13 +235,16 @@ for (const mode of ['sync', 'async']) {
       workspaceId: workspace.id, userId: context.user.id, sessionId: context.session.id,
       title: 'owned table', payload: { data: { columns: [], rows: [] } },
     });
-    const transform = async (userId, operation, params) => context.workspace[
+    const { service, calls } = createTransformService(context.database, mode);
+    const transform = async (userId, operation, params) => service[
       mode === 'async' ? 'transformArtifactAsync' : 'transformArtifact'
     ]({ artifactId: source.id, userId, operation, params });
     const otherUser = context.database.getUserByUsername('channel_analyst');
     await assert.rejects(transform(otherUser.id, 'limit_rows', { limit: 1 }), /workspace artifact not found/);
     await assert.rejects(transform(context.user.id, 'sort', {}), /sort requires field/);
     await assert.rejects(transform(context.user.id, 'unknown', {}), /unsupported artifact operation/);
+    assert.equal(context.database.countRows('artifact_versions'), 1);
+    if (mode === 'async') assert.deepEqual(calls, { reads: 3, writes: 0 });
     assert.deepEqual(context.workspace.listArtifacts({ workspaceId: workspace.id, userId: context.user.id }).map((artifact) => artifact.id), [source.id]);
     assert.deepEqual(context.workspace.getArtifact({ artifactId: source.id, userId: context.user.id }), source);
   });
