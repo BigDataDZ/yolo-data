@@ -209,7 +209,7 @@
   "src/userRepository.js": 141,
   "src/valueClarification.js": 186,
   "src/workflow.js": 230,
-  "src/workspace.js": 566,
+  "src/workspace.js": 464,
   "src/xlsx.js": 369,
   "src/xlsxReader.js": 480
 }
