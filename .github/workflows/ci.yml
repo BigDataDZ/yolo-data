@@ -107,6 +107,7 @@ jobs:
           if-no-files-found: ignore
 
   mysql-upload-admission:
+    name: MySQL persistence acceptance
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -130,5 +131,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Live MySQL concurrent upload admission
-        run: node --test tests/uploadAdmission.mysql.integration.test.js
+      - name: Live MySQL concurrent upload and memory admission
+        run: node --test --test-concurrency=1 tests/uploadAdmission.mysql.integration.test.js tests/userMemoryAdmission.mysql.integration.test.js
