@@ -41,4 +41,3 @@ export function coerce(raw) {
   }
   return cfg;
 }
-
