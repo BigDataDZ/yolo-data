@@ -131,5 +131,5 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: Live MySQL concurrent upload and memory admission
-        run: node --test --test-concurrency=1 tests/uploadAdmission.mysql.integration.test.js tests/userMemoryAdmission.mysql.integration.test.js
+      - name: Live MySQL persistence concurrency acceptance
+        run: node --test --test-concurrency=1 tests/uploadAdmission.mysql.integration.test.js tests/userMemoryAdmission.mysql.integration.test.js tests/dataSourceTestAtomic.mysql.integration.test.js

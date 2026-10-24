@@ -82,7 +82,7 @@
   "src/datasourceCrypto.js": 55,
   "src/datasourceLifecycle.js": 15,
   "src/datasourcePool.js": 24,
-  "src/dataSourceRepository.js": 184,
+  "src/dataSourceRepository.js": 180,
   "src/derivedMetrics.js": 391,
   "src/dialects/common.js": 25,
   "src/dialects/index.js": 27,
@@ -218,5 +218,6 @@
   "src/xlsx.js": 369,
   "src/xlsxReader.js": 480,
   "src/skillAudits.js": 119,
-  "src/platformAsyncLogRepository.js": 168
+  "src/platformAsyncLogRepository.js": 168,
+  "src/dataSourceRow.js": 25
 }
