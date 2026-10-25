@@ -220,9 +220,10 @@
   "src/skillAudits.js": 119,
   "src/platformAsyncLogRepository.js": 168,
   "src/dataSourceRow.js": 25,
-  "src/mcp/configValues.js": 44,
+  "src/mcp/configValues.js": 34,
   "src/feedbackSubmission.js": 69,
   "src/processArtifactDraft.js": 119,
   "src/mcp/tools/contractExecution.js": 39,
-  "src/mcp/tools/snapshotAccess.js": 41
+  "src/mcp/tools/snapshotAccess.js": 41,
+  "src/mcp/configDefaults.js": 15
 }

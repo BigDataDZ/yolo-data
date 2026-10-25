@@ -1,19 +1,8 @@
-export const DEFAULT_MCP_CONFIG = {
-  enabled: false,
-  mode: 'read',
-  toolOverrides: {},
-  tenantScope: [],
-  rateLimit: { rpm: 60, burst: 10 },
-  audit: { enabled: true, level: 'full' },
-  sessionMode: 'stateful',
-};
+import { getDefaultMcpConfig } from './configDefaults.js';
+export { DEFAULT_MCP_CONFIG, getDefaultMcpConfig } from './configDefaults.js';
 
 const VALID_MODES = ['disabled', 'read', 'standard', 'full'];
 
-
-export function getDefaultMcpConfig() {
-  return JSON.parse(JSON.stringify(DEFAULT_MCP_CONFIG));
-}
 
 export function coerce(raw) {
   const cfg = getDefaultMcpConfig();
@@ -26,6 +15,7 @@ export function coerce(raw) {
     cfg.toolOverrides = { ...raw.toolOverrides };
   }
   if (Array.isArray(raw.tenantScope)) cfg.tenantScope = raw.tenantScope.map(String);
+  if (Array.isArray(raw.allowedOrigins)) cfg.allowedOrigins = raw.allowedOrigins.map(String);
   if (raw.rateLimit && typeof raw.rateLimit === 'object') {
     const rpm = Number(raw.rateLimit.rpm);
     const burst = Number(raw.rateLimit.burst);
