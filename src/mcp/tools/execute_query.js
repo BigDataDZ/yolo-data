@@ -1,48 +1,10 @@
 // 工具 execute_query：凭 contractId 执行冻结的查询契约，返回列定义与结果行。
 // 结果确定性由契约保证，不触发 LLM 推理；执行前复检一次门禁。
 import { z } from 'zod';
+import { buildDatasetRequest, parseContract } from './contractExecution.js';
 import {
-  wrapToolHandler, buildMeta, MCP_ERROR, fail, normalizeResult,
+  wrapToolHandler, buildMeta, assertTenantScope, MCP_ERROR, fail, normalizeResult,
 } from './shared.js';
-
-function buildDatasetRequest(contract, fields = []) {
-  const fieldByName = new Map(fields.map((f) => [String(f.fieldName), f]));
-  const fieldByBiz = new Map(fields.map((f) => [String(f.bizName ?? f.name), f]));
-  const resolveField = (name) => {
-    const direct = fieldByName.get(String(name)) ?? fieldByBiz.get(String(name));
-    return direct?.fieldName ?? name;
-  };
-  const window = (contract.timeWindows && contract.timeWindows[0]) || contract.dateInfo || null;
-  const timeField = fields.find((f) => f.role === 'TIME');
-  const dateRange = (timeField && window)
-    ? { field: timeField.fieldName, startDate: window.startDate ?? null, endDate: window.endDate ?? null }
-    : undefined;
-  return {
-    metrics: (contract.metrics ?? []).map((m) => ({ field: resolveField(m) })),
-    dimensions: (contract.dimensions ?? []).map((d) => resolveField(d)),
-    filters: (contract.filters ?? []).map((f) => ({
-      field: resolveField(f.bizName ?? f.field),
-      operator: f.operator,
-      value: f.value,
-      scope: f.scope ?? 'ROW',
-    })),
-    dateRange,
-    order: contract.order ?? [],
-    limit: contract.limit ?? 200,
-    timeGrain: contract.timeGrain ?? null,
-    analysisPipeline: Boolean(contract.analysisPipeline),
-  };
-}
-
-function parseContract(record) {
-  if (!record) return null;
-  if (record.contractJson && typeof record.contractJson === 'object') return record.contractJson;
-  try {
-    return JSON.parse(record.contractJson);
-  } catch {
-    return null;
-  }
-}
 
 export function registerExecuteQuery(server, ctx) {
   server.registerTool('execute_query', {
@@ -59,6 +21,10 @@ export function registerExecuteQuery(server, ctx) {
         ? await database.getMcpQueryContractAsync(args.contractId)
         : database.getMcpQueryContract(args.contractId);
       if (!record) throw fail(MCP_ERROR.CONTRACT_NOT_FOUND, '查询契约不存在，请重新执行 resolve_query');
+      if (String(record.tenantId ?? 'default') !== String(requestContext?.tenantId ?? 'default')) {
+        throw fail(MCP_ERROR.FORBIDDEN, '无权限执行此查询契约');
+      }
+      assertTenantScope(ctx, record.themeId);
       if (record.expiresAt && new Date(record.expiresAt).getTime() < Date.now()) {
         throw fail(MCP_ERROR.CONTRACT_EXPIRED, '查询契约已过期，请重新编译契约');
       }

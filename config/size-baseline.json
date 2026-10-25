@@ -136,7 +136,7 @@
   "src/mcp/rateLimit.js": 17,
   "src/mcp/requestContext.js": 22,
   "src/mcp/server.js": 30,
-  "src/mcp/tools/execute_query.js": 119,
+  "src/mcp/tools/execute_query.js": 93,
   "src/mcp/tools/get_policy.js": 33,
   "src/mcp/tools/get_snapshot.js": 49,
   "src/mcp/tools/list_metrics.js": 45,
@@ -222,5 +222,6 @@
   "src/dataSourceRow.js": 25,
   "src/mcp/configValues.js": 44,
   "src/feedbackSubmission.js": 69,
-  "src/processArtifactDraft.js": 119
+  "src/processArtifactDraft.js": 119,
+  "src/mcp/tools/contractExecution.js": 39
 }
