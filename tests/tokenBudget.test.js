@@ -49,3 +49,30 @@ test('tokenBudgetError 携带 429 状态码', () => {
   assert.equal(error.code, 'TOKEN_BUDGET_EXCEEDED');
   assert.match(error.message, /12000/);
 });
+
+test('sync and async budgets agree at, below and above the limit with the same scope', async () => {
+  for (const used of [0, 99, 100, 101]) {
+    const scopes = [];
+    const service = new TokenBudgetService({
+      sumTokenUsage(scope) { scopes.push(scope); return used; },
+      async sumTokenUsageAsync(scope) { scopes.push(scope); return used; },
+    }, { env: {}, now: () => Date.parse('2026-10-26T00:00:00Z') });
+    const input = { userId: 7, themeId: 8, userLimit: 50, themeLimit: 100 };
+    const sync = service.check(input);
+    assert.deepEqual(await service.checkAsync(input), sync);
+    assert.equal(sync.ok, used < 100);
+    assert.equal(sync.remaining, Math.max(0, 100 - used));
+    assert.deepEqual(scopes, Array(2).fill({
+      userId: 7, themeId: 8, sinceIso: '2026-10-25T00:00:00.000Z',
+    }));
+  }
+});
+
+test('unlimited budgets do not query storage on either path', async () => {
+  const service = new TokenBudgetService({
+    sumTokenUsage() { throw new Error('unexpected storage read'); },
+    sumTokenUsageAsync() { throw new Error('unexpected storage read'); },
+  }, { env: {} });
+  assert.deepEqual(await service.checkAsync(), service.check());
+  assert.equal(service.check().remaining, Infinity);
+});
