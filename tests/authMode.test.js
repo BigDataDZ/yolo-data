@@ -52,6 +52,11 @@ test('dev mode binds to loopback unless HOST is explicitly overridden', () => {
   assert.equal(loadConfig({ HOST: '0.0.0.0' }).host, '0.0.0.0');
 });
 
+test('demo database name falls back to platform database when demo database is blank', () => {
+  const config = loadConfig({ DEMO_DB_DATABASE: '', PLATFORM_DB_NAME: 'yolo_platform' });
+  assert.equal(config.bootstrapDatasource.demo.schemaName, 'yolo_platform');
+});
+
 test('application rejects unsupported auth overrides before creating persistent state', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'yolo-auth-mode-'));
   const config = {
@@ -63,7 +68,7 @@ test('application rejects unsupported auth overrides before creating persistent 
   try {
     await assert.rejects(async () => {
       const application = await createApplication(config);
-      application.database.close();
+      await application.database.closeAsync();
     }, /AUTH_MODE.*dev.*session/);
     assert.deepEqual(fs.readdirSync(directory), []);
   } finally {

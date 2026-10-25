@@ -11,8 +11,8 @@ export function registerDatasetRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
-      sendJson(response, 200, application.businessDatasets.listDatasets({
+      const user = await getRequestUser(request, database);
+      sendJson(response, 200, await application.businessDatasets.listDatasetsAsync({
         userId: user.role === 'ADMIN' ? null : user.id,
         includeDisabled: user.role === 'ADMIN',
       }));
@@ -29,13 +29,13 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
       const dataset = await application.businessDatasets.createDataset(body);
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASET_CREATE',
         detail: {
@@ -60,19 +60,37 @@ export function registerDatasetRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, sendJson } = ctx;
       const datasetActionRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const fields = await application.businessDatasets.syncDatasetFields(
         Number(datasetActionRoute[0]),
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASET_SYNC',
         detail: { datasetId: Number(datasetActionRoute[0]), fieldCount: fields.length },
       });
       sendJson(response, 200, { fields });
+    },
+  });
+
+  table.add({
+    id: 'businessDatasets.delete',
+    method: 'DELETE',
+    path: '/api/business-datasets/:id(\\d+)',
+    tags: ['datasets'],
+    summary: '删除业务数据集（管理员）',
+    middleware: ['auth', 'admin'],
+    adminOnly: true,
+    handler: async (ctx) => {
+      const { request, response, database, params, getRequestUser, sendJson } = ctx;
+      const user = await getRequestUser(request, database);
+      const datasetId = Number(params[0]);
+      const deleted = await database.deleteBusinessDatasetAsync(datasetId);
+      await database.addAuditLogAsync({ userId: user.id, action: 'DATASET_DELETE', detail: { datasetId, deleted } });
+      sendJson(response, 200, { deleted });
     },
   });
 
@@ -86,11 +104,11 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, application.businessDatasets.getDatasetFields(Number(params[0])));
+      sendJson(response, 200, await application.businessDatasets.getDatasetFieldsAsync(Number(params[0])));
     },
   });
 
@@ -106,7 +124,7 @@ export function registerDatasetRoutes(table) {
       const {
         request, response, database, application, params, getRequestUser, readJson, sendJson,
       } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -116,12 +134,12 @@ export function registerDatasetRoutes(table) {
       if (typeof body.enabled !== 'boolean') {
         throw Object.assign(new Error('enabled must be a boolean'), { statusCode: 400 });
       }
-      const result = application.businessDatasets.setFieldEnabled(
+      const result = await application.businessDatasets.setFieldEnabledAsync(
         datasetId,
         fieldName,
         body.enabled,
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASET_FIELD_TOGGLE',
         detail: {
@@ -145,7 +163,7 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, application, params, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -166,7 +184,7 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -175,7 +193,7 @@ export function registerDatasetRoutes(table) {
       const profile = await application.businessDatasets.profileDataset(datasetId, {
         sampleSize: body.sampleSize,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASET_PROFILE_ANALYZE',
         detail: {
@@ -198,17 +216,17 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const datasetId = Number(params[0]);
       const body = await readJson(request);
-      const result = application.businessDatasets.applyDatasetProfile(datasetId, {
+      const result = await application.businessDatasets.applyDatasetProfile(datasetId, {
         fields: Array.isArray(body.fields) ? body.fields : [],
         config: body.config ?? null,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASET_PROFILE_APPLY',
         detail: {
@@ -231,11 +249,11 @@ export function registerDatasetRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, url, database, getRequestUser, sendJson, parseIntParam } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listDatasetQueryLogs(
+      sendJson(response, 200, await database.listDatasetQueryLogsAsync(
         parseIntParam(url.searchParams.get('limit'), 100),
       ));
     },

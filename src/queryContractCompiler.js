@@ -991,10 +991,11 @@ function validateDeterministicSignals({
   timeWindows,
   limit,
   calculation,
+  vocabularyResolver = null,
 }) {
   const issues = [];
   const text = String(question ?? '');
-  const topN = resolveTopN(text);
+  const topN = vocabularyResolver?.({ question })?.topN ?? resolveTopN(text);
   if (Number.isFinite(topN) && topN > 0) {
     if (!dimensionFields.some((dimension) => dimension.isTime !== true)) {
       issues.push({
@@ -1012,7 +1013,7 @@ function validateDeterministicSignals({
     }
   }
 
-  const timeGrainIntent = extractTimeGrainExpression(text);
+  const timeGrainIntent = extractTimeGrainExpression(text, vocabularyResolver);
   if (timeGrainIntent) {
     const hasGrain = String(calculation?.timeGrain ?? '').toUpperCase() === timeGrainIntent.grain;
     const hasTimeDimension = dimensionFields.some((dimension) => dimension.isTime === true);
@@ -1511,10 +1512,11 @@ export class QueryContractCompiler {
     draft = {},
     now = new Date(),
     sourceContext = '',
+    vocabularyResolver = null,
   }) {
     const normalizedSourceType = String(sourceType ?? draft.sourceType ?? '').toUpperCase();
-    const analysisMode = inferAnalysisMode(question);
-    const timeGrainIntent = extractTimeGrainExpression(question);
+    const analysisMode = inferAnalysisMode(question, vocabularyResolver);
+    const timeGrainIntent = extractTimeGrainExpression(question, vocabularyResolver);
     const bindingText = String(sourceContext || question || '').trim();
     const issues = [];
     const semanticPolicyApplication = applySemanticPolicy({
@@ -1993,6 +1995,7 @@ export class QueryContractCompiler {
       timeWindows,
       limit,
       calculation,
+      vocabularyResolver,
     });
     const pipelineExemptCodes = new Set([
       'RANKING_DIMENSION_REQUIRED',

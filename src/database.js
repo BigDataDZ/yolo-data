@@ -1,19 +1,23 @@
 import { PlatformLogRepository } from './platformLogRepository.js';
+import { SkillRepository } from './skillRepository.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { currentTraceId } from './trace.js';
-import { ensureAuthSchema, seedDefaultPasswords } from './auth.js';
 import { CONTRACT_COMPILER_VERSION } from './contractVersion.js';
 import { normalizeSemanticPolicy } from './semanticPolicy.js';
 import { mergeThemeSemanticPolicy } from './themeSemanticRules.js';
 import {
   mergeValueCandidates, normalizeValueOrigin, VALUE_DOMAIN_STATUSES,
 } from './semanticDomain.js';
-import { normalizeDataSource } from './dialects/index.js';
-import { dataSourceTestState } from './datasourceLifecycle.js';
+import { ModelRepository } from './modelRepository.js';
+import { UserRepository } from './userRepository.js';
+import { DataSourceRepository } from './dataSourceRepository.js';
+import { ThemeRepository } from './themeRepository.js';
+import { PermissionRepository } from './permissionRepository.js';
 import { saveDataSourceTest } from './datasourceConnectionTest.js';
+import { attachKnexPlatformStore, createKnexPlatformStore } from './knexPlatformStore.js';
 function nowIso() {
   return new Date().toISOString();
 }
@@ -115,18 +119,28 @@ function requireRecordId(value, label) {
   }
   return id;
 }
-
 export class PlatformDatabase {
-  constructor(filePath) {
+  constructor(filePath, {
+    seedBootstrapResources = false,
+    initSqlPath = path.resolve('config/platform/sqlite-init.sql'),
+  } = {}) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    this.isInMemory = filePath === ':memory:';
+    this.initSqlPath = initSqlPath;
     this.db = new DatabaseSync(filePath);
-    this.logRepository = new PlatformLogRepository(this.db);
+    attachKnexPlatformStore(this, createKnexPlatformStore({ backend: 'sqlite', path: filePath }));
+    this.logRepository = new PlatformLogRepository(this.db, filePath === ':memory:' ? null : this);
+    this.skillRepository = new SkillRepository(this.db, this);
+    this.modelRepository = new ModelRepository(this.db, this);
+    this.userRepository = new UserRepository(this.db, this);
+    this.dataSourceRepository = new DataSourceRepository(this.db, this);
+    this.themeRepository = new ThemeRepository(this);
+    this.permissionRepository = new PermissionRepository(this);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.migrate();
-    this.seed();
-    ensureAuthSchema(this);
-    seedDefaultPasswords(this);
+    this.seed({ seedBootstrapResources });
+    this.migrateThemeIndicatorRelations();
     this.migrateThemeSemanticValueDomains();
     this.migrateThemeSemanticValueSources();
     this.migrateSemanticValueGovernanceV1();
@@ -134,633 +148,67 @@ export class PlatformDatabase {
   }
 
   migrate() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS app_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL UNIQUE,
-        display_name TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'ANALYST',
-        status INTEGER NOT NULL DEFAULT 1,
-        attributes_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        key TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS themes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        description TEXT NOT NULL DEFAULT '',
-        system_prompt TEXT NOT NULL DEFAULT '',
-        indicator_ids_json TEXT NOT NULL DEFAULT '[]',
-        allowed_dimensions_json TEXT NOT NULL DEFAULT '[]',
-        llm_config_json TEXT NOT NULL DEFAULT '{}',
-        dataset_ids_json TEXT NOT NULL DEFAULT '[]',
-        business_dataset_ids_json TEXT NOT NULL DEFAULT '[]',
-        primary_business_dataset_id INTEGER,
-        semantic_value_config_json TEXT NOT NULL DEFAULT '{}',
-        semantic_policy_json TEXT NOT NULL DEFAULT '{}',
-        examples_json TEXT NOT NULL DEFAULT '[]',
-        default_chart TEXT NOT NULL DEFAULT 'auto',
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS skills (
-        code TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        category TEXT NOT NULL DEFAULT 'CORE',
-        kind TEXT NOT NULL DEFAULT 'TOOL',
-        tool_name TEXT,
-        instruction TEXT NOT NULL DEFAULT '',
-        default_enabled INTEGER NOT NULL DEFAULT 1,
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS theme_skills (
-        theme_id INTEGER NOT NULL,
-        skill_code TEXT NOT NULL,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        config_json TEXT NOT NULL DEFAULT '{}',
-        PRIMARY KEY (theme_id, skill_code),
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE,
-        FOREIGN KEY (skill_code) REFERENCES skills(code) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS user_theme_grants (
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        can_query INTEGER NOT NULL DEFAULT 1,
-        can_manage INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (user_id, theme_id),
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS user_indicator_grants (
-        user_id INTEGER NOT NULL,
-        indicator_id TEXT NOT NULL,
-        can_query INTEGER NOT NULL DEFAULT 1,
-        PRIMARY KEY (user_id, indicator_id),
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS user_dataset_grants (
-        user_id INTEGER NOT NULL,
-        dataset_id INTEGER NOT NULL,
-        can_query INTEGER NOT NULL DEFAULT 1,
-        PRIMARY KEY (user_id, dataset_id),
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
-        FOREIGN KEY (dataset_id) REFERENCES business_datasets(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS data_sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        db_type TEXT NOT NULL DEFAULT 'DORIS',
-        host TEXT NOT NULL,
-        port INTEGER NOT NULL,
-        database_name TEXT NOT NULL,
-        username TEXT NOT NULL,
-        encrypted_password TEXT NOT NULL,
-        options_json TEXT NOT NULL DEFAULT '{}',
-        status INTEGER NOT NULL DEFAULT 1,
-        last_test_at TEXT,
-        last_test_ok INTEGER,
-        last_test_message TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS business_datasets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        description TEXT NOT NULL DEFAULT '',
-        datasource_id INTEGER NOT NULL,
-        schema_name TEXT NOT NULL,
-        primary_table TEXT NOT NULL,
-        config_json TEXT NOT NULL DEFAULT '{}',
-        status INTEGER NOT NULL DEFAULT 1,
-        last_synced_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (datasource_id) REFERENCES data_sources(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS dataset_fields (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dataset_id INTEGER NOT NULL,
-        field_name TEXT NOT NULL,
-        display_name TEXT NOT NULL DEFAULT '',
-        data_type TEXT NOT NULL DEFAULT '',
-        semantic_type TEXT NOT NULL DEFAULT 'STRING',
-        role TEXT NOT NULL DEFAULT 'DIMENSION',
-        aggregator TEXT NOT NULL DEFAULT 'NONE',
-        description TEXT NOT NULL DEFAULT '',
-        allowed_operators_json TEXT NOT NULL DEFAULT '[]',
-        ordinal_position INTEGER NOT NULL DEFAULT 0,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        UNIQUE (dataset_id, field_name),
-        FOREIGN KEY (dataset_id) REFERENCES business_datasets(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS dataset_query_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        session_id INTEGER,
-        trace_id TEXT,
-        dataset_id INTEGER NOT NULL,
-        sql_text TEXT NOT NULL,
-        row_count INTEGER NOT NULL DEFAULT 0,
-        latency_ms INTEGER NOT NULL DEFAULT 0,
-        success INTEGER NOT NULL DEFAULT 0,
-        error_message TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_domains (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        display_name TEXT NOT NULL DEFAULT '',
-        value TEXT NOT NULL,
-        normalized_value TEXT NOT NULL,
-        aliases_json TEXT NOT NULL DEFAULT '[]',
-        description TEXT NOT NULL DEFAULT '',
-        source TEXT NOT NULL DEFAULT 'DESCRIPTION',
-        confidence REAL NOT NULL DEFAULT 1,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (source_type, source_id, field_name, normalized_value)
-      );
-
-      CREATE TABLE IF NOT EXISTS theme_semantic_value_domains (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id INTEGER NOT NULL,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        display_name TEXT NOT NULL DEFAULT '',
-        value TEXT NOT NULL,
-        normalized_value TEXT NOT NULL,
-        aliases_json TEXT NOT NULL DEFAULT '[]',
-        description TEXT NOT NULL DEFAULT '',
-        source TEXT NOT NULL DEFAULT 'DESCRIPTION',
-        confidence REAL NOT NULL DEFAULT 1,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (theme_id, source_type, source_id, field_name, normalized_value),
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id INTEGER NOT NULL,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        display_name TEXT NOT NULL DEFAULT '',
-        version INTEGER NOT NULL DEFAULT 1,
-        status TEXT NOT NULL DEFAULT 'UNKNOWN',
-        origin_mask_json TEXT NOT NULL DEFAULT '[]',
-        value_count INTEGER NOT NULL DEFAULT 0,
-        sample_size INTEGER NOT NULL DEFAULT 0,
-        checksum TEXT NOT NULL DEFAULT '',
-        scope_signature TEXT NOT NULL DEFAULT '',
-        schema_hash TEXT NOT NULL DEFAULT '',
-        error_message TEXT NOT NULL DEFAULT '',
-        refreshed_at TEXT,
-        expires_at TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (theme_id, source_type, source_id, field_name, version),
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_snapshot_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        snapshot_id INTEGER NOT NULL,
-        value TEXT NOT NULL,
-        normalized_value TEXT NOT NULL,
-        aliases_json TEXT NOT NULL DEFAULT '[]',
-        origin TEXT NOT NULL,
-        origin_ref TEXT NOT NULL DEFAULT '',
-        confidence REAL NOT NULL DEFAULT 1,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        first_seen_at TEXT NOT NULL,
-        last_seen_at TEXT NOT NULL,
-        UNIQUE (snapshot_id, normalized_value),
-        FOREIGN KEY (snapshot_id) REFERENCES semantic_value_snapshots(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_overrides (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id INTEGER NOT NULL,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        concept TEXT NOT NULL,
-        aliases_json TEXT NOT NULL DEFAULT '[]',
-        operator TEXT NOT NULL DEFAULT 'IN',
-        configured_values_json TEXT NOT NULL DEFAULT '[]',
-        rule_source TEXT NOT NULL DEFAULT '',
-        action TEXT NOT NULL DEFAULT 'ENUM_MAPPING',
-        allow_unverified INTEGER NOT NULL DEFAULT 0,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        updated_by INTEGER,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (theme_id, source_type, source_id, field_name, concept, action),
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_refresh_jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id INTEGER NOT NULL,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        trigger TEXT NOT NULL DEFAULT 'MANUAL',
-        status TEXT NOT NULL DEFAULT 'PENDING',
-        requested_by INTEGER,
-        scanned_count INTEGER NOT NULL DEFAULT 0,
-        added_count INTEGER NOT NULL DEFAULT 0,
-        removed_count INTEGER NOT NULL DEFAULT 0,
-        changed_count INTEGER NOT NULL DEFAULT 0,
-        error_json TEXT NOT NULL DEFAULT '{}',
-        started_at TEXT,
-        finished_at TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS semantic_value_audit_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        theme_id INTEGER NOT NULL,
-        source_type TEXT NOT NULL,
-        source_id TEXT NOT NULL,
-        field_name TEXT NOT NULL,
-        action TEXT NOT NULL,
-        before_checksum TEXT NOT NULL DEFAULT '',
-        after_checksum TEXT NOT NULL DEFAULT '',
-        actor_id INTEGER,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS row_policies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER,
-        dimension TEXT NOT NULL,
-        operator TEXT NOT NULL,
-        values_json TEXT NOT NULL DEFAULT '[]',
-        value_source TEXT NOT NULL DEFAULT 'FIXED',
-        attribute_key TEXT,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS column_policies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER,
-        column_name TEXT NOT NULL,
-        action TEXT NOT NULL DEFAULT 'MASK',
-        mask_value TEXT NOT NULL DEFAULT '***',
-        enabled INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS indicator_cache (
-        source_id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        biz_name TEXT NOT NULL DEFAULT '',
-        type_id TEXT NOT NULL DEFAULT '',
-        type_name TEXT NOT NULL DEFAULT '',
-        indicator_level TEXT NOT NULL DEFAULT '',
-        business_caliber TEXT NOT NULL DEFAULT '',
-        description TEXT NOT NULL DEFAULT '',
-        owner TEXT NOT NULL DEFAULT '',
-        department TEXT NOT NULL DEFAULT '',
-        status INTEGER NOT NULL DEFAULT 1,
-        metrics_json TEXT NOT NULL DEFAULT '[]',
-        dimensions_json TEXT NOT NULL DEFAULT '[]',
-        models_json TEXT NOT NULL DEFAULT '[]',
-        raw_json TEXT NOT NULL DEFAULT '{}',
-        synced_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS indicator_types (
-        source_id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        code TEXT NOT NULL DEFAULT '',
-        parent_id TEXT NOT NULL DEFAULT '',
-        raw_json TEXT NOT NULL DEFAULT '{}',
-        synced_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS platform_settings (
-        key TEXT PRIMARY KEY,
-        value_json TEXT NOT NULL DEFAULT 'null',
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS models (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        provider TEXT NOT NULL DEFAULT 'deepseek',
-        model_name TEXT NOT NULL,
-        base_url TEXT NOT NULL DEFAULT '',
-        api_key_env TEXT NOT NULL DEFAULT '',
-        api_key_encrypted TEXT,
-        temperature REAL NOT NULL DEFAULT 0,
-        max_tokens INTEGER NOT NULL DEFAULT 0,
-        timeout_ms INTEGER NOT NULL DEFAULT 60000,
-        max_tool_rounds INTEGER NOT NULL DEFAULT 12,
-        is_default INTEGER NOT NULL DEFAULT 0,
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS mcp_api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key_id TEXT NOT NULL UNIQUE,
-        key_hash TEXT NOT NULL UNIQUE,
-        name TEXT NOT NULL DEFAULT 'mcp',
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        scopes TEXT NOT NULL DEFAULT '"mcp"',
-        created_by INTEGER,
-        created_at TEXT NOT NULL,
-        revoked INTEGER NOT NULL DEFAULT 0
-      );
-
-      CREATE TABLE IF NOT EXISTS mcp_query_contracts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        contract_id TEXT NOT NULL UNIQUE,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        user_id INTEGER,
-        theme_id INTEGER,
-        source_type TEXT NOT NULL,
-        indicator_id TEXT,
-        dataset_id TEXT,
-        contract_json TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'FROZEN',
-        created_at TEXT NOT NULL,
-        expires_at TEXT
-      );
-
-      CREATE TABLE IF NOT EXISTS conversations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        question TEXT NOT NULL,
-        answer_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS chat_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        title TEXT NOT NULL DEFAULT '新会话',
-        summary TEXT NOT NULL DEFAULT '',
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL DEFAULT '',
-        result_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS workspaces (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        session_id INTEGER,
-        name TEXT NOT NULL DEFAULT '问数工作区',
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        UNIQUE (session_id),
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE,
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS workspace_artifacts (
-        id TEXT PRIMARY KEY,
-        workspace_id INTEGER NOT NULL,
-        user_id INTEGER NOT NULL,
-        session_id INTEGER,
-        message_id INTEGER,
-        conversation_id INTEGER,
-        artifact_type TEXT NOT NULL DEFAULT 'TABLE',
-        title TEXT NOT NULL DEFAULT '',
-        current_version INTEGER NOT NULL DEFAULT 1,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        status INTEGER NOT NULL DEFAULT 1,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS artifact_versions (
-        id TEXT PRIMARY KEY,
-        artifact_id TEXT NOT NULL,
-        version INTEGER NOT NULL,
-        operation_json TEXT NOT NULL DEFAULT '{}',
-        payload_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        UNIQUE (artifact_id, version),
-        FOREIGN KEY (artifact_id) REFERENCES workspace_artifacts(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        theme_id INTEGER,
-        action TEXT NOT NULL,
-        detail_json TEXT NOT NULL DEFAULT '{}',
-        trace_id TEXT,
-        created_at TEXT NOT NULL
-      );
-
-      CREATE TABLE IF NOT EXISTS query_plans (
-        id TEXT PRIMARY KEY,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        session_id INTEGER,
-        source_type TEXT NOT NULL DEFAULT 'INDICATOR',
-        dataset_id TEXT,
-        compiler_version TEXT,
-        trace_id TEXT,
-        question TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'COMPILED',
-        plan_json TEXT NOT NULL DEFAULT '{}',
-        validation_json TEXT NOT NULL DEFAULT '{}',
-        evidence_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE,
-        FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS qa_feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        theme_id INTEGER NOT NULL,
-        session_id INTEGER,
-        message_id INTEGER,
-        question TEXT NOT NULL DEFAULT '',
-        correct INTEGER NOT NULL DEFAULT 0,
-        comment TEXT NOT NULL DEFAULT '',
-        corrected_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS knowledge_gaps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        term TEXT NOT NULL,
-        kind TEXT NOT NULL DEFAULT 'QUESTION',
-        source TEXT NOT NULL DEFAULT 'ASK',
-        count INTEGER NOT NULL DEFAULT 1,
-        dismissed INTEGER NOT NULL DEFAULT 0,
-        resolved INTEGER NOT NULL DEFAULT 0,
-        resolution_json TEXT NOT NULL DEFAULT '{}',
-        context_json TEXT NOT NULL DEFAULT '{}',
-        first_seen TEXT NOT NULL,
-        last_seen TEXT NOT NULL,
-        UNIQUE (term, kind)
-      );
-
-      CREATE TABLE IF NOT EXISTS llm_call_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        session_id INTEGER,
-        theme_id INTEGER,
-        trace_id TEXT,
-        call_type TEXT NOT NULL,
-        provider TEXT NOT NULL DEFAULT 'deepseek',
-        model TEXT NOT NULL DEFAULT '',
-        prompt_digest TEXT NOT NULL DEFAULT '',
-        response_digest TEXT NOT NULL DEFAULT '',
-        token_usage_json TEXT NOT NULL DEFAULT '{}',
-        latency_ms INTEGER NOT NULL DEFAULT 0,
-        success INTEGER NOT NULL DEFAULT 0,
-        error_message TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_indicators_name ON indicator_cache(name);
-      CREATE INDEX IF NOT EXISTS idx_indicators_type ON indicator_cache(type_id);
-      CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, id);
-      CREATE INDEX IF NOT EXISTS idx_semantic_value_domain_lookup
-        ON semantic_value_domains(source_type, source_id, field_name, enabled);
-      CREATE INDEX IF NOT EXISTS idx_theme_semantic_value_domain_lookup
-        ON theme_semantic_value_domains(
-          theme_id, source_type, source_id, field_name, enabled
-        );
-      CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_workspace_artifacts_workspace
-        ON workspace_artifacts(workspace_id, updated_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_artifact_versions_artifact
-        ON artifact_versions(artifact_id, version DESC);
-      CREATE INDEX IF NOT EXISTS idx_theme_skills_theme ON theme_skills(theme_id, enabled);
-      CREATE INDEX IF NOT EXISTS idx_query_plans_user ON query_plans(user_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_feedback_theme ON qa_feedback(theme_id, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_gaps_status ON knowledge_gaps(resolved, dismissed, count DESC);
-      CREATE INDEX IF NOT EXISTS idx_llm_logs_created ON llm_call_logs(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_dataset_fields_dataset ON dataset_fields(dataset_id, enabled);
-      CREATE INDEX IF NOT EXISTS idx_dataset_query_logs_dataset ON dataset_query_logs(dataset_id, created_at DESC);
-    `);
-
-    this.ensureColumn('themes', 'llm_config_json', "TEXT NOT NULL DEFAULT '{}'");
-    this.ensureColumn('themes', 'dataset_ids_json', "TEXT NOT NULL DEFAULT '[]'");
-    this.ensureColumn(
-      'themes',
-      'business_dataset_ids_json',
-      "TEXT NOT NULL DEFAULT '[]'",
-    );
-    this.ensureColumn('themes', 'primary_business_dataset_id', 'INTEGER');
-    this.ensureColumn(
-      'themes',
-      'semantic_value_config_json',
-      "TEXT NOT NULL DEFAULT '{}'",
-    );
-    this.ensureColumn(
-      'themes',
-      'semantic_policy_json',
-      "TEXT NOT NULL DEFAULT '{}'",
-    );
-    this.ensureColumn('themes', 'examples_json', "TEXT NOT NULL DEFAULT '[]'");
-    this.ensureColumn('themes', 'model_ids_json', "TEXT NOT NULL DEFAULT '[]'");
-    this.ensureColumn('themes', 'default_model_id', 'INTEGER');
-    this.ensureColumn('chat_sessions', 'model_id', 'INTEGER');
-    this.ensureColumn('query_plans', 'source_type', "TEXT NOT NULL DEFAULT 'INDICATOR'");
-    this.ensureColumn('query_plans', 'dataset_id', 'TEXT');
-    this.ensureColumn('query_plans', 'compiler_version', 'TEXT');
-    this.ensureColumn('query_plans', 'trace_id', 'TEXT');
-    this.ensureColumn('audit_logs', 'trace_id', 'TEXT');
-    this.ensureColumn('llm_call_logs', 'trace_id', 'TEXT');
-    this.ensureColumn('dataset_query_logs', 'trace_id', 'TEXT');
-    this.ensureColumn('skills', 'source', "TEXT NOT NULL DEFAULT 'BUILTIN'");
-    this.ensureColumn('skills', 'source_path', 'TEXT');
-    this.ensureColumn('skills', 'metadata_json', "TEXT NOT NULL DEFAULT '{}'");
-    this.ensureColumn('skills', 'phase_tags_json', "TEXT NOT NULL DEFAULT '[]'");
-    this.ensureColumn('skills', 'content', "TEXT NOT NULL DEFAULT ''");
-    this.ensureColumn('skills', 'content_hash', 'TEXT');
-    // Trace indexes must be created after ensureColumn so pre-existing databases
-    // (whose tables predate the trace_id column) migrate cleanly.
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_query_plans_trace ON query_plans(trace_id);
-      CREATE INDEX IF NOT EXISTS idx_llm_logs_trace ON llm_call_logs(trace_id);
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_trace ON audit_logs(trace_id);
-      CREATE INDEX IF NOT EXISTS idx_dataset_query_logs_trace ON dataset_query_logs(trace_id);
-    `);
+    this.db.exec(fs.readFileSync(this.initSqlPath, 'utf8'));
+    this.applySqlMigrations(path.join(path.dirname(this.initSqlPath), 'sqlite-migrations'));
   }
 
-  ensureColumn(table, column, definition) {
-    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
-    if (columns.some((item) => item.name === column)) {
-      return;
+  applySqlMigrations(directory) {
+    if (!fs.existsSync(directory)) return;
+    const files = fs.readdirSync(directory)
+      .filter((name) => name.endsWith('.sql'))
+      .sort();
+    for (const name of files) {
+      const key = name.replace(/\.sql$/i, '');
+      const applied = this.db.prepare(
+        'SELECT 1 FROM schema_migrations WHERE key = ?',
+      ).get(key);
+      if (applied) continue;
+
+      const source = fs.readFileSync(path.join(directory, name), 'utf8');
+      const statements = source.split(/^\s*--\s*STATEMENT\s*$/m)
+        .map((statement) => statement.replace(/^\s*--.*$/gm, '').trim())
+        .filter(Boolean);
+      this.db.exec('BEGIN');
+      try {
+        for (const statement of statements) {
+          const addColumn = statement.match(
+            /^ALTER\s+TABLE\s+([\w]+)\s+ADD\s+COLUMN\s+([\w]+)/i,
+          );
+          if (addColumn) {
+            const [, table, column] = addColumn;
+            const exists = this.db.prepare(`PRAGMA table_info(${table})`).all()
+              .some((item) => item.name === column);
+            if (exists) continue;
+          }
+          this.db.exec(statement);
+        }
+        this.db.prepare(
+          'INSERT INTO schema_migrations (key, applied_at) VALUES (?, ?)',
+        ).run(key, nowIso());
+        this.db.exec('COMMIT');
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
     }
-    this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 
-  seed() {
+  migrateThemeIndicatorRelations() {
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO theme_indicators (theme_id, indicator_id, created_at)
+      VALUES (?, ?, ?)
+    `);
+    for (const theme of this.db.prepare(
+      'SELECT id, indicator_ids_json AS indicatorIdsJson FROM themes',
+    ).all()) {
+      for (const indicatorId of parseJson(theme.indicatorIdsJson, [])) {
+        const value = String(indicatorId ?? '').trim();
+        if (value) insert.run(Number(theme.id), value, nowIso());
+      }
+    }
+  }
+
+  seed({ seedBootstrapResources = false } = {}) {
     const timestamp = nowIso();
     const bootstrap = loadBootstrapConfig();
     const insertUser = this.db.prepare(`
@@ -813,6 +261,9 @@ export class PlatformDatabase {
     }
 
     this.seedSkills(themes);
+    if (seedBootstrapResources) {
+      this.seedBootstrapResources(bootstrap);
+    }
 
     const rowPolicyCount = this.db.prepare('SELECT COUNT(*) AS count FROM row_policies').get().count;
     if (rowPolicyCount === 0) {
@@ -830,6 +281,79 @@ export class PlatformDatabase {
           valueSource: policy.valueSource ?? 'FIXED',
           enabled: policy.enabled !== false,
         });
+      }
+    }
+  }
+
+  seedBootstrapResources(bootstrap = {}) {
+    const timestamp = nowIso();
+    const models = Array.isArray(bootstrap.models) ? bootstrap.models : [];
+    const insertModel = this.db.prepare(`
+      INSERT OR IGNORE INTO models
+        (name, provider, model_name, base_url, api_key_env,
+         temperature, max_tokens, timeout_ms, max_tool_rounds,
+         is_default, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const model of models) {
+      const name = String(model.name ?? '').trim();
+      const modelName = String(model.modelName ?? model.model ?? '').trim();
+      if (!name || !modelName) continue;
+      insertModel.run(
+        name,
+        String(model.provider ?? 'deepseek').trim().toLowerCase(),
+        modelName,
+        String(model.baseUrl ?? '').trim(),
+        String(model.apiKeyEnv ?? '').trim(),
+        Number(model.temperature ?? 0),
+        Math.max(0, Number(model.maxTokens ?? 0) || 0),
+        Math.max(1000, Number(model.timeoutMs ?? 60000) || 60000),
+        Math.max(1, Number(model.maxToolRounds ?? 12) || 12),
+        model.isDefault === true ? 1 : 0,
+        Number(model.status ?? 1),
+        timestamp,
+        timestamp,
+      );
+    }
+
+    const dataSources = Array.isArray(bootstrap.dataSources) ? bootstrap.dataSources : [];
+    for (const source of dataSources) {
+      const code = String(source.code ?? '').trim();
+      if (!code || this.getDataSourceByCode(code)) continue;
+      this.saveDataSource({
+        code,
+        name: String(source.name ?? code).trim(),
+        dbType: source.dbType,
+        host: source.host,
+        port: source.port,
+        databaseName: source.databaseName,
+        username: source.username,
+        encryptedPassword: source.encryptedPassword ?? '',
+        options: source.options ?? {},
+        status: source.status ?? 0,
+      });
+    }
+
+    const datasets = Array.isArray(bootstrap.businessDatasets)
+      ? bootstrap.businessDatasets
+      : [];
+    for (const definition of datasets) {
+      const code = String(definition.code ?? '').trim();
+      if (!code || this.getBusinessDatasetByCode(code)) continue;
+      const source = this.getDataSourceByCode(definition.datasourceCode);
+      if (!source) continue;
+      const dataset = this.saveBusinessDataset({
+        code,
+        name: String(definition.name ?? code).trim(),
+        description: String(definition.description ?? '').trim(),
+        datasourceId: source.id,
+        schemaName: String(definition.schemaName ?? '').trim(),
+        primaryTable: String(definition.primaryTable ?? '').trim(),
+        config: definition.config ?? {},
+        status: definition.status ?? 0,
+      });
+      if (Array.isArray(definition.fields) && definition.fields.length > 0) {
+        this.replaceDatasetFields(dataset.id, definition.fields);
       }
     }
   }
@@ -1162,6 +686,24 @@ export class PlatformDatabase {
     `);
     const definitions = [
       {
+        code: 'yolo-core-skill.temporal_expression',
+        name: '时间表达式解析',
+        description: '把自然语言中的日期范围和时间周期解析为结构化时间条件',
+        category: 'CORE',
+        kind: 'RESOLVER',
+        toolName: null,
+        instruction: '优先将自然语言日期、周期和时间范围转换为结构化时间条件。',
+      },
+      {
+        code: 'yolo-core-skill.business_vocabulary',
+        name: '业务词汇解析',
+        description: '解析中文时间粒度、排名数量和常用业务表达为结构化意图',
+        category: 'CORE',
+        kind: 'RESOLVER',
+        toolName: null,
+        instruction: '将中文业务表达解析为结构化意图，避免在 Agent 工作流中散落正则。',
+      },
+      {
         code: 'indicator_search',
         name: '指标检索',
         description: '根据业务问题检索当前主题下的可用指标',
@@ -1303,6 +845,17 @@ export class PlatformDatabase {
           insertThemeSkill.run(Number(theme.id), skillCode);
         }
       }
+      // Backfill newly introduced core Skills for existing themes after the
+      // normal default binding has run. INSERT OR IGNORE preserves an explicit
+      // disabled assignment.
+      const coreSkillCodes = definitions
+        .filter((skill) => skill.category === 'CORE')
+        .map((skill) => skill.code);
+      for (const theme of themes) {
+        for (const skillCode of coreSkillCodes) {
+          insertThemeSkill.run(Number(theme.id), skillCode);
+        }
+      }
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -1312,203 +865,48 @@ export class PlatformDatabase {
 
   close() {
     this.db.close();
+    void this.knexStore.close();
+  }
+
+  async closeAsync() {
+    this.db.close();
+    await this.knexStore.close();
   }
 
   listUsers() {
-    return this.db.prepare(`
-      SELECT id, username, display_name AS displayName, role, status,
-             attributes_json AS attributesJson, created_at AS createdAt,
-             updated_at AS updatedAt
-      FROM app_users ORDER BY id
-    `).all().map((row) => ({
-      ...row,
-      role: normalizeUserRole(row.role),
-      attributes: parseJson(row.attributesJson, {}),
-    }));
+    return this.userRepository.listUsers();
   }
 
   getUser(id) {
-    const row = this.db.prepare(`
-      SELECT id, username, display_name AS displayName, role, status,
-             attributes_json AS attributesJson, created_at AS createdAt,
-             updated_at AS updatedAt
-      FROM app_users WHERE id = ?
-    `).get(Number(id));
-    return row
-      ? { ...row, role: normalizeUserRole(row.role), attributes: parseJson(row.attributesJson, {}) }
-      : null;
+    return this.userRepository.getUser(id);
   }
 
   getUserByUsername(username) {
-    const row = this.db.prepare(`
-      SELECT id, username, display_name AS displayName, role, status,
-             attributes_json AS attributesJson, created_at AS createdAt,
-             updated_at AS updatedAt
-      FROM app_users WHERE username = ?
-    `).get(username);
-    return row
-      ? { ...row, role: normalizeUserRole(row.role), attributes: parseJson(row.attributesJson, {}) }
-      : null;
+    return this.userRepository.getUserByUsername(username);
   }
 
   saveUser(payload, id = null) {
-    const timestamp = nowIso();
-    const username = String(payload.username ?? '').trim();
-    const displayName = String(payload.displayName ?? '').trim();
-    const role = normalizeUserRole(payload.role);
-    const attributesJson = asJson(payload.attributes ?? {});
-    if (!username || !displayName) {
-      throw new Error('username and displayName are required');
-    }
-
-    if (id) {
-      this.db.prepare(`
-        UPDATE app_users
-        SET username = ?, display_name = ?, role = ?, status = ?,
-            attributes_json = ?, updated_at = ?
-        WHERE id = ?
-      `).run(username, displayName, role, Number(payload.status ?? 1),
-        attributesJson, timestamp, Number(id));
-      return this.getUser(id);
-    }
-
-    const result = this.db.prepare(`
-      INSERT INTO app_users
-        (username, display_name, role, status, attributes_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(username, displayName, role, Number(payload.status ?? 1),
-      attributesJson, timestamp, timestamp);
-    return this.getUser(Number(result.lastInsertRowid));
+    return this.userRepository.saveUser(payload, id);
   }
 
   listModels() {
-    return this.db.prepare(`
-      SELECT id, name, provider, model_name AS modelName, base_url AS baseUrl,
-             api_key_env AS apiKeyEnv, api_key_encrypted AS apiKeyEncrypted,
-             temperature, max_tokens AS maxTokens, timeout_ms AS timeoutMs,
-             max_tool_rounds AS maxToolRounds, is_default AS isDefault,
-             status, created_at AS createdAt, updated_at AS updatedAt
-      FROM models
-      ORDER BY is_default DESC, id
-    `).all().map((row) => ({
-      ...row,
-      isDefault: asBool(row.isDefault),
-      hasApiKey: Boolean(row.apiKeyEncrypted),
-      status: Number(row.status ?? 1),
-    }));
+    return this.modelRepository.listModels();
   }
 
   getModel(id) {
-    return this.listModels().find((model) => Number(model.id) === Number(id)) ?? null;
+    return this.modelRepository.getModel(id);
   }
 
   saveModel(payload, id = null) {
-    const timestamp = nowIso();
-    const name = String(payload.name ?? '').trim();
-    const modelName = String(payload.modelName ?? payload.model ?? '').trim();
-    if (!name || !modelName) {
-      throw new Error('model name and model identifier are required');
-    }
-    const provider = String(payload.provider ?? 'deepseek').trim().toLowerCase();
-    const isDefault = payload.isDefault === true;
-    this.db.exec('BEGIN');
-    try {
-      if (isDefault) {
-        this.db.prepare('UPDATE models SET is_default = 0').run();
-      }
-      const normalized = {
-        name,
-        provider,
-        modelName,
-        baseUrl: String(payload.baseUrl ?? '').trim(),
-        apiKeyEnv: String(payload.apiKeyEnv ?? '').trim(),
-        apiKeyEncrypted: String(payload.apiKeyEncrypted ?? '').trim() || null,
-        temperature: Number(payload.temperature ?? 0),
-        maxTokens: Math.max(0, Number(payload.maxTokens ?? 0) || 0),
-        timeoutMs: Math.max(1000, Number(payload.timeoutMs ?? 60000) || 60000),
-        maxToolRounds: Math.max(1, Number(payload.maxToolRounds ?? 12) || 12),
-        isDefault,
-        status: Number(payload.status ?? 1),
-      };
-      if (id) {
-        this.db.prepare(`
-          UPDATE models
-          SET name = ?, provider = ?, model_name = ?, base_url = ?,
-              api_key_env = ?, api_key_encrypted = ?,
-              temperature = ?, max_tokens = ?, timeout_ms = ?,
-              max_tool_rounds = ?, is_default = ?, status = ?,
-              updated_at = ?
-          WHERE id = ?
-        `).run(
-          normalized.name,
-          normalized.provider,
-          normalized.modelName,
-          normalized.baseUrl,
-          normalized.apiKeyEnv,
-          normalized.apiKeyEncrypted,
-          normalized.temperature,
-          normalized.maxTokens,
-          normalized.timeoutMs,
-          normalized.maxToolRounds,
-          normalized.isDefault ? 1 : 0,
-          normalized.status,
-          timestamp,
-          Number(id),
-        );
-      } else {
-        const result = this.db.prepare(`
-          INSERT INTO models
-            (name, provider, model_name, base_url, api_key_env,
-             api_key_encrypted, temperature, max_tokens, timeout_ms,
-             max_tool_rounds, is_default, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          normalized.name,
-          normalized.provider,
-          normalized.modelName,
-          normalized.baseUrl,
-          normalized.apiKeyEnv,
-          normalized.apiKeyEncrypted,
-          normalized.temperature,
-          normalized.maxTokens,
-          normalized.timeoutMs,
-          normalized.maxToolRounds,
-          normalized.isDefault ? 1 : 0,
-          normalized.status,
-          timestamp,
-          timestamp,
-        );
-        id = Number(result.lastInsertRowid);
-      }
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
-    return this.getModel(id);
+    return this.modelRepository.saveModel(payload, id);
   }
 
   setModelDefault(id) {
-    const model = this.getModel(id);
-    if (!model) {
-      return null;
-    }
-    this.db.exec('BEGIN');
-    try {
-      this.db.prepare('UPDATE models SET is_default = 0').run();
-      this.db.prepare(`
-        UPDATE models SET is_default = 1, updated_at = ? WHERE id = ?
-      `).run(nowIso(), Number(id));
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
-    return this.getModel(id);
+    return this.modelRepository.setModelDefault(id);
   }
 
   deleteModel(id) {
-    return this.db.prepare('DELETE FROM models WHERE id = ?').run(Number(id)).changes > 0;
+    return this.modelRepository.deleteModel(id);
   }
 
   listThemes() {
@@ -1530,7 +928,7 @@ export class PlatformDatabase {
       FROM themes ORDER BY id
     `).all().map((row) => ({
       ...row,
-      indicatorIds: parseJson(row.indicatorIdsJson, []),
+      indicatorIds: this.listThemeIndicatorIds(row.id),
       allowedDimensions: parseJson(row.allowedDimensionsJson, []),
       llmConfig: parseJson(row.llmConfigJson, {}),
       datasetIds: parseJson(row.datasetIdsJson, []),
@@ -1565,7 +963,7 @@ export class PlatformDatabase {
     `).get(Number(id));
     return row ? {
       ...row,
-      indicatorIds: parseJson(row.indicatorIdsJson, []),
+      indicatorIds: this.listThemeIndicatorIds(row.id),
       allowedDimensions: parseJson(row.allowedDimensionsJson, []),
       llmConfig: parseJson(row.llmConfigJson, {}),
       datasetIds: parseJson(row.datasetIdsJson, []),
@@ -1585,12 +983,21 @@ export class PlatformDatabase {
     const name = String(payload.name ?? '').trim();
     const description = String(payload.description ?? '').trim();
     const systemPrompt = String(payload.systemPrompt ?? '').trim();
-    const indicatorIdList = normalizeSourceIdList(payload.indicatorIds);
+    let indicatorIdList = id
+      ? this.listThemeIndicatorIds(id)
+      : normalizeSourceIdList(payload.indicatorIds);
+    if (id && Object.prototype.hasOwnProperty.call(payload, 'indicatorIds')) {
+      this.replaceThemeIndicatorIds(id, payload.indicatorIds);
+      indicatorIdList = normalizeSourceIdList(payload.indicatorIds);
+    }
     const indicatorIds = asJson(indicatorIdList);
     const allowedDimensions = asJson(payload.allowedDimensions ?? []);
     const llmConfig = asJson(payload.llmConfig ?? {});
     const datasetIds = asJson(payload.datasetIds ?? []);
-    const primaryBusinessDatasetId = payload.primaryBusinessDatasetId
+    const primaryBusinessDatasetId = Object.prototype.hasOwnProperty.call(payload, 'businessDatasetIds')
+      && !Object.prototype.hasOwnProperty.call(payload, 'primaryBusinessDatasetId')
+      ? null
+      : payload.primaryBusinessDatasetId
       ? Number(payload.primaryBusinessDatasetId)
       : null;
     const modelIds = [...new Set(
@@ -1714,74 +1121,63 @@ export class PlatformDatabase {
     }
   }
 
-  syncExternalSkills(skills = []) {
-    const timestamp = nowIso();
-    const normalized = (skills ?? []).map((skill) => ({
-      code: String(skill.code ?? '').trim(),
-      name: String(skill.name ?? '').trim(),
-      description: String(skill.description ?? '').trim(),
-      instruction: String(skill.instruction ?? '').trim(),
-      sourcePath: skill.sourcePath ? String(skill.sourcePath) : null,
-      metadataJson: asJson(skill.metadata ?? {}),
-      phaseTagsJson: asJson(skill.phaseTags ?? []),
-      content: String(skill.content ?? ''),
-      contentHash: String(skill.contentHash ?? ''),
-    })).filter((skill) => skill.code && skill.name);
+  listThemeIndicatorIds(themeId) {
+    return this.db.prepare(`
+      SELECT indicator_id AS indicatorId
+      FROM theme_indicators WHERE theme_id = ? ORDER BY indicator_id
+    `).all(Number(themeId)).map((row) => String(row.indicatorId));
+  }
 
+  replaceThemeIndicatorIds(themeId, indicatorIds = []) {
+    const normalizedThemeId = Number(themeId);
+    const values = normalizeSourceIdList(indicatorIds);
     this.db.exec('BEGIN');
     try {
-      const upsert = this.db.prepare(`
-        INSERT INTO skills
-          (code, name, description, category, kind, tool_name, instruction,
-           default_enabled, status, source, source_path, metadata_json,
-           phase_tags_json, content, content_hash, created_at, updated_at)
-        VALUES (?, ?, ?, 'EXTERNAL', 'INSTRUCTION', NULL, ?, 0, 1,
-                'SKILL_MD', ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(code) DO UPDATE SET
-          name = excluded.name,
-          description = excluded.description,
-          instruction = excluded.instruction,
-          source = excluded.source,
-          source_path = excluded.source_path,
-          metadata_json = excluded.metadata_json,
-          phase_tags_json = excluded.phase_tags_json,
-          content = excluded.content,
-          content_hash = excluded.content_hash,
-          status = 1,
-          updated_at = excluded.updated_at
-        WHERE skills.source = 'SKILL_MD'
+      this.db.prepare('DELETE FROM theme_indicators WHERE theme_id = ?').run(normalizedThemeId);
+      const insert = this.db.prepare(`
+        INSERT INTO theme_indicators (theme_id, indicator_id, created_at)
+        VALUES (?, ?, ?)
       `);
-      for (const skill of normalized) {
-        upsert.run(
-          skill.code,
-          skill.name,
-          skill.description,
-          skill.instruction,
-          skill.sourcePath,
-          skill.metadataJson,
-          skill.phaseTagsJson,
-          skill.content,
-          skill.contentHash,
-          timestamp,
-          timestamp,
-        );
-      }
-      const codes = normalized.map((skill) => skill.code);
-      if (codes.length === 0) {
-        this.db.prepare("DELETE FROM skills WHERE source = 'SKILL_MD'").run();
-      } else {
-        const placeholders = codes.map(() => '?').join(', ');
-        this.db.prepare(`
-          DELETE FROM skills
-          WHERE source = 'SKILL_MD' AND code NOT IN (${placeholders})
-        `).run(...codes);
+      for (const indicatorId of values) insert.run(normalizedThemeId, indicatorId, nowIso());
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  replaceIndicatorThemes(indicatorId, themeIds = []) {
+    const normalizedIndicatorId = String(indicatorId ?? '').trim();
+    if (!normalizedIndicatorId) {
+      throw new Error('indicatorId is required');
+    }
+    const normalizedThemeIds = [...new Set((themeIds ?? [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0))];
+    const timestamp = nowIso();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM theme_indicators WHERE indicator_id = ?')
+        .run(normalizedIndicatorId);
+      const insert = this.db.prepare(`
+        INSERT INTO theme_indicators (theme_id, indicator_id, created_at)
+        SELECT id, ?, ? FROM themes WHERE id = ?
+      `);
+      for (const themeId of normalizedThemeIds) {
+        insert.run(normalizedIndicatorId, timestamp, themeId);
       }
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
-    return normalized.length;
+    return normalizedThemeIds
+      .filter((themeId) => Boolean(this.getTheme(themeId)))
+      .map((themeId) => ({ themeId, indicatorId: normalizedIndicatorId }));
+  }
+
+  syncExternalSkills(skills = []) {
+    return this.skillRepository.syncExternalSkills(skills);
   }
 
   listSkills() {
@@ -1804,6 +1200,20 @@ export class PlatformDatabase {
         phaseTags: parseJson(phaseTagsJson, []),
       };
     });
+  }
+
+  async listSkillsAsync() {
+    const rows = await this.query(`SELECT code, name, description, category, kind,
+      tool_name AS toolName, instruction, default_enabled AS defaultEnabled, status,
+      source, source_path AS sourcePath, metadata_json AS metadataJson, phase_tags_json AS phaseTagsJson
+      FROM skills WHERE status=1 ORDER BY category, code`);
+    return rows.map((row) => ({
+      ...row,
+      defaultEnabled: asBool(row.defaultEnabled),
+      source: row.source || 'BUILTIN',
+      metadata: parseJson(row.metadataJson, {}),
+      phaseTags: parseJson(row.phaseTagsJson, []),
+    }));
   }
 
   getSkill(code) {
@@ -2085,99 +1495,38 @@ export class PlatformDatabase {
   }
 
   listDataSources() {
-    return this.db.prepare(`
-      SELECT id, code, name, db_type AS dbType, host, port,
-             database_name AS databaseName, username,
-             options_json AS optionsJson, status,
-             last_test_at AS lastTestAt, last_test_ok AS lastTestOk,
-             last_test_message AS lastTestMessage,
-             created_at AS createdAt, updated_at AS updatedAt
-      FROM data_sources
-      ORDER BY id
-    `).all().map((row) => ({
-      ...row,
-      options: parseJson(row.optionsJson, {}),
-      lastTestOk: row.lastTestOk === null || row.lastTestOk === undefined
-        ? null
-        : asBool(row.lastTestOk),
-    }));
+    return this.dataSourceRepository.listDataSources();
   }
 
   getDataSource(id) {
-    const row = this.db.prepare(`
-      SELECT id, code, name, db_type AS dbType, host, port,
-             database_name AS databaseName, username, encrypted_password AS encryptedPassword,
-             options_json AS optionsJson, status,
-             last_test_at AS lastTestAt, last_test_ok AS lastTestOk,
-             last_test_message AS lastTestMessage,
-             created_at AS createdAt, updated_at AS updatedAt
-      FROM data_sources WHERE id = ?
-    `).get(Number(id));
-    return row ? {
-      ...row,
-      options: parseJson(row.optionsJson, {}),
-      lastTestOk: row.lastTestOk === null || row.lastTestOk === undefined
-        ? null
-        : asBool(row.lastTestOk),
-    } : null;
+    return this.dataSourceRepository.getDataSource(id);
   }
 
   getDataSourceByCode(code) {
-    const row = this.db.prepare(`
-      SELECT id FROM data_sources WHERE code = ?
-    `).get(String(code));
-    return row ? this.getDataSource(row.id) : null;
+    return this.dataSourceRepository.getDataSourceByCode(code);
+  }
+
+  async getDataSourceByCodeAsync(code) {
+    return this.dataSourceRepository.getDataSourceByCodeAsync(code);
   }
 
   saveDataSource(payload, id = null) {
-    const timestamp = nowIso();
-    payload = normalizeDataSource(payload);
-    const code = String(payload.code ?? '').trim();
-    const name = String(payload.name ?? '').trim();
-    if (!code || !name) {
-      throw new Error('data source code and name are required');
-    }
-    const values = [
-      code,
-      name,
-      String(payload.dbType ?? 'DORIS').toUpperCase(),
-      String(payload.host ?? '').trim(),
-      Number(payload.port ?? 9030),
-      String(payload.databaseName ?? '').trim(),
-      String(payload.username ?? '').trim(),
-      String(payload.encryptedPassword ?? ''),
-      asJson(payload.options ?? {}),
-      Number(payload.status ?? 1),
-      timestamp,
-    ];
-    if (id) {
-      const current = this.getDataSource(id);
-      if (!current) {
-        throw new Error('data source not found');
-      }
-      this.db.prepare(`
-        UPDATE data_sources
-        SET code = ?, name = ?, db_type = ?, host = ?, port = ?, database_name = ?, username = ?, encrypted_password = ?,
-            options_json = ?, status = ?, updated_at = ?,
-            last_test_at = ?, last_test_ok = ?, last_test_message = ?
-        WHERE id = ?
-      `).run(
-        values[0], values[1], values[2], values[3], values[4], values[5],
-        values[6], values[7] || current.encryptedPassword, values[8], values[9],
-        timestamp, ...dataSourceTestState(current, values.slice(2, 9)), Number(id),
+    return this.dataSourceRepository.saveDataSource(payload, id);
+  }
+
+  deleteDataSource(id) {
+    const source = this.getDataSource(id);
+    if (!source) return false;
+    const datasets = this.db.prepare(`
+      SELECT id, name FROM business_datasets WHERE datasource_id = ? ORDER BY id
+    `).all(Number(id));
+    if (datasets.length > 0) {
+      throw Object.assign(
+        new Error(`数据源仍被 ${datasets.length} 个数据集引用：${datasets.map((item) => item.name).join('、')}`),
+        { statusCode: 409, code: 'DATASOURCE_IN_USE', references: datasets },
       );
-      return this.getDataSource(id);
     }
-    const result = this.db.prepare(`
-      INSERT INTO data_sources
-        (code, name, db_type, host, port, database_name, username,
-         encrypted_password, options_json, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      values[0], values[1], values[2], values[3], values[4], values[5],
-      values[6], values[7], values[8], values[9], timestamp, timestamp,
-    );
-    return this.getDataSource(Number(result.lastInsertRowid));
+    return this.db.prepare('DELETE FROM data_sources WHERE id = ?').run(Number(id)).changes > 0;
   }
 
   updateDataSourceTest(id, result, testedSource = null) {
@@ -2212,6 +1561,100 @@ export class PlatformDatabase {
       config: parseJson(row.configJson, {}),
       canQuery: asBool(row.canQuery),
     }));
+  }
+
+  async listBusinessDatasetsAsync({ userId = null, includeDisabled = false } = {}) {
+    const rows = await this.query(`
+      SELECT d.id, d.code, d.name, d.description, d.datasource_id AS datasourceId,
+             s.code AS datasourceCode, s.name AS datasourceName, s.db_type AS dbType,
+             d.schema_name AS schemaName, d.primary_table AS primaryTable,
+             d.config_json AS configJson, d.status, d.last_synced_at AS lastSyncedAt,
+             d.created_at AS createdAt, d.updated_at AS updatedAt,
+             (SELECT COUNT(*) FROM dataset_fields f WHERE f.dataset_id = d.id) AS fieldCount,
+             (SELECT COUNT(*) FROM dataset_fields f WHERE f.dataset_id = d.id AND f.enabled = 1) AS enabledFieldCount,
+             CASE WHEN ? IS NULL THEN 1 ELSE (SELECT COUNT(*) FROM user_dataset_grants g
+               WHERE g.dataset_id = d.id AND g.user_id = ? AND g.can_query = 1) END AS canQuery
+      FROM business_datasets d JOIN data_sources s ON s.id = d.datasource_id
+      WHERE (? = 1 OR (d.status = 1 AND s.status = 1)) ORDER BY d.id`, [
+      userId ? Number(userId) : null, userId ? Number(userId) : null, includeDisabled ? 1 : 0,
+    ]);
+    return rows.map((row) => ({ ...row, config: parseJson(row.configJson, {}), canQuery: asBool(row.canQuery) }));
+  }
+
+  async getBusinessDatasetAsync(id) {
+    return (await this.listBusinessDatasetsAsync({ includeDisabled: true }))
+      .find((dataset) => Number(dataset.id) === Number(id)) ?? null;
+  }
+
+  async saveBusinessDatasetAsync(payload, id = null) {
+    const timestamp = nowIso();
+    const values = [String(payload.code ?? '').trim(), String(payload.name ?? '').trim(),
+      String(payload.description ?? '').trim(), Number(payload.datasourceId),
+      String(payload.schemaName ?? '').trim(), String(payload.primaryTable ?? '').trim(),
+      asJson(payload.config ?? {}), Number(payload.status ?? 1), timestamp];
+    if (!values[0] || !values[1] || !values[3] || !values[4] || !values[5]) {
+      throw new Error('dataset code, name, datasource, schema and table are required');
+    }
+    if (id) {
+      if (!await this.getBusinessDatasetAsync(id)) throw new Error('dataset not found');
+      await this.execute(`UPDATE business_datasets SET code=?, name=?, description=?, datasource_id=?,
+        schema_name=?, primary_table=?, config_json=?, status=?, updated_at=? WHERE id=?`, [...values, Number(id)]);
+      return this.getBusinessDatasetAsync(id);
+    }
+    const result = await this.execute(`INSERT INTO business_datasets
+      (code, name, description, datasource_id, schema_name, primary_table, config_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [...values.slice(0, 8), timestamp, timestamp]);
+    return this.getBusinessDatasetAsync(result.insertId);
+  }
+
+  async replaceDatasetFieldsAsync(datasetId, fields) {
+    const timestamp = nowIso();
+    await this.transaction(async (tx) => {
+      await tx.execute('DELETE FROM dataset_fields WHERE dataset_id = ?', [Number(datasetId)]);
+      for (const field of fields) {
+        await tx.execute(`INSERT INTO dataset_fields
+          (dataset_id, field_name, display_name, data_type, semantic_type, role, aggregator,
+           description, allowed_operators_json, ordinal_position, enabled)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [Number(datasetId), String(field.fieldName),
+          String(field.displayName ?? field.fieldName), String(field.dataType ?? ''),
+          String(field.semanticType ?? 'STRING'), String(field.role ?? 'DIMENSION'),
+          String(field.aggregator ?? 'NONE'), String(field.description ?? ''),
+          asJson(field.allowedOperators ?? []), Number(field.ordinalPosition ?? 0), field.enabled === false ? 0 : 1]);
+      }
+    });
+    await this.execute('UPDATE business_datasets SET last_synced_at=?, updated_at=? WHERE id=?', [timestamp, timestamp, Number(datasetId)]);
+    return this.listDatasetFieldsAsync(datasetId);
+  }
+
+  async listDatasetFieldsAsync(datasetId, { enabledOnly = false } = {}) {
+    const rows = await this.query(`SELECT id, dataset_id AS datasetId, field_name AS fieldName,
+      display_name AS displayName, data_type AS dataType, semantic_type AS semanticType,
+      role, aggregator, description, allowed_operators_json AS allowedOperatorsJson,
+      ordinal_position AS ordinalPosition, enabled FROM dataset_fields
+      WHERE dataset_id = ? AND (? = 0 OR enabled = 1) ORDER BY ordinal_position, id`,
+    [Number(datasetId), enabledOnly ? 1 : 0]);
+    return rows.map((row) => ({ ...row, allowedOperators: parseJson(row.allowedOperatorsJson, []), enabled: asBool(row.enabled) }));
+  }
+
+  async setDatasetFieldEnabledAsync(datasetId, fieldName, enabled) {
+    const result = await this.execute('UPDATE dataset_fields SET enabled = ? WHERE dataset_id = ? AND field_name = ?',
+      [enabled === false ? 0 : 1, Number(datasetId), String(fieldName)]);
+    if (!Number(result.affectedRows)) return null;
+    const fields = await this.listDatasetFieldsAsync(datasetId);
+    return fields.find((field) => field.fieldName === String(fieldName)) ?? null;
+  }
+
+  async deleteBusinessDatasetAsync(id) {
+    const dataset = await this.getBusinessDatasetAsync(id);
+    if (!dataset) return false;
+    const themes = (await this.themeRepository.listThemesAsync()).filter((theme) =>
+      (theme.businessDatasetIds ?? []).map(String).includes(String(id))
+      || String(theme.primaryBusinessDatasetId ?? '') === String(id));
+    if (themes.length) throw Object.assign(
+      new Error(`数据集仍被 ${themes.length} 个智能体引用：${themes.map((item) => item.name).join('、')}`),
+      { statusCode: 409, code: 'DATASET_IN_USE', references: themes.map((item) => ({ id: item.id, name: item.name })) },
+    );
+    return Number((await this.execute('DELETE FROM business_datasets WHERE id = ?', [Number(id)])).affectedRows) > 0;
   }
 
   getBusinessDataset(id) {
@@ -2263,6 +1706,21 @@ export class PlatformDatabase {
       values[6], values[7], timestamp, timestamp,
     );
     return this.getBusinessDataset(Number(result.lastInsertRowid));
+  }
+
+  deleteBusinessDataset(id) {
+    const dataset = this.getBusinessDataset(id);
+    if (!dataset) return false;
+    const themes = this.listThemes().filter((theme) =>
+      (theme.businessDatasetIds ?? []).map(String).includes(String(id))
+      || String(theme.primaryBusinessDatasetId ?? '') === String(id));
+    if (themes.length > 0) {
+      throw Object.assign(
+        new Error(`数据集仍被 ${themes.length} 个智能体引用：${themes.map((item) => item.name).join('、')}`),
+        { statusCode: 409, code: 'DATASET_IN_USE', references: themes.map((item) => ({ id: item.id, name: item.name })) },
+      );
+    }
+    return this.db.prepare('DELETE FROM business_datasets WHERE id = ?').run(Number(id)).changes > 0;
   }
 
   replaceDatasetFields(datasetId, fields) {
@@ -2862,8 +2320,16 @@ export class PlatformDatabase {
     return this.logRepository.logDatasetQuery(...args);
   }
 
+  logDatasetQueryAsync(...args) {
+    return this.logRepository.logDatasetQueryAsync(...args);
+  }
+
   listDatasetQueryLogs(...args) {
     return this.logRepository.listDatasetQueryLogs(...args);
+  }
+
+  listDatasetQueryLogsAsync(...args) {
+    return this.logRepository.listDatasetQueryLogsAsync(...args);
   }
 
   getIndicator(id) {
@@ -3490,6 +2956,10 @@ export class PlatformDatabase {
     return this.logRepository.addAuditLog(...args);
   }
 
+  addAuditLogAsync(...args) {
+    return this.logRepository.addAuditLogAsync(...args);
+  }
+
   // ---- MCP: API Key 生命周期（仅存哈希，不存明文）----
   createMcpApiKey({ name, tenantId, createdBy, scopes = 'mcp' }) {
     const rawKey = `mcp_${crypto.randomBytes(24).toString('hex')}`;
@@ -3574,6 +3044,10 @@ export class PlatformDatabase {
 
   listAuditLogs(...args) {
     return this.logRepository.listAuditLogs(...args);
+  }
+
+  listAuditLogsAsync(...args) {
+    return this.logRepository.listAuditLogsAsync(...args);
   }
 
   getTraceEvidence(traceId) {
@@ -3848,18 +3322,34 @@ export class PlatformDatabase {
     return this.logRepository.logLlmCall(...args);
   }
 
+  logLlmCallAsync(...args) {
+    return this.logRepository.logLlmCallAsync(...args);
+  }
+
   listLlmLogs(...args) {
     return this.logRepository.listLlmLogs(...args);
+  }
+
+  listLlmLogsAsync(...args) {
+    return this.logRepository.listLlmLogsAsync(...args);
   }
 
   llmLogStats(...args) {
     return this.logRepository.llmLogStats(...args);
   }
 
+  llmLogStatsAsync(...args) {
+    return this.logRepository.llmLogStatsAsync(...args);
+  }
+
   // P0-4：按用户/主题/时间窗口汇总已消耗的 Token（total_tokens，缺字段时回退 prompt+completion）。
   // created_at 为 ISO 字符串，按字典序比较即可覆盖时间窗口（与 logLlmCall 写入格式一致）。
   sumTokenUsage(...args) {
     return this.logRepository.sumTokenUsage(...args);
+  }
+
+  sumTokenUsageAsync(...args) {
+    return this.logRepository.sumTokenUsageAsync(...args);
   }
 
   getPlatformSetting(key, fallback = null) {

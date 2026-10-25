@@ -8,8 +8,8 @@ export function registerThemeRoutes(table) {
     middleware: ['auth'],
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, sendJson, toPublicTheme } = ctx;
-      const user = getRequestUser(request, database);
-      sendJson(response, 200, agent.getThemesForUser(user.id).map(toPublicTheme));
+      const user = await getRequestUser(request, database);
+      sendJson(response, 200, (await agent.getThemesForUserAsync(user.id)).map(toPublicTheme));
     },
   });
 
@@ -23,15 +23,15 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson, toPublicTheme, prepareThemePayload } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const theme = database.saveTheme(
+      const theme = await database.themeRepository.saveThemeAsync(
         prepareThemePayload(body, null, application.datasourceCrypto),
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_CREATE',
         detail: {
@@ -55,20 +55,20 @@ export function registerThemeRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, readJson, sendJson, toPublicTheme, prepareThemePayload } = ctx;
       const themeRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const existingTheme = database.getTheme(Number(themeRoute[0]));
+      const existingTheme = await database.themeRepository.getThemeAsync(Number(themeRoute[0]));
       if (!existingTheme) {
         throw Object.assign(new Error('theme not found'), { statusCode: 404 });
       }
-      const theme = database.saveTheme(
+      const theme = await database.themeRepository.saveThemeAsync(
         prepareThemePayload(body, existingTheme, application.datasourceCrypto),
         Number(themeRoute[0]),
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_UPDATE',
         detail: {
@@ -92,7 +92,7 @@ export function registerThemeRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, readJson, sendJson, toPublicTheme } = ctx;
       const themeStatusRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -100,11 +100,11 @@ export function registerThemeRoutes(table) {
       if (body.status !== 0 && body.status !== 1) {
         throw Object.assign(new Error('status must be 0 or 1'), { statusCode: 400 });
       }
-      const theme = database.setThemeStatus(Number(themeStatusRoute[0]), body.status);
+      const theme = await database.themeRepository.setThemeStatusAsync(Number(themeStatusRoute[0]), body.status);
       if (!theme) {
         throw Object.assign(new Error('theme not found'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_STATUS_UPDATE',
         detail: { themeId: theme.id, name: theme.name, status: theme.status },
@@ -124,12 +124,12 @@ export function registerThemeRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, sendJson } = ctx;
       const themeDeleteRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const deleted = database.deleteTheme(Number(themeDeleteRoute[0]));
-      database.addAuditLog({
+      const deleted = await database.themeRepository.deleteThemeAsync(Number(themeDeleteRoute[0]));
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_DELETE',
         detail: { themeId: Number(themeDeleteRoute[0]), deleted },
@@ -149,16 +149,16 @@ export function registerThemeRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, readJson, sendJson } = ctx;
       const themePromptRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const theme = database.updateThemePrompt(Number(themePromptRoute[0]), body.systemPrompt);
+      const theme = await database.themeRepository.updateThemePromptAsync(Number(themePromptRoute[0]), body.systemPrompt);
       if (!theme) {
         throw Object.assign(new Error('theme not found'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_PROMPT_UPDATE',
         detail: { themeId: theme.id, name: theme.name },
@@ -200,13 +200,13 @@ export function registerThemeRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, agent, params, getRequestUser, sendJson } = ctx;
       const themeSemanticValuesRefreshRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const themeId = Number(themeSemanticValuesRefreshRoute[0]);
       const result = await agent.refreshSemanticValueFields(themeId);
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'THEME_SEMANTIC_VALUES_REFRESH',
         detail: {
@@ -229,7 +229,7 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, agent, database, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -259,11 +259,13 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listSkills());
+      sendJson(response, 200, database.isAsyncPlatformStore
+        ? await database.listSkillsAsync()
+        : database.listSkills());
     },
   });
 
@@ -277,14 +279,16 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       sendJson(response, 200, {
         roots: application.config.skillDirectories ?? [],
         sync: application.runtime.skillSync,
-        skills: database.listSkills(),
+        skills: database.isAsyncPlatformStore
+          ? await database.listSkillsAsync()
+          : database.listSkills(),
       });
     },
   });
@@ -299,13 +303,13 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const sync = application.skillRegistry.refreshExternalSkills();
+      const sync = await application.skillRegistry.refreshExternalSkills();
       application.runtime.skillSync = sync;
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SKILL_REGISTRY_SYNC',
         detail: {
@@ -316,7 +320,9 @@ export function registerThemeRoutes(table) {
       });
       sendJson(response, 200, {
         ...sync,
-        skills: database.listSkills(),
+        skills: database.isAsyncPlatformStore
+          ? await database.listSkillsAsync()
+          : database.listSkills(),
       });
     },
   });
@@ -331,7 +337,7 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -355,13 +361,13 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
       const result = await agent.refreshSemanticValueDomain(body);
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SEMANTIC_DOMAIN_REFRESH',
         detail: {
@@ -386,7 +392,7 @@ export function registerThemeRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, agent, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
@@ -395,7 +401,7 @@ export function registerThemeRoutes(table) {
         ...body,
         updatedBy: user.id,
       });
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'SEMANTIC_DOMAIN_OVERRIDE',
         detail: {
@@ -415,12 +421,12 @@ export function registerThemeRoutes(table) {
 async function themeSemanticValuesHandler(ctx) {
   const { request, response, database, agent, params, method, getRequestUser, readJson, sendJson } = ctx;
   const themeSemanticValuesRoute = params;
-  const user = getRequestUser(request, database);
+  const user = await getRequestUser(request, database);
   if (user.role !== 'ADMIN') {
     throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
   }
   const themeId = Number(themeSemanticValuesRoute[0]);
-  const theme = database.getTheme(themeId);
+  const theme = await database.themeRepository.getThemeAsync(themeId);
   if (!theme) {
     throw Object.assign(new Error('theme not found'), { statusCode: 404 });
   }
@@ -429,11 +435,11 @@ async function themeSemanticValuesHandler(ctx) {
     return;
   }
   const body = await readJson(request);
-  const updated = database.saveTheme({
+  const updated = await database.themeRepository.saveThemeAsync({
     ...theme,
     semanticValueConfig: body,
   }, themeId);
-  database.addAuditLog({
+  await database.addAuditLogAsync({
     userId: user.id,
     action: 'THEME_SEMANTIC_VALUES_UPDATE',
     detail: {

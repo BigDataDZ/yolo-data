@@ -20,6 +20,8 @@ test('MySQL, TiDB and Doris retain one dialect; PG aliases normalize at save tim
 test('identifier quoting uses the same whitelist for both dialects', () => {
   assert.equal(getDialect('MYSQL').quoteIdentifier('Order'), '`Order`');
   assert.equal(getDialect('PG').quoteIdentifier('Order'), '"Order"');
+  assert.equal(getDialect('MYSQL').quoteIdentifier('yolo-data'), '`yolo-data`');
+  assert.equal(getDialect('PG').quoteIdentifier('yolo-data'), '"yolo-data"');
   for (const type of ['MYSQL', 'PG']) {
     for (const name of ['bad.name', 'a"', 'x;DROP TABLE sales', '', 'x`']) {
       assert.throws(() => getDialect(type).quoteIdentifier(name), /invalid SQL identifier/);
@@ -139,6 +141,19 @@ test('PG sampling, profiling, distinct and execution use quoted source identifie
   assert.equal(result.columns[0].showType, 'NUMBER');
   assert.equal(logs[0].success, true);
   for (const sql of queries) { assert.match(sql, /"public"\."sales"/); assert.equal(sql.includes('`'), false); }
+});
+
+test('MySQL sampling supports a hyphenated database/schema name', async () => {
+  const { service } = dialectDataset('MYSQL', 'yolo-data');
+  let query;
+  service.getPoolById = () => ({ query: async (input) => {
+    query = input.sql;
+    return [[{ day: '2026-01-01' }], [{ name: 'day' }]];
+  } });
+
+  await service.sampleDataset(1, 20);
+
+  assert.match(query, /FROM `yolo-data`\.`sales` LIMIT \?/);
 });
 
 test('connection tests record driver/connection errors instead of throwing before the try block', async () => {

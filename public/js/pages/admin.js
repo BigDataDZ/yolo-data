@@ -184,6 +184,22 @@ async function renderDatasetsPage(root) {
       }
     });
   });
+  root.querySelectorAll('[data-delete-source]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const source = sources.find((item) => String(item.id) === button.dataset.deleteSource);
+      if (!source || !window.confirm(`确认删除数据源「${source.name}」？`)) return;
+      setBusy(button, true, '删除中');
+      try {
+        await api(`/api/data-sources/${button.dataset.deleteSource}`, { method: 'DELETE' });
+        toast('数据源已删除');
+        await loadBootstrap(state.currentUser.id);
+        renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        setBusy(button, false);
+      }
+    });
+  });
   root.querySelectorAll('[data-sync-dataset]').forEach((button) => {
     button.addEventListener('click', async () => {
       setBusy(button, true, '同步中');
@@ -206,6 +222,22 @@ async function renderDatasetsPage(root) {
   });
   root.querySelectorAll('[data-sample-dataset]').forEach((button) => {
     button.addEventListener('click', () => sampleDataset(button.dataset.sampleDataset));
+  });
+  root.querySelectorAll('[data-delete-dataset]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const dataset = datasets.find((item) => String(item.id) === button.dataset.deleteDataset);
+      if (!dataset || !window.confirm(`确认删除业务数据集「${dataset.name}」？`)) return;
+      setBusy(button, true, '删除中');
+      try {
+        await api(`/api/business-datasets/${button.dataset.deleteDataset}`, { method: 'DELETE' });
+        toast('业务数据集已删除');
+        await loadBootstrap(state.currentUser.id);
+        renderPage();
+      } catch (error) {
+        toast(error.message, 'error');
+        setBusy(button, false);
+      }
+    });
   });
   root.querySelectorAll('[data-profile-dataset]').forEach((button) => {
     button.addEventListener('click', () => openDatasetProfiler(button.dataset.profileDataset));
@@ -230,6 +262,7 @@ function renderBusinessDatasetsTable(datasets) {
                 <button class="btn btn-quiet btn-small" data-profile-dataset="${dataset.id}" type="button">智能识别</button>
                 <button class="btn btn-quiet btn-small" data-dataset-fields="${dataset.id}" type="button">字段</button>
                 <button class="btn btn-quiet btn-small" data-sample-dataset="${dataset.id}" type="button">抽样</button>
+                <button class="btn btn-quiet btn-small btn-danger" data-delete-dataset="${dataset.id}" type="button">删除</button>
               </td>
             </tr>
           `).join('') || '<tr><td colspan="6">暂无业务数据集</td></tr>'}
@@ -252,7 +285,7 @@ function renderDatasetSourcesTable(sources) {
               <td class="mono">${escapeHtml(source.host)}:${source.port}</td>
               <td>${escapeHtml(source.databaseName)}</td>
               <td><span class="tag ${source.lastTestOk === true ? 'tag-teal' : source.lastTestOk === false ? 'tag-red' : ''}">${source.lastTestOk === true ? '成功' : source.lastTestOk === false ? '失败' : '未测试'}</span></td>
-              <td><button class="btn btn-small" data-edit-source="${source.id}" type="button">编辑</button> <button class="btn btn-small" data-test-source="${source.id}" type="button">测试连接</button></td>
+              <td><button class="btn btn-small" data-edit-source="${source.id}" type="button">编辑</button> <button class="btn btn-small" data-test-source="${source.id}" type="button">测试连接</button> <button class="btn btn-small btn-danger" data-delete-source="${source.id}" type="button">删除</button></td>
             </tr>
           `).join('') || '<tr><td colspan="6">暂无数据源</td></tr>'}
         </tbody>

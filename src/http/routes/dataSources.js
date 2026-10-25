@@ -11,11 +11,11 @@ export function registerDataSourceRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, application.businessDatasets.listDataSources());
+      sendJson(response, 200, await application.businessDatasets.listDataSourcesAsync());
     },
   });
 
@@ -29,13 +29,13 @@ export function registerDataSourceRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const source = application.businessDatasets.saveDataSource(body);
-      database.addAuditLog({
+      const source = await application.businessDatasets.saveDataSourceAsync(body);
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'DATASOURCE_CREATE',
         detail: {
@@ -59,12 +59,23 @@ export function registerDataSourceRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, sendJson } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const source = await application.businessDatasets.testDataSource(Number(params[0]));
+      const source = await application.businessDatasets.testDataSourceAsync(Number(params[0]));
       sendJson(response, 200, publicDataSource(source));
+    },
+  });
+
+  table.add({
+    id: 'dataSources.delete', method: 'DELETE', path: '/api/data-sources/:id(\\d+)',
+    tags: ['datasets'], summary: '删除数据源（管理员）',
+    middleware: ['auth', 'admin'], adminOnly: true,
+    handler: async ({ response, database, params, user, sendJson }) => {
+      const deleted = await database.dataSourceRepository.deleteDataSourceAsync(Number(params[0]));
+      await database.addAuditLogAsync({ userId: user.id, action: 'DATASOURCE_DELETE', detail: { datasourceId: Number(params[0]), deleted } });
+      sendJson(response, 200, { deleted });
     },
   });
 
@@ -75,11 +86,11 @@ export function registerDataSourceRoutes(table) {
     handler: async ({ request, response, database, application, params, user, readJson, sendJson }) => {
       const id = Number(params[0]);
       const body = await readJson(request);
-      const current = database.getDataSource(id);
+      const current = await database.dataSourceRepository.getDataSourceAsync(id);
       if (!current) throw Object.assign(new Error('data source not found'), { statusCode: 404 });
       const payload = dataSourceUpdate(current, body);
-      const source = application.businessDatasets.saveDataSource(payload, id);
-      database.addAuditLog({ userId: user.id, action: 'DATASOURCE_UPDATE', detail: {
+      const source = await application.businessDatasets.saveDataSourceAsync(payload, id);
+      await database.addAuditLogAsync({ userId: user.id, action: 'DATASOURCE_UPDATE', detail: {
         datasourceId: id, code: source.code,
         changedFields: Object.keys(body).filter(key => key !== 'password'),
         passwordChanged: Boolean(body.password),
@@ -99,7 +110,7 @@ export function registerDataSourceRoutes(table) {
       adminOnly: true,
       handler: async (ctx) => {
         const { request, response, url, database, application, params, getRequestUser, sendJson } = ctx;
-        const user = getRequestUser(request, database);
+        const user = await getRequestUser(request, database);
         if (user.role !== 'ADMIN') {
           throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
         }

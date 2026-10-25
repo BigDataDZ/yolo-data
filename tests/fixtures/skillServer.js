@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../../src/server.js';
 import { loadConfig } from '../../src/config.js';
-import { setUserPassword } from '../../src/auth.js';
+import { setUserPasswordAsync } from '../../src/auth.js';
 
 export const TEST_PASSWORD = 'skill-acceptance-password';
 export function skillDocument(name = 'acceptance-method', description = '验收分析方法') {
@@ -22,7 +22,8 @@ export async function withSkillServer(run, { directory: suppliedDirectory, initi
     const baseUrl = `http://127.0.0.1:${server.address().port}`;
     await initialize?.({ server, application, baseUrl, directory });
     for (const username of ['admin', 'east_manager']) {
-      setUserPassword(application.database, application.database.getUserByUsername(username).id, TEST_PASSWORD);
+      await setUserPasswordAsync(application.database,
+        application.database.getUserByUsername(username).id, TEST_PASSWORD);
     }
     const request = async (route, { cookie, method = 'GET', body, headers = {} } = {}) => {
       const response = await fetch(`${baseUrl}${route}`, { method,
@@ -41,6 +42,6 @@ export async function withSkillServer(run, { directory: suppliedDirectory, initi
     application?.memoryMaintenance.stop();
     await application?.businessDatasets.close();
     if (server) await new Promise((resolve) => server.close(resolve));
-    application?.database.close();
+    await application?.database.closeAsync();
   }
 }

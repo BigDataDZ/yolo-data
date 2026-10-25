@@ -1,4 +1,9 @@
 import { extractSkillGuidance, SkillAdapter } from './skillAdapter.js';
+import {
+  CORE_SKILL_DEFINITIONS,
+  CORE_RESOLVER_NAMES,
+  createCoreSkillResolverRegistry,
+} from './coreSkills.js';
 
 const REQUIRED_TOOLS = [
   'search_indicators',
@@ -30,20 +35,24 @@ function normalizeSkillCodes(skillCodes, availableSkills) {
 }
 
 export class SkillRegistry {
-  constructor(database, { skillDirectories = [] } = {}) {
+  constructor(database, { skillDirectories = [], coreResolvers = null } = {}) {
     this.database = database;
     this.adapter = new SkillAdapter({
       directories: skillDirectories,
     });
     this.lastSync = null;
+    this.coreResolvers = coreResolvers ?? createCoreSkillResolverRegistry();
   }
 
-  refreshExternalSkills() {
+  async refreshExternalSkills() {
     const discovered = this.adapter.discover();
     if (discovered.roots.length === 0) {
+      const persisted = this.database.isAsyncPlatformStore
+        ? await this.database.listSkillsAsync()
+        : this.listSkills();
       this.lastSync = {
         syncedAt: new Date().toISOString(),
-        count: this.listSkills().filter((skill) => skill.source === 'SKILL_MD').length,
+        count: persisted.filter((skill) => skill.source === 'SKILL_MD').length,
         roots: [],
         configuredRoots: discovered.configuredRoots,
         warnings: discovered.warnings,
@@ -51,7 +60,9 @@ export class SkillRegistry {
       };
       return this.lastSync;
     }
-    const count = this.database.syncExternalSkills(discovered.skills);
+    const count = this.database.isAsyncPlatformStore
+      ? await this.database.skillRepository.syncExternalSkills(discovered.skills)
+      : await this.database.syncExternalSkills(discovered.skills);
     this.lastSync = {
       syncedAt: new Date().toISOString(),
       count,
@@ -64,7 +75,35 @@ export class SkillRegistry {
   }
 
   listSkills() {
-    return this.database.listSkills();
+    const persisted = this.database.listSkills();
+    const known = new Set(CORE_SKILL_DEFINITIONS
+      .filter((skill) => this.database.getSkill(skill.code))
+      .map((skill) => skill.code));
+    return [
+      ...CORE_SKILL_DEFINITIONS
+        .filter((skill) => !known.has(skill.code))
+        .map((skill) => ({
+          ...skill,
+          source: 'BUILTIN',
+          status: 1,
+        })),
+      ...persisted,
+    ];
+  }
+
+  async listSkillsAsync() {
+    const persisted = await this.database.listSkillsAsync();
+    const known = new Set(persisted.map((skill) => skill.code));
+    return [
+      ...CORE_SKILL_DEFINITIONS.filter((skill) => !known.has(skill.code)).map((skill) => ({
+        ...skill, source: 'BUILTIN', status: 1,
+      })),
+      ...persisted,
+    ];
+  }
+
+  async listForThemeAsync(theme) {
+    return normalizeSkillCodes(theme?.skillCodes ?? [], await this.listSkillsAsync());
   }
 
   listForTheme(theme) {
@@ -108,6 +147,33 @@ export class SkillRegistry {
       .filter((item) => item.guidance);
   }
 
+  async buildPhaseInstructionsAsync(skills, phase) {
+    const normalizedPhase = String(phase ?? '').toUpperCase();
+    const selected = (skills ?? []).filter((skill) => (
+      ['SKILL_MD', 'UPLOAD'].includes(String(skill.source ?? '').toUpperCase())
+      && (skill.phaseTags ?? []).map(String).map((item) => item.toUpperCase())
+        .includes(normalizedPhase)
+    ));
+    return Promise.all(selected.map(async (skill) => {
+      const full = this.database.getSkillAsync
+        ? (await this.database.getSkillAsync(skill.code) ?? skill)
+        : this.database.isAsyncPlatformStore
+          ? skill
+          : (this.database.getSkill(skill.code) ?? skill);
+      const guidance = extractSkillGuidance({
+        ...full,
+        body: full.content ?? '',
+      }, normalizedPhase);
+      return {
+        code: skill.code,
+        name: skill.name,
+        phase: normalizedPhase,
+        sourcePath: skill.sourcePath ?? null,
+        guidance,
+      };
+    })).then((items) => items.filter((item) => item.guidance));
+  }
+
   auditPlanningContext({
     skills,
     question,
@@ -115,7 +181,26 @@ export class SkillRegistry {
     businessDatasets = [],
     primaryBusinessDatasetId = null,
   }) {
-    const guidance = this.buildPhaseInstructions(skills, 'PRE_PLAN');
+    return this.buildPlanningAudit({
+      skills,
+      question,
+      theme,
+      businessDatasets,
+      primaryBusinessDatasetId,
+    }, this.buildPhaseInstructions(skills, 'PRE_PLAN'));
+  }
+
+  async auditPlanningContextAsync(args) {
+    const guidance = await this.buildPhaseInstructionsAsync(args.skills, 'PRE_PLAN');
+    return this.buildPlanningAudit(args, guidance);
+  }
+
+  buildPlanningAudit({
+    question,
+    theme,
+    businessDatasets = [],
+    primaryBusinessDatasetId = null,
+  }, guidance) {
     const checks = [
       {
         id: 'source-of-truth',
@@ -167,7 +252,21 @@ export class SkillRegistry {
     indicator,
     data,
   }) {
-    const guidance = this.buildPhaseInstructions(skills, 'POST_EXECUTE');
+    return this.buildQueryResultValidation({
+      question,
+      semanticParse,
+      dataset,
+      indicator,
+      data,
+    }, this.buildPhaseInstructions(skills, 'POST_EXECUTE'));
+  }
+
+  async validateQueryResultAsync(args) {
+    const guidance = await this.buildPhaseInstructionsAsync(args.skills, 'POST_EXECUTE');
+    return this.buildQueryResultValidation(args, guidance);
+  }
+
+  buildQueryResultValidation({ question, semanticParse, dataset, indicator, data }, guidance) {
     const contract = semanticParse?.queryContract ?? null;
     const hasResult = Array.isArray(data?.rows);
     const checks = [
@@ -256,6 +355,42 @@ export class SkillRegistry {
     return (skills ?? []).find(
       (skill) => skill.kind === 'TOOL' && skill.toolName === target,
     ) ?? null;
+  }
+
+  registerCoreResolver(name, resolver) {
+    this.coreResolvers.register(name, resolver);
+    return this;
+  }
+
+  unregisterCoreResolver(name) {
+    this.coreResolvers.unregister(name);
+  }
+
+  resolveCoreSkill(name, context = {}, skills = []) {
+    const definition = CORE_SKILL_DEFINITIONS.find(
+      (skill) => skill.resolverName === String(name),
+    );
+    if (!definition || !CORE_RESOLVER_NAMES.has(String(name))) {
+      return null;
+    }
+    const selected = (skills ?? []).find((skill) => (
+      skill.code === definition.code
+      && skill.status !== 0
+      && skill.enabled !== false
+      && (
+        String(skill.source ?? 'BUILTIN').toUpperCase() === 'BUILTIN'
+        || (
+          String(skill.source).toUpperCase() === 'SKILL_MD'
+          && String(skill.category).toUpperCase() === 'CORE'
+          && String(skill.kind).toUpperCase() === 'RESOLVER'
+          && skill.metadata?.resolverName === definition.resolverName
+        )
+      )
+    ));
+    if (!selected) {
+      return null;
+    }
+    return this.coreResolvers.resolve(name, context);
   }
 }
 

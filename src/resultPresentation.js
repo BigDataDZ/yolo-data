@@ -1,9 +1,11 @@
+import { isNumericColumn } from './numericPresentation.js';
 import { buildCacheKey, RuntimeCache } from './runtimeCache.js';
 import { buildThemeColumnRules } from './themePresentationRules.js';
 import {
   buildOnlineTemplateRules,
   mergeDeterministicFallbacks,
 } from './presentationFallbacks.js';
+export { presentationValueForColumn } from './numericPresentation.js';
 
 const PRESENTATION_TYPES = new Set([
   'amount',
@@ -42,12 +44,6 @@ function columnKey(column) {
 
 function columnLabel(column) {
   return String(column?.childName ?? column?.name ?? columnKey(column)).trim();
-}
-
-function isNumericColumn(column) {
-  return String(column?.showType ?? '').toUpperCase() === 'NUMBER'
-    || ['NUMBER', 'DECIMAL', 'DOUBLE', 'FLOAT', 'INTEGER', 'BIGINT']
-      .includes(String(column?.type ?? '').toUpperCase());
 }
 
 function numericValue(value) {
@@ -535,13 +531,4 @@ export function formatPresentationCell(value, column) {
     }`;
   }
   return `${prefix}${text}${suffix}`;
-}
-
-export function presentationValueForColumn(value, column) {
-  const number = numericValue(value);
-  if (number === null) {
-    return value;
-  }
-  const scale = Number(column?.xlsxScale) || 1;
-  return number * scale;
 }

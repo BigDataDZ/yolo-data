@@ -1,6 +1,6 @@
 {
   "name": "yolo-data",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "YOLO Data intelligent query platform",
@@ -9,17 +9,24 @@
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
-    "dev": "node --watch src/server.js",
+    "db:init": "node scripts/init-platform-db.mjs",
+    "db:config:export": "node scripts/export-platform-config.mjs",
+    "db:config:seed": "node scripts/seed-platform-config.mjs",
+    "db:init:mysql": "node scripts/generate-mysql-init.mjs",
+    "dev": "node scripts/dev.mjs",
     "start": "node src/server.js",
     "test": "node --test",
     "lint": "node scripts/check-architecture.mjs",
     "lint:baseline": "node scripts/check-architecture.mjs --baseline",
     "eval": "node scripts/run-eval.mjs",
-    "smoke:query": "node scripts/run-query-smoke.mjs"
+    "smoke:query": "node scripts/run-query-smoke.mjs",
+    "demo:export": "node scripts/demo-export.mjs"
   },
   "dependencies": {
-    "mysql2": "^3.24.5",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "knex": "^3.3.0",
+    "mysql2": "^3.24.5",
+    "yaml": "^2.9.1",
     "zod": "^3.23.0"
   }
 }

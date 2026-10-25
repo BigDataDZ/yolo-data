@@ -706,6 +706,7 @@ export function buildDeterministicSummary({
   // 平台只校验并转述，不参与计算；缺失或校验不通过时回落到确定性事实。
   analysis = null,
   resultQuality = null,
+  vocabularyResolver = null,
 }) {
   if (resultQuality?.truncated) {
     return [
@@ -731,6 +732,7 @@ export function buildDeterministicSummary({
     analysisLines,
     movementLines: fallback,
     trend: trendFinding(columns, rows, contract),
+    vocabularyResolver,
   });
 }
 

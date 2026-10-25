@@ -53,7 +53,7 @@ export class SemanticCompiler {
       },
       limit: safeLimit(limit),
       execution: {
-        adapter: 'supersonic-indicator',
+        adapter: 'local-indicator-catalog',
         operation: 'queryIndicator',
         rawSqlAllowed: false,
       },
@@ -464,7 +464,7 @@ export class SemanticCompiler {
       policyFilters: plan.policyFilters,
       dateInfo: plan.dateInfo,
       execution: {
-        adapter: 'supersonic-indicator',
+        adapter: 'local-indicator-catalog',
         endpoint: '/api/semantic/query/metric',
         rowCount: rows.length,
         columnCount: columns.length,

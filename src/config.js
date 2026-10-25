@@ -3,12 +3,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveAuthMode } from './auth.js';
+import { applyConfigFile } from './configFile.js';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // Python 沙箱解释器的兜底候选。Windows 装的是 `python`，macOS/Linux 上是 `python3`；
-// 必须和 .env.example 的 `PYTHON_BIN=python3` 及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
+// 必须和 yolo-conf.yaml 的 `codeExecution.pythonBin` 注释及 scripts/setup.mjs 探测顺序一致，避免缺少别名时失败。
 export const DEFAULT_PYTHON_BIN = process.platform === 'win32' ? 'python' : 'python3';
+
+function projectPythonBin() {
+  const relativePath = process.platform === 'win32'
+    ? path.join('.venv', 'Scripts', 'python.exe')
+    : path.join('.venv', 'bin', 'python');
+  const candidate = path.join(projectRoot, relativePath);
+  return fs.existsSync(candidate) ? candidate : DEFAULT_PYTHON_BIN;
+}
 
 function readInt(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -28,16 +37,16 @@ function parsePathList(value, fallback = []) {
 }
 
 export function loadConfig(env = process.env) {
-  const envFilePath = path.resolve(projectRoot, '.env');
-  if (env === process.env && fs.existsSync(envFilePath)) {
-    const existing = { ...process.env };
-    process.loadEnvFile(envFilePath);
-    Object.assign(process.env, existing);
-  }
+  // 配置面：yolo-conf.yaml 提供结构与默认值，真实环境变量覆盖；平台不读取 .env 文件。
+  // `env === process.env` 是「真实进程」守卫：测试传自定义 env 时不读工作区配置文件。
+  if (env === process.env) applyConfigFile({ projectRoot });
   const nodeEnv = String(env.NODE_ENV ?? '').trim().toLowerCase();
   const authMode = resolveAuthMode({ authMode: env.AUTH_MODE ?? '', nodeEnv });
   const host = String(env.HOST ?? '').trim() || (authMode === 'dev' ? '127.0.0.1' : '0.0.0.0');
   const dbPath = String(env.PLATFORM_DB_PATH ?? './data/platform.db').trim();
+  const platformDbBackend = String(
+    env.PLATFORM_DB_BACKEND ?? env.DATABASE_BACKEND ?? 'sqlite',
+  ).trim().toLowerCase() || 'sqlite';
   const skillDirectories = parsePathList(
     env.AGENT_SKILL_DIRECTORIES,
     [
@@ -58,15 +67,23 @@ export function loadConfig(env = process.env) {
     port: readInt(env.PORT, 8088),
     host,
     dbPath: path.isAbsolute(dbPath) ? dbPath : path.resolve(projectRoot, dbPath),
-    supersonic: {
-      baseUrl: normalizeBaseUrl(env.SUPERSONIC_BASE_URL),
-      token: String(env.SUPERSONIC_TOKEN ?? '').trim(),
-      appKey: String(env.SUPERSONIC_APP_KEY ?? '').trim(),
-      serviceClientId: String(env.SUPERSONIC_SERVICE_CLIENT_ID ?? '').trim(),
-      serviceClientSecret: String(
-        env.SUPERSONIC_SERVICE_CLIENT_SECRET ?? '',
-      ).trim(),
-      timeoutMs: readInt(env.SUPERSONIC_TIMEOUT_MS, 30_000),
+    platformDatabase: {
+      backend: platformDbBackend,
+      path: path.isAbsolute(dbPath) ? dbPath : path.resolve(projectRoot, dbPath),
+      // Programmatic/test configs stay isolated by default; the real process
+      // config enables install-package resources unless explicitly disabled.
+      seedResources: env === process.env
+        && String(env.PLATFORM_BOOTSTRAP_RESOURCES ?? 'true').toLowerCase() !== 'false',
+      mysql: {
+        host: String(env.PLATFORM_DB_HOST ?? '').trim(),
+        port: readInt(env.PLATFORM_DB_PORT, 3306),
+        database: String(env.PLATFORM_DB_NAME ?? 'yolo_platform').trim(),
+        user: String(env.PLATFORM_DB_USER ?? 'yolo').trim(),
+        password: String(env.PLATFORM_DB_PASSWORD ?? ''),
+        charset: String(env.PLATFORM_DB_CHARSET ?? 'utf8mb4').trim(),
+        initialize: String(env.PLATFORM_DB_INIT ?? 'true').toLowerCase() !== 'false',
+        initSqlPath: String(env.PLATFORM_DB_INIT_SQL ?? './config/platform/mysql-init.sql').trim(),
+      },
     },
     deepseek: {
       // 通用环境变量优先；保留旧变量作为兼容回退。
@@ -109,7 +126,7 @@ export function loadConfig(env = process.env) {
       projectRoot,
       String(env.CODE_EXECUTION_ROOT ?? './data/code-runs').trim(),
     ),
-    pythonBin: String(env.PYTHON_BIN ?? '').trim() || DEFAULT_PYTHON_BIN,
+    pythonBin: String(env.PYTHON_BIN ?? '').trim() || projectPythonBin(),
     uploads: {
       maxBytes: Math.max(1, readInt(env.UPLOAD_MAX_BYTES, 8 * 1024 * 1024)),
       maxFilesPerSession: Math.max(1, readInt(env.UPLOAD_MAX_FILES_PER_SESSION, 20)),
@@ -140,6 +157,26 @@ export function loadConfig(env = process.env) {
       database: String(env.DORIS_BOOTSTRAP_DATABASE ?? '').trim(),
       salesTable: String(env.DORIS_BOOTSTRAP_SALES_TABLE ?? '').trim(),
       goodsTable: String(env.DORIS_BOOTSTRAP_GOODS_TABLE ?? '').trim(),
+      // 内置演示数据（config/demo/*）：开启后启动即建表、灌演示行并注册数据集。
+      demo: {
+        enabled: String(env.DEMO_DATA_ENABLED ?? '').toLowerCase() === 'true',
+        loadData: String(env.DEMO_DATA_LOAD ?? 'true').toLowerCase() !== 'false',
+        appendToExisting: String(env.DEMO_DATA_APPEND ?? '').toLowerCase() === 'true',
+        rows: readInt(env.DEMO_DATA_ROWS, 5000),
+        seed: readInt(env.DEMO_DATA_SEED, 20261022),
+        startDate: String(env.DEMO_DATA_START ?? '2024-11-01').trim(),
+        endDate: String(env.DEMO_DATA_END ?? '2026-10-20').trim(),
+        // 默认复用平台 MySQL 数据源（后端为 mysql 时由 ensurePlatformMysqlDatasource 自动创建）。
+        datasourceCode: String(env.DEMO_DATA_DATASOURCE ?? 'platform_mysql').trim(),
+        dbType: String(env.DEMO_DB_TYPE ?? 'MYSQL').trim().toUpperCase(),
+        host: String(env.DEMO_DB_HOST ?? '').trim(),
+        port: readInt(env.DEMO_DB_PORT, 3306),
+        // Blank demo database means reuse the platform database. The config
+        // file loader materializes blank values as empty strings, so use ||.
+        schemaName: String(env.DEMO_DB_DATABASE || env.PLATFORM_DB_NAME || '').trim(),
+        username: String(env.DEMO_DB_USER ?? '').trim(),
+        password: String(env.DEMO_DB_PASSWORD ?? ''),
+      },
     },
   };
 }

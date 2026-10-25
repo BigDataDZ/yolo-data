@@ -49,3 +49,31 @@ export function resolveThemeBusinessDatasets({
     primaryBusinessDatasetId: activePrimaryBusinessDatasetId,
   };
 }
+
+export async function resolveThemeBusinessDatasetsAsync(options = {}) {
+  const { database, user, theme, scope, businessDatasets = null } = options;
+  if (!user || !theme) return { businessDatasets: [], primaryBusinessDatasetId: null };
+  const resolvedScope = scope ?? resolveAccessScope({
+    user,
+    theme,
+    permissionProfile: database.permissionRepository?.getProfile
+      ? await database.permissionRepository.getProfile(user.id)
+      : database.getPermissionProfile?.(user.id),
+  });
+  const grantedDatasetIds = new Set((resolvedScope.allowedDatasetIds ?? []).map(Number));
+  const configuredDatasetIds = new Set((theme.businessDatasetIds ?? []).map(Number));
+  const primaryBusinessDatasetId = Number(theme.primaryBusinessDatasetId) || null;
+  const availableDatasets = database.listBusinessDatasetsAsync
+    ? await database.listBusinessDatasetsAsync({ userId: user.id })
+    : businessDatasets?.listDatasets({ userId: user.id }) ?? [];
+  const datasets = availableDatasets
+    .filter((dataset) => resolvedScope.isAdmin || grantedDatasetIds.has(Number(dataset.id)))
+    .filter((dataset) => configuredDatasetIds.size === 0 || configuredDatasetIds.has(Number(dataset.id)))
+    .sort((left, right) => Number(left.id) === primaryBusinessDatasetId ? -1
+      : Number(right.id) === primaryBusinessDatasetId ? 1 : Number(left.id) - Number(right.id));
+  return {
+    businessDatasets: datasets,
+    primaryBusinessDatasetId: datasets.some((item) => Number(item.id) === primaryBusinessDatasetId)
+      ? primaryBusinessDatasetId : null,
+  };
+}

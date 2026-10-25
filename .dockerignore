@@ -10,6 +10,7 @@ artifacts
 eval/report.json
 *.log
 *.tmp
+# 配置文件 yolo-conf.yaml 会进镜像（它就是默认配置面）；
+# 机密不要在构建上下文里携带，运行时用 environment 覆盖。
 .env
 .env.*
-!.env.example

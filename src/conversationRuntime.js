@@ -19,7 +19,7 @@ export async function resolveConversationRuntime({
   maxInheritTurns,
   maxInheritedSlots,
 } = {}) {
-  const understanding = memory.buildUnderstandingContext(sessionId, userId);
+  const understanding = await memory.buildUnderstandingContextAsync(sessionId, userId);
   const memorySlots = extractMemorySlots(
     ...(memoryTexts ?? []),
     understanding.memoryMessage?.retrievalText ?? '',

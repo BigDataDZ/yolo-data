@@ -1,0 +1,8 @@
+{
+  "datasetCode": "ads_sale_detail_demo",
+  "datasetName": "销售明细（演示）",
+  "datasetDescription": "内置演示数据集：生鲜 B2B 销售明细，2 年、8 个虚拟客户，金额口径自带闭合关系。",
+  "sourceCode": "demo_sales_source",
+  "sourceName": "演示销售库",
+  "table": "ads_sale_detail"
+}

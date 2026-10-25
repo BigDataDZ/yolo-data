@@ -175,6 +175,7 @@ export function composeNaturalAnswer({
   analysisLines = [],
   movementLines = [],
   trend = '',
+  vocabularyResolver = null,
 }) {
   if (rows.length === 0) {
     return '按当前条件未返回数据，也没有自动调整时间范围或指标。';
@@ -186,7 +187,8 @@ export function composeNaturalAnswer({
   if (analysisLines.length > 0) {
     return analysisLines.map(sentence).join('\n');
   }
-  const wantsTrend = /趋势|走势|变化/.test(String(question ?? ''))
+  const vocabulary = vocabularyResolver?.({ question }) ?? {};
+  const wantsTrend = vocabulary.trend || /趋势|走势|变化/.test(String(question ?? ''))
     || Boolean(contract?.timeGrain);
   if (wantsTrend && trend) {
     return [
@@ -194,7 +196,15 @@ export function composeNaturalAnswer({
       sentence(trend),
     ].filter(Boolean).join('\n');
   }
-  const breakdown = composeBreakdown({ question, rows, columns, contract });
+  const naturalQuestion = vocabulary.ranking || vocabulary.direction === 'ASC'
+    ? `${question} ${vocabulary.ranking ? '排名' : ''} ${vocabulary.direction === 'ASC' ? '最低' : ''}`
+    : question;
+  const breakdown = composeBreakdown({
+    question: naturalQuestion,
+    rows,
+    columns,
+    contract,
+  });
   if (breakdown) {
     const periods = temporalPeriods(columns, rows, contract);
     if (wantsTrend && periods.length === 1) {

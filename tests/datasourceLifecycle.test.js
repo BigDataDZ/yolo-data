@@ -15,7 +15,7 @@ function fixture(t) {
   const closed = [];
   // Only the external connection is replaced; persistence and cache lifecycle are real.
   service.createPool = source => ({ host: source.host, end: async () => { closed.push(source.host); } });
-  t.after(async () => { await service.close(); database.close(); });
+  t.after(async () => { await service.close(); await database.closeAsync(); });
   return { database, service, closed };
 }
 

@@ -126,37 +126,25 @@ flowchart LR
 
 ## Quick Start
 
-Recommended Docker Compose setup:
+### Option 1: Guided launcher (Linux / Windows)
 
 ```bash
 git clone https://github.com/xiaour/yolo-data.git yolo-data
 cd yolo-data
-docker compose up -d
+./start.sh
 ```
 
-Run directly with Docker:
+On Windows PowerShell, run `./start.ps1`. The launcher guides first-time setup; run it again to start the app.
+
+### Option 2: Docker Compose
 
 ```bash
-docker build -t yolo-data .
-docker run -d -p 127.0.0.1:8088:8088 -e AUTH_MODE=session \
-  -v yolo-data:/app/data --restart unless-stopped yolo-data
+docker compose up -d --build
 ```
 
-Local development (creates the Python virtualenv and installs analysis dependencies):
+Open [http://localhost:8088/](http://localhost:8088/) after startup. Configure model and data-source settings in `yolo-conf.yaml` as needed; change the default password after your first login. See Configuration below for details.
 
-```bash
-npm run setup
-# edit .env for model keys, metric platform and database connections
-npm run dev
-```
-
-Install the optional PostgreSQL driver only when needed:
-
-```bash
-npm install pg
-```
-
-Open [http://localhost:8088/](http://localhost:8088/).
+For PostgreSQL data sources, see the [PostgreSQL integration guide](docs/postgresql.md).
 
 | Username | Display name | Role | Default password |
 | --- | --- | --- | --- |
@@ -167,6 +155,8 @@ Open [http://localhost:8088/](http://localhost:8088/).
 Administrators manage the platform. Analysts can access and query only the DataAgents granted to them.
 
 ## Configuration
+
+The root `yolo-conf.yaml` is the configuration file; its bilingual comments describe available settings. Non-empty environment variables override YAML, and built-in defaults are used otherwise. `.env` files are not loaded; provide secrets through environment variables. Set `YOLO_CONF_FILE` to use another configuration file.
 
 ### OpenAI-compatible models
 

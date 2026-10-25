@@ -58,7 +58,7 @@ const BLOCKED_PATTERNS = [
   /\b(?:mysql|mariadb|postgres(?:ql)?|doris|clickhouse|mongodb|redis|oracle|sqlserver|jdbc|odbc):\/\//i,
   /\b(?:pymysql|psycopg2?|sqlalchemy|pyodbc|sqlite3|MySQLdb|clickhouse_driver|pymongo|oracledb)\./i,
   /\bos\.(?:environ|getenv)\b/i,
-  /\b(?:DATASOURCE_SECRET_KEY|DORIS_BOOTSTRAP_PASSWORD|SUPERSONIC_TOKEN|API_KEY|DEEPSEEK_API_KEY)\b/,
+  /\b(?:DATASOURCE_SECRET_KEY|DORIS_BOOTSTRAP_PASSWORD|API_KEY|DEEPSEEK_API_KEY)\b/,
   /\b__import__\s*\(/i,
 ];
 
@@ -479,7 +479,7 @@ export class CodeExecutionService {
     return manifestEntry;
   }
 
-  importOutputs({
+  async importOutputs({
     runRoot,
     userId,
     workspaceId,
@@ -513,7 +513,7 @@ export class CodeExecutionService {
       const content = TEXT_EXTENSIONS.has(extension)
         ? fs.readFileSync(filePath, 'utf8')
         : fs.readFileSync(filePath).toString('base64');
-      const artifact = this.workspace.createFileArtifact({
+      const artifactInput = {
         workspaceId,
         userId,
         sessionId,
@@ -534,7 +534,10 @@ export class CodeExecutionService {
         runId,
         inputArtifactIds,
         size: stat.size,
-      });
+      };
+      const artifact = this.workspace.createFileArtifactAsync
+        ? await this.workspace.createFileArtifactAsync(artifactInput)
+        : this.workspace.createFileArtifact(artifactInput);
       outputs.push({
         artifactId: artifact.id,
         fileName: path.basename(filePath),
@@ -617,10 +620,12 @@ export class CodeExecutionService {
 
     const inputs = [];
     for (const [index, artifactId] of (inputArtifactIds ?? []).entries()) {
-      const artifact = this.workspace.getArtifact({
+      const artifact = this.workspace.getArtifactAsync
+        ? await this.workspace.getArtifactAsync({
         artifactId: String(artifactId),
         userId,
-      });
+        })
+        : this.workspace.getArtifact({ artifactId: String(artifactId), userId });
       inputs.push(this.materializeArtifact({
         artifact,
         runInputDir: inputDir,
@@ -649,7 +654,7 @@ export class CodeExecutionService {
         env: safeEnv(runRoot),
         timeoutSeconds: timeout,
       });
-    const outputs = this.importOutputs({
+    const outputs = await this.importOutputs({
       runRoot,
       userId,
       workspaceId,
@@ -659,7 +664,7 @@ export class CodeExecutionService {
       runId,
       inputArtifactIds: inputs.map((item) => item.artifactId),
     });
-    const codeArtifact = this.workspace.createCodeArtifact({
+    const codeArtifactInput = {
       workspaceId,
       userId,
       sessionId,
@@ -675,7 +680,10 @@ export class CodeExecutionService {
       inputArtifacts: inputs,
       outputs,
       purpose,
-    });
+    };
+    const codeArtifact = this.workspace.createCodeArtifactAsync
+      ? await this.workspace.createCodeArtifactAsync(codeArtifactInput)
+      : this.workspace.createCodeArtifact(codeArtifactInput);
     return {
       runId,
       codeArtifactId: codeArtifact.id,

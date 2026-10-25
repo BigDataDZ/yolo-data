@@ -7,7 +7,7 @@ export class LlmAuditService {
     this.database = database;
   }
 
-  record({
+  async record({
     userId,
     sessionId,
     themeId,
@@ -25,7 +25,7 @@ export class LlmAuditService {
       const prompt = Array.isArray(messages)
         ? messages.map((message) => `${message.role}: ${message.content ?? ''}`).join('\n')
         : messages;
-      return this.database.logLlmCall({
+      return await this.database.logLlmCallAsync({
         userId,
         sessionId,
         themeId,
@@ -44,11 +44,11 @@ export class LlmAuditService {
     }
   }
 
-  list(limit = 200) {
-    return this.database.listLlmLogs(limit);
+  async list(limit = 200) {
+    return this.database.listLlmLogsAsync(limit);
   }
 
-  stats() {
-    return this.database.llmLogStats();
+  async stats() {
+    return this.database.llmLogStatsAsync();
   }
 }

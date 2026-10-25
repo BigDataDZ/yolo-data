@@ -1,4 +1,6 @@
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// Hyphens are common in MySQL/Doris database names (for example `yolo-data`).
+// They remain safe because identifiers are quoted before being used in SQL.
+const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 export function quoteIdentifier(value, quote = '`') {
   const name = String(value ?? '');

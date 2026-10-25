@@ -29,7 +29,7 @@ function fixture(t, status = 0) {
       end: async () => { calls.ended += 1; },
     };
   };
-  t.after(async () => { await service.close(); database.close(); });
+  t.after(async () => { await service.close(); await database.closeAsync(); });
   const execute = () => service.executeQuery({
     datasetId: dataset.id, request: { metrics: ['amount'] },
   });

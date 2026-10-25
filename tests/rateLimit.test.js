@@ -14,7 +14,7 @@ function testConfig(directory) {
     projectRoot: process.cwd(),
     port: 0,
     dbPath: path.join(directory, 'test.db'),
-    supersonic: { baseUrl: '', token: '', timeoutMs: 5_000 },
+    本地指标目录: { baseUrl: '', token: '', timeoutMs: 5_000 },
     deepseek: {
       baseUrl: 'https://api.deepseek.com/v1',
       apiKey: '',
@@ -66,6 +66,6 @@ test('P0-8 rateLimit:chat buckets per user and rejects with a 429 envelope', asy
     assert.equal(otherUser.status, 400);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
   }
 });

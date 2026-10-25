@@ -411,6 +411,70 @@
 
 /* ---------------- 帮助中心 ---------------- */
 
+/* GitHub Star 引导条：首页顶部（默认）与文档页尾部（.is-compact，间距更小）。 */
+.help-star-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #dbe8fb;
+  border-radius: var(--radius);
+  background: linear-gradient(96deg, var(--accent-weak), var(--surface) 64%);
+  box-shadow: var(--shadow-s);
+}
+
+.help-star-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  color: #e39122;
+  background: #fff4e2;
+}
+
+.help-star-badge .icon svg,
+.help-star-btn .icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.help-star-text {
+  margin: 0;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.help-star-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
+  /* 站内没有全局 a 去下划线，按钮形态的链接必须自己收掉。 */
+  text-decoration: none;
+}
+
+.help-star-banner.is-compact {
+  margin-top: 14px;
+  padding: 9px 12px;
+}
+
+.help-star-banner.is-compact .help-star-badge {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+}
+
+.help-star-banner.is-compact .help-star-text {
+  font-size: 12px;
+}
+
 .help-search-wrap {
   position: relative;
   max-width: 560px;
@@ -921,6 +985,20 @@
 
   .help-search-wrap {
     max-width: none;
+  }
+
+  /* 窄屏下文字先收缩、按钮放不下就换行靠左，避免按钮文字被挤断。 */
+  .help-star-banner {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+
+  .help-star-banner .help-star-text {
+    flex: 1 1 180px;
+  }
+
+  .help-star-btn {
+    margin-left: 0;
   }
 }
 

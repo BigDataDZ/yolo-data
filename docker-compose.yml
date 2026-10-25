@@ -29,11 +29,15 @@ services:
       # API_BASE_URL: https://api.deepseek.com/v1
       # MODEL: deepseek-chat
       # 外部指标平台（可选）：留空即使用平台集成的本地指标管理，无需外部平台。
-      # SUPERSONIC_BASE_URL: https://your-supersonic.internal
-      # SUPERSONIC_TOKEN: your-token
+      # 内置演示数据（可选）：开启后启动会建表并灌入演示数据，需能连到可达的 MySQL。
+      # 详见 config/demo/README.md；演示库用 DEMO_DB_* 指定。
+      DEMO_DATA_ENABLED: ${DEMO_DATA_ENABLED:-false}
     volumes:
       # SQLite 库 / 数据源密钥 / 分析脚本暂存都在这里；删卷 = 清空平台数据。
       - yolo-data:/app/data
+      # 配置面：宿主改 yolo-conf.yaml 后 `docker compose restart` 即生效，无需重建镜像。
+      # 下面的 environment 优先级更高，机密仍走环境变量。
+      - ./yolo-conf.yaml:/app/yolo-conf.yaml:ro
     restart: unless-stopped
 
 volumes:

@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { startServer } from '../src/server.js';
 import { loadConfig } from '../src/config.js';
-import { setUserPassword } from '../src/auth.js';
+import { setUserPasswordAsync } from '../src/auth.js';
 
 test('browser: PostgreSQL datasource form, API persistence, connection test and dataset creation', {
   skip: !process.env.YOLO_BROWSER_TEST, timeout: 90000,
@@ -19,7 +19,8 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
     codeExecutionRoot: path.join(directory, 'code-runs'), userMemory: { maintenanceIntervalMs: 0 },
   };
   const { server, application } = await startServer(config);
-  setUserPassword(application.database, application.database.getUserByUsername('admin').id, 'browser-test-password');
+  await setUserPasswordAsync(application.database,
+    application.database.getUserByUsername('admin').id, 'browser-test-password');
   const browser = await chromium.launch({ headless: true, ...(process.env.YOLO_BROWSER_CHANNEL ? { channel: process.env.YOLO_BROWSER_CHANNEL } : {}) });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
@@ -168,7 +169,7 @@ test('browser: PostgreSQL datasource form, API persistence, connection test and 
     application.businessDatasets.pools.clear();
     application.memoryMaintenance.stop();
     await new Promise((resolve) => server.close(resolve));
-    application.database.close();
+    await application.database.closeAsync();
     if (setup) { await setup.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`); await setup.end(); }
   }
 });

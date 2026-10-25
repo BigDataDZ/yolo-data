@@ -24,70 +24,54 @@ export function createDistributedLock({ backend = 'sqlite', database = null, red
     return createRedisLock(redis);
   }
 
-  // 默认 sqlite 租约锁。
+  // 租约存储通过平台数据库接口操作，避免依赖 DatabaseSync。
   if (!database) {
-    throw new Error('distributedLock backend=sqlite 需要 database 实例');
+    throw new Error('distributedLock 需要 platform database 实例');
   }
-  database.ensureColumn?.('app_users', 'id', 'INTEGER');
-  try {
-    database.db.exec(`
-      CREATE TABLE IF NOT EXISTS session_locks (
-        key TEXT PRIMARY KEY,
-        owner TEXT NOT NULL,
-        expires_at TEXT NOT NULL
-      );
-    `);
-  } catch {
-    // 表已存在则忽略
-  }
-  return createSqliteLock(database);
+  return createPlatformLock(database);
 }
 
-function createSqliteLock(database) {
-  function expired(rows) {
-    return rows.length === 0 || Date.parse(rows[0].expires_at) <= Date.now();
-  }
+function createPlatformLock(database) {
   return {
-    backend: 'sqlite',
+    backend: database.knexStore?.backend ?? 'platform',
     enabled: true,
     async acquire(key, owner, ttlMs = 30_000) {
       const now = Date.now();
       const expiresAt = new Date(now + ttlMs).toISOString();
-      const existing = database.db
-        .prepare('SELECT owner, expires_at FROM session_locks WHERE key = ?')
-        .get(key);
-      if (existing && !expired([existing])) {
-        return false; // 被他人持有
+      if (database.knexStore?.backend === 'mysql') {
+        const rows = await database.query('SELECT owner, expires_at AS expiresAt FROM session_locks WHERE `key` = ?', [String(key)]);
+        const current = rows[0];
+        if (current && Date.parse(current.expiresAt) > now) return false;
+        if (current) {
+          const result = await database.execute('UPDATE session_locks SET owner=?, expires_at=? WHERE `key`=? AND expires_at<=?', [String(owner), expiresAt, String(key), new Date(now).toISOString()]);
+          return Number(result.affectedRows) > 0;
+        }
+        try {
+          await database.execute('INSERT INTO session_locks (`key`, owner, expires_at) VALUES (?, ?, ?)', [String(key), String(owner), expiresAt]);
+          return true;
+        } catch (error) {
+          if (/duplicate|unique/i.test(error.message)) return false;
+          throw error;
+        }
       }
-      database.db
-        .prepare(`
-          INSERT INTO session_locks (key, owner, expires_at) VALUES (?, ?, ?)
-          ON CONFLICT(key) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
-        `)
-        .run(key, owner, expiresAt);
-      return true;
+      try {
+        await database.execute(`INSERT INTO session_locks (
+          `key`, owner, expires_at
+        ) VALUES (?, ?, ?) ON CONFLICT(`key`) DO UPDATE SET
+          owner = excluded.owner, expires_at = excluded.expires_at
+          WHERE session_locks.expires_at <= ?`,
+        [String(key), String(owner), expiresAt, new Date(now).toISOString()]);
+        const rows = await database.query('SELECT owner FROM session_locks WHERE `key` = ?', [String(key)]);
+        return rows[0]?.owner === String(owner);
+      } catch (error) { throw error; }
     },
     async release(key, owner) {
-      const row = database.db
-        .prepare('SELECT owner FROM session_locks WHERE key = ?')
-        .get(key);
-      if (!row || row.owner !== owner) {
-        return false;
-      }
-      database.db.prepare('DELETE FROM session_locks WHERE key = ?').run(key);
-      return true;
+      const result = await database.execute('DELETE FROM session_locks WHERE `key` = ? AND owner = ?', [String(key), String(owner)]);
+      return Number(result.affectedRows) > 0;
     },
     async refresh(key, owner, ttlMs = 30_000) {
-      const row = database.db
-        .prepare('SELECT owner FROM session_locks WHERE key = ?')
-        .get(key);
-      if (!row || row.owner !== owner) {
-        return false;
-      }
-      database.db
-        .prepare('UPDATE session_locks SET expires_at = ? WHERE key = ?')
-        .run(new Date(Date.now() + ttlMs).toISOString(), key);
-      return true;
+      const result = await database.execute('UPDATE session_locks SET expires_at = ? WHERE `key` = ? AND owner = ?', [new Date(Date.now() + ttlMs).toISOString(), String(key), String(owner)]);
+      return Number(result.affectedRows) > 0;
     },
   };
 }

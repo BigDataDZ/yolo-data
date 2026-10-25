@@ -1,4 +1,5 @@
-import { buildExecutionContext, buildLegacyModelContext, buildUnderstandingContext, updateInitialTitle } from './sessionMemoryContext.js';
+import { buildExecutionContext, buildLegacyModelContext, buildUnderstandingContext, buildUnderstandingContextAsync, updateInitialTitle, updateInitialTitleAsync } from './sessionMemoryContext.js';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 
 // 会话记忆只负责“理解上下文”；执行阶段通过结构化任务状态单独装配，
 // 避免原始聊天记录和长期记忆直接污染查询契约。
@@ -17,6 +18,32 @@ export class SessionMemoryStore {
 
   createSession({ userId, themeId, title, modelId = null }) {
     return this.database.createChatSession({ userId, themeId, title, modelId });
+  }
+
+  async createSessionAsync(args) {
+    return callPlatformDatabase(this.database, 'createChatSessionAsync', 'createChatSession', args);
+  }
+  async listSessionsAsync(userId) {
+    return callPlatformDatabase(this.database, 'listChatSessionsAsync', 'listChatSessions', userId);
+  }
+  async getSessionAsync(sessionId, userId) {
+    const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', sessionId, userId);
+    if (!session) throw new Error('chat session not found');
+    return session;
+  }
+  async listMessagesAsync(sessionId, userId, limit = 100) {
+    const messages = await callPlatformDatabase(this.database, 'listChatMessagesAsync', 'listChatMessages', sessionId, userId, limit);
+    if (messages === null) throw new Error('chat session not found');
+    return messages;
+  }
+  async deleteSessionAsync(sessionId, userId) { return callPlatformDatabase(this.database, 'deleteChatSessionAsync', 'deleteChatSession', sessionId, userId); }
+  async appendUserMessageAsync(sessionId, userId, content, result = {}) {
+    return callPlatformDatabase(this.database, 'appendChatMessageAsync', 'appendChatMessage', { sessionId, userId, role: 'user', content, result });
+  }
+  async appendAssistantMessageAsync(sessionId, userId, content, result) {
+    const message = await callPlatformDatabase(this.database, 'appendChatMessageAsync', 'appendChatMessage', { sessionId, userId, role: 'assistant', content, result });
+    void this.distillAfterTurnAsync({ sessionId, userId, content, result });
+    return message;
   }
 
   listSessions(userId) {
@@ -69,6 +96,10 @@ export class SessionMemoryStore {
     return buildUnderstandingContext(this, sessionId, userId);
   }
 
+  buildUnderstandingContextAsync(sessionId, userId) {
+    return buildUnderstandingContextAsync(this, sessionId, userId);
+  }
+
   buildExecutionContext({ taskState = null, question = '' } = {}) {
     return buildExecutionContext({ taskState, question });
   }
@@ -89,7 +120,27 @@ export class SessionMemoryStore {
       const question = this.database.listChatMessages(sessionId, userId, this.contextLimit)
         .filter((message) => message.role === 'user')
         .at(-1)?.content ?? '';
-      this.distiller.ingest({
+      void this.distiller.ingest({
+        userId,
+        themeId: session?.themeId ?? null,
+        sessionId,
+        question,
+        answer: content,
+      }).catch(() => {});
+    } catch {
+      // 沉淀失败不影响主流程
+    }
+  }
+
+  async distillAfterTurnAsync({ sessionId, userId, content, result }) {
+    if (!this.distiller || result?.error || !String(content ?? '').trim()) return;
+    try {
+      const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', sessionId, userId);
+      const messages = await callPlatformDatabase(this.database, 'listChatMessagesAsync', 'listChatMessages', sessionId, userId, this.contextLimit);
+      const question = messages
+        .filter((message) => message.role === 'user')
+        .at(-1)?.content ?? '';
+      await this.distiller.ingest({
         userId,
         themeId: session?.themeId ?? null,
         sessionId,
@@ -97,11 +148,15 @@ export class SessionMemoryStore {
         answer: content,
       });
     } catch {
-      // 沉淀失败不影响主流程
+      // Memory distillation is best-effort and must not affect the answer.
     }
   }
 
   maybeSetInitialTitle(sessionId, content) {
     return updateInitialTitle(this, sessionId, content);
+  }
+
+  async maybeSetInitialTitleAsync(sessionId, content) {
+    return updateInitialTitleAsync(this, sessionId, content);
   }
 }

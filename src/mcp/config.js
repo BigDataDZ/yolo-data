@@ -1,5 +1,6 @@
 // MCP 配置读写：存入平台设置表（key='mcp'），5 秒缓存，管理员后台修改后最多 5 秒生效。
 // 默认拒绝原则：配置无效时回退到只读模式（disabled 关闭 / read 最小可见）。
+import { callPlatformDatabase } from '../platformDatabaseAccess.js';
 
 export const DEFAULT_MCP_CONFIG = {
   enabled: false,
@@ -62,6 +63,22 @@ export function getMcpConfig(database) {
 export function setMcpConfig(database, patch) {
   const next = coerce(patch && typeof patch === 'object' ? patch : {});
   database.savePlatformSetting('mcp', next);
+  cache = { value: next, at: Date.now() };
+  return next;
+}
+
+export async function getMcpConfigAsync(database) {
+  const now = Date.now();
+  if (cache.value && now - cache.at < CACHE_TTL) return cache.value;
+  const record = await callPlatformDatabase(database, 'getPlatformSettingAsync', 'getPlatformSetting', 'mcp', null);
+  const cfg = coerce(record?.value);
+  cache = { value: cfg, at: now };
+  return cfg;
+}
+
+export async function setMcpConfigAsync(database, patch) {
+  const next = coerce(patch && typeof patch === 'object' ? patch : {});
+  await callPlatformDatabase(database, 'savePlatformSettingAsync', 'savePlatformSetting', 'mcp', next);
   cache = { value: next, at: Date.now() };
   return next;
 }

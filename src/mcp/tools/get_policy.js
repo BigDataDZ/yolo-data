@@ -18,7 +18,9 @@ export function registerGetPolicy(server, ctx) {
     return auditToolCall(database, buildMeta('get_policy', requestContext, args), async () => {
       let resolved;
       try {
-        resolved = agent.resolveContext(args.userId, args.themeId);
+        resolved = agent.resolveContextAsync
+          ? await agent.resolveContextAsync(args.userId, args.themeId)
+          : agent.resolveContext(args.userId, args.themeId);
       } catch (error) {
         throw fail(-32002, error?.message ?? '解析上下文失败');
       }

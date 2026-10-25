@@ -11,11 +11,11 @@ export function registerModelRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, getRequestUser, sendJson, toPublicModel } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      sendJson(response, 200, database.listModels().map(toPublicModel));
+      sendJson(response, 200, (await database.modelRepository.listModelsAsync()).map(toPublicModel));
     },
   });
 
@@ -37,12 +37,12 @@ export function registerModelRoutes(table) {
         readJson,
         sendJson,
       } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const existing = body?.id ? database.getModel(Number(body.id)) : null;
+      const existing = body?.id ? await database.modelRepository.getModelAsync(Number(body.id)) : null;
       if (body?.id && !existing) {
         throw Object.assign(new Error('model not found'), { statusCode: 404 });
       }
@@ -98,15 +98,15 @@ export function registerModelRoutes(table) {
     adminOnly: true,
     handler: async (ctx) => {
       const { request, response, database, application, getRequestUser, readJson, sendJson, toPublicModel, prepareModelPayload } = ctx;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
       const body = await readJson(request);
-      const model = database.saveModel(
+      const model = await database.modelRepository.saveModelAsync(
         prepareModelPayload(body, null, application.datasourceCrypto),
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'MODEL_CREATE',
         detail: { modelId: model.id, name: model.name, modelName: model.modelName },
@@ -126,20 +126,20 @@ export function registerModelRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, application, params, getRequestUser, readJson, sendJson, toPublicModel, prepareModelPayload } = ctx;
       const modelRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const existing = database.getModel(Number(modelRoute[0]));
+      const existing = await database.modelRepository.getModelAsync(Number(modelRoute[0]));
       if (!existing) {
         throw Object.assign(new Error('model not found'), { statusCode: 404 });
       }
       const body = await readJson(request);
-      const model = database.saveModel(
+      const model = await database.modelRepository.saveModelAsync(
         prepareModelPayload(body, existing, application.datasourceCrypto),
         Number(modelRoute[0]),
       );
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'MODEL_UPDATE',
         detail: { modelId: model.id, name: model.name, modelName: model.modelName },
@@ -159,15 +159,15 @@ export function registerModelRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, sendJson, toPublicModel } = ctx;
       const modelDefaultRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const model = database.setModelDefault(Number(modelDefaultRoute[0]));
+      const model = await database.modelRepository.setModelDefaultAsync(Number(modelDefaultRoute[0]));
       if (!model) {
         throw Object.assign(new Error('model not found'), { statusCode: 404 });
       }
-      database.addAuditLog({
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'MODEL_DEFAULT_UPDATE',
         detail: { modelId: model.id, name: model.name },
@@ -187,12 +187,12 @@ export function registerModelRoutes(table) {
     handler: async (ctx) => {
       const { request, response, database, params, getRequestUser, sendJson } = ctx;
       const modelDeleteRoute = params;
-      const user = getRequestUser(request, database);
+      const user = await getRequestUser(request, database);
       if (user.role !== 'ADMIN') {
         throw Object.assign(new Error('admin permission required'), { statusCode: 403 });
       }
-      const deleted = database.deleteModel(Number(modelDeleteRoute[0]));
-      database.addAuditLog({
+      const deleted = await database.modelRepository.deleteModelAsync(Number(modelDeleteRoute[0]));
+      await database.addAuditLogAsync({
         userId: user.id,
         action: 'MODEL_DELETE',
         detail: { modelId: Number(modelDeleteRoute[0]), deleted },

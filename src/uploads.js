@@ -3,6 +3,7 @@
 // 只做通用的格式校验与解析，不包含任何业务口径或指标名。
 
 import { createHash } from 'node:crypto';
+import { callPlatformDatabase } from './platformDatabaseAccess.js';
 import { profileDataset } from './datasetProfiler.js';
 import { getPlatformLexicon } from './businessLexicon.js';
 import { buildTable, decodeBuffer, parseTabularContent } from './fileParsing.js';
@@ -301,6 +302,62 @@ export class UploadService {
       });
       throw error;
     }
+  }
+
+  async uploadAsync({ userId, sessionId, name, contentBase64 }) {
+    try {
+      return await this.performUploadAsync({ userId, sessionId, name, contentBase64 });
+    } catch (error) {
+      await this.auditAsync('FILE_REJECTED', { userId, sessionId, detail: { name: sanitizeUploadName(name), code: error.code ?? 'UPLOAD_REJECTED', message: error.message, size: base64ByteLength(contentBase64) } });
+      throw error;
+    }
+  }
+
+  async auditAsync(action, { userId, sessionId, detail = {} }) {
+    if (this.database?.addAuditLogAsync) {
+      try { await this.database.addAuditLogAsync({ userId, themeId: detail.themeId ?? null, action, detail: { sessionId: sessionId ?? null, ...detail } }); } catch { /* audit is best effort */ }
+      return;
+    }
+    this.audit(action, { userId, sessionId, detail });
+  }
+
+  async assertQuotaAsync({ workspaceId, userId, incomingBytes }) {
+    const artifacts = await this.workspace.listArtifactsAsync({ workspaceId, userId });
+    const uploads = artifacts.filter((artifact) => artifact.metadata?.source?.type === 'UPLOAD');
+    if (uploads.length >= this.limits.maxFilesPerSession) throw uploadError(`单个会话最多上传 ${this.limits.maxFilesPerSession} 个文件，请先清理或新建会话`, 429, 'UPLOAD_QUOTA_EXCEEDED');
+    const usedBytes = uploads.reduce((total, artifact) => total + Number(artifact.metadata?.size ?? 0), 0);
+    if (usedBytes + incomingBytes > this.limits.maxTotalBytesPerSession) throw uploadError(`会话内上传文件总大小超过 ${Math.floor(this.limits.maxTotalBytesPerSession / 1024 / 1024)}MB，请新建会话`, 429, 'UPLOAD_QUOTA_EXCEEDED');
+  }
+
+  async performUploadAsync({ userId, sessionId, name, contentBase64 }) {
+    if (!this.workspace) throw uploadError('workspace service is not configured', 500, 'UPLOAD_UNAVAILABLE');
+    const session = await callPlatformDatabase(this.database, 'getChatSessionAsync', 'getChatSession', Number(sessionId), userId);
+    if (!session) throw uploadError('上传前需要先建立会话', 404, 'UPLOAD_SESSION_REQUIRED');
+    const { safeName, extension, buffer } = this.validate({ name, contentBase64 });
+    const workspaceRecord = this.workspace.ensureForSessionAsync
+      ? await this.workspace.ensureForSessionAsync({ userId, themeId: session.themeId, sessionId: session.id, name: safeName })
+      : this.workspace.ensureForSession({ userId, themeId: session.themeId, sessionId: session.id, name: safeName });
+    await this.assertQuotaAsync({ workspaceId: workspaceRecord.id, userId, incomingBytes: buffer.length });
+    let parsed = SPREADSHEET_EXTENSIONS.has(extension) ? this.parseSpreadsheet({ buffer, extension }) : TABULAR_EXTENSIONS.has(extension) ? this.parseTextTable({ buffer, extension }) : null;
+    const warnings = [...(parsed?.warnings ?? [])];
+    if (parsed && !parsed.unparsed && parsed.rows?.length) { const cleaned = sanitizeTable(parsed); parsed = { ...parsed, columns: cleaned.columns, rows: cleaned.rows }; if (cleaned.sanitized) warnings.push(`检测到上传内容含疑似提示注入特征（${cleaned.findings.map((f) => f.id).join(', ')}），已中和并隔离，不影响数据本身。`); }
+    if (parsed && !parsed.unparsed && parsed.truncated) warnings.push(`文件${Number(parsed.totalRows) > 0 ? `共 ${parsed.totalRows} 行，` : ''}解析表只保留前 ${parsed.rows.length} 行；如需全量请在代码计算中读取原始文件产物`);
+    if (parsed && !parsed.unparsed && !parsed.columns?.length) throw uploadError('未能从文件中识别出列，请检查文件是否有表头行');
+    const sha256 = createHash('sha256').update(buffer).digest('hex');
+    const source = { type: 'UPLOAD', name: safeName, extension, size: buffer.length, mimeType: MIME_TYPES[extension] ?? 'text/plain; charset=utf-8', sha256, uploadedAt: new Date().toISOString() };
+    const fileInput = { workspaceId: workspaceRecord.id, userId, sessionId: session.id, title: `${safeName}（原始文件）`, content: buffer.toString('base64'), encoding: 'base64', format: extension, mimeType: source.mimeType, purpose: '用户上传的本地文件', size: buffer.length, source };
+    const fileArtifact = this.workspace.createFileArtifactAsync ? await this.workspace.createFileArtifactAsync(fileInput) : this.workspace.createFileArtifact(fileInput);
+    let tableArtifact = null;
+    if (parsed && !parsed.unparsed && parsed.columns.length > 0) {
+      const tableInput = { workspaceId: workspaceRecord.id, userId, sessionId: session.id, title: `${safeName}（解析表）`, metadata: { source: { type: 'UPLOAD_FILE', id: fileArtifact.id, name: safeName }, derivedFromArtifactId: fileArtifact.id, parentArtifactIds: [fileArtifact.id], inputArtifactIds: [fileArtifact.id], lineageQuestion: `上传本地文件：${safeName}`, format: extension, encoding: parsed.encoding, delimiter: parsed.delimiter, sheetName: parsed.sheetName ?? null, rowCount: parsed.rows.length, totalRowCount: parsed.totalRows ?? parsed.rows.length, columnCount: parsed.columns.length, truncated: Boolean(parsed.truncated), warnings }, payload: { data: { columns: parsed.columns, rows: parsed.rows } } };
+      tableArtifact = this.workspace.createTableArtifactAsync ? await this.workspace.createTableArtifactAsync(tableInput) : this.workspace.createTableArtifact(tableInput);
+    }
+    const profile = tableArtifact ? this.profileTable(parsed) : null;
+    const sampleRows = parsed?.rows?.slice(0, PROCESS_SAMPLE_ROWS) ?? [];
+    const processInput = { workspaceId: workspaceRecord.id, userId, sessionId: session.id, title: `步骤 01 · 本地文件解析${tableArtifact ? ` · ${parsed.rows.length} 行` : ''}`, metadata: { process: true, dataKind: 'UPLOAD', dataKindLabel: '本地上传解析', stepId: 'upload', sequence: 1, tool: 'upload_local_file', toolTitle: '本地文件解析', status: 'success', startedAt: source.uploadedAt, durationMs: null, summary: tableArtifact ? `已识别 ${parsed.columns.length} 列、${parsed.rows.length} 行，编码 ${parsed.encoding}` : '文件已保存为原始产物，未解析为表格', rowCount: tableArtifact ? parsed.rows.length : 0, columnCount: parsed?.columns?.length ?? 0, capturedRowCount: sampleRows.length, sampled: (parsed?.rows?.length ?? 0) > sampleRows.length, truncated: Boolean(tableArtifact && parsed.truncated), inputArtifactIds: [fileArtifact.id], parentArtifactIds: [fileArtifact.id], outputArtifactIds: tableArtifact ? [tableArtifact.id] : [], upload: { sha256, size: buffer.length, extension, encoding: parsed?.encoding ?? null }, warnings }, payload: { step: { id: 'upload', sequence: 1, tool: 'upload_local_file', title: '本地文件解析', status: 'success', durationMs: null }, dataKind: 'UPLOAD', summary: tableArtifact ? `已识别 ${parsed.columns.length} 列、${parsed.rows.length} 行` : '未解析为表格', data: { columns: tableArtifact ? parsed.columns : [], rows: tableArtifact ? sampleRows : [] }, profile } };
+    const processArtifact = this.workspace.createProcessArtifactAsync ? await this.workspace.createProcessArtifactAsync(processInput) : this.workspace.createProcessArtifact(processInput);
+    await this.auditAsync('FILE_UPLOAD', { userId, sessionId: session.id, detail: { themeId: session.themeId, name: safeName, size: buffer.length, sha256, fileArtifactId: fileArtifact.id, tableArtifactId: tableArtifact?.id ?? null, processArtifactId: processArtifact.id, rowCount: tableArtifact ? parsed.rows.length : 0, columnCount: tableArtifact ? parsed.columns.length : 0, encoding: parsed?.encoding ?? null, truncated: Boolean(tableArtifact && parsed?.truncated) } });
+    return { sessionId: session.id, workspaceId: workspaceRecord.id, file: { artifactId: fileArtifact.id, title: fileArtifact.title, name: safeName, size: buffer.length, sha256 }, table: tableArtifact ? { artifactId: tableArtifact.id, title: tableArtifact.title, rowCount: parsed.rows.length, columnCount: parsed.columns.length, columns: parsed.columns, encoding: parsed.encoding, delimiter: parsed.delimiter, sheetName: parsed.sheetName ?? null, truncated: parsed.truncated } : null, processArtifactId: processArtifact.id, profile, warnings };
   }
 
   performUpload({ userId, sessionId, name, contentBase64 }) {

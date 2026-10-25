@@ -140,7 +140,7 @@ test('semantic value registry loads source values when metadata has no enum list
   assert.ok(indicator.dimensions[0].valueDomain.source.includes('SOURCE_VALUES'));
 });
 
-test('indicator value domains do not consume Supersonic description metadata', async () => {
+test('indicator value domains do not consume 本地指标目录 description metadata', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-ask-values-no-s2-'));
   const database = new PlatformDatabase(path.join(directory, 'test.db'));
   const registry = new SemanticValueRegistry(database);

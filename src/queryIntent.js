@@ -62,7 +62,9 @@ const TIME_GRAIN_PATTERNS = [
   ],
 ];
 
-export function extractTimeGrainExpression(question) {
+export function extractTimeGrainExpression(question, vocabularyResolver = null) {
+  const resolved = vocabularyResolver?.({ question });
+  if (resolved?.timeGrain) return resolved.timeGrain;
   const source = text(question);
   for (const [grain, pattern] of TIME_GRAIN_PATTERNS) {
     const match = source.match(pattern);
@@ -73,11 +75,11 @@ export function extractTimeGrainExpression(question) {
   return null;
 }
 
-export function inferTimeGrain(question) {
-  return extractTimeGrainExpression(question)?.grain ?? null;
+export function inferTimeGrain(question, vocabularyResolver = null) {
+  return extractTimeGrainExpression(question, vocabularyResolver)?.grain ?? null;
 }
 
-export function inferAnalysisMode(question) {
+export function inferAnalysisMode(question, vocabularyResolver = null) {
   const source = text(question);
   const attributionSignal = matchAttributionSignal(source);
   if (attributionSignal) {
@@ -88,7 +90,7 @@ export function inferAnalysisMode(question) {
       requiresBreakdown: true,
     };
   }
-  if (isTrendText(source)) {
+  if (vocabularyResolver?.({ question })?.trend || isTrendText(source)) {
     return {
       mode: 'TREND',
       sourceText: source.match(/趋势|走势/)?.[0] ?? '',
@@ -178,7 +180,7 @@ function inferDatasetMetrics(question, fields) {
   return results;
 }
 
-function inferDatasetDimensions(question, fields) {
+function inferDatasetDimensions(question, fields, vocabularyResolver = null) {
   const source = text(question);
   const candidates = (fields ?? []).filter(
     (field) => field.role === 'DIMENSION' || field.role === 'TIME',
@@ -191,7 +193,8 @@ function inferDatasetDimensions(question, fields) {
     }
   }
   if (
-    inferTimeGrain(source)
+    inferTimeGrain(source, vocabularyResolver)
+    || Boolean(vocabularyResolver?.({ question })?.trend)
     || /趋势|走势/.test(source)
   ) {
     const dateField = candidates.find((field) => field.role === 'TIME');
@@ -207,22 +210,26 @@ export function inferDatasetQuerySpec({
   fields,
   fallbackMetrics = [],
   fallbackDimensions = [],
+  vocabularyResolver = null,
 }) {
   const metrics = inferDatasetMetrics(question, fields);
-  const inferredDimensions = inferDatasetDimensions(question, fields);
-  const detailRequested = /明细|清单|列表|原始记录|所有记录|逐笔/.test(String(question));
+  const inferredDimensions = inferDatasetDimensions(question, fields, vocabularyResolver);
+  const detailRequested = Boolean(vocabularyResolver?.({ question })?.detail)
+    || /明细|清单|列表|原始记录|所有记录|逐笔/.test(String(question));
   const dimensions = inferredDimensions.length > 0
     ? inferredDimensions
     : detailRequested
       ? fallbackDimensions
       : [];
-  const topN = resolveTopN(question);
-  const timeGrain = inferTimeGrain(question);
-  const ranking = /排名|排行|对比|最高|最低|top\s*\d*|前\s*\d+/i.test(String(question));
+  const vocabulary = vocabularyResolver?.({ question }) ?? {};
+  const topN = vocabulary.topN ?? resolveTopN(question);
+  const timeGrain = inferTimeGrain(question, vocabularyResolver);
+  const ranking = Boolean(vocabulary.ranking)
+    || /排名|排行|对比|最高|最低|top\s*\d*|前\s*\d+/i.test(String(question));
   const effectiveMetrics = metrics.length > 0 ? metrics : fallbackMetrics;
   const order = ranking && effectiveMetrics[0] ? [{
     field: effectiveMetrics[0].field,
-    direction: /最低|升序/.test(String(question)) ? 'ASC' : 'DESC',
+    direction: vocabulary.direction ?? (/最低|升序/.test(String(question)) ? 'ASC' : 'DESC'),
   }] : [];
   return {
     metrics: effectiveMetrics,
@@ -289,7 +296,13 @@ function inferIndicatorMetrics(question, metrics, fallbackMetrics, lexicon = nul
     .filter(Boolean))];
 }
 
-function inferIndicatorDimensions(question, dimensions, fallbackDimensions, dateField) {
+function inferIndicatorDimensions(
+  question,
+  dimensions,
+  fallbackDimensions,
+  dateField,
+  vocabularyResolver = null,
+) {
   const source = text(question);
   const selected = [];
   for (const dimension of dimensions ?? []) {
@@ -307,7 +320,7 @@ function inferIndicatorDimensions(question, dimensions, fallbackDimensions, date
       selected.push(name);
     }
   }
-  if ((inferTimeGrain(source) || /趋势|走势/.test(source)) && dateField) {
+  if ((inferTimeGrain(source, vocabularyResolver) || /趋势|走势/.test(source)) && dateField) {
     selected.unshift(dateField);
   }
   const detailRequested = /明细|清单|列表|原始记录|所有记录|逐笔/.test(String(question));
@@ -328,6 +341,7 @@ export function inferIndicatorQuerySpec({
   fallbackDimensions = [],
   dateField = null,
   lexicon = null,
+  vocabularyResolver = null,
 }) {
   const inferredMetrics = inferIndicatorMetrics(question, metrics, fallbackMetrics, lexicon);
   const inferredDimensions = inferIndicatorDimensions(
@@ -335,10 +349,13 @@ export function inferIndicatorQuerySpec({
     dimensions,
     fallbackDimensions,
     dateField,
+    vocabularyResolver,
   );
-  const ranking = /排名|排行|对比|最高|最低|top\s*\d*|前\s*\d+/i.test(String(question));
-  const topN = resolveTopN(question);
-  const timeGrain = inferTimeGrain(question);
+  const ranking = Boolean(vocabularyResolver?.({ question })?.ranking)
+    || /排名|排行|对比|最高|最低|top\s*\d*|前\s*\d+/i.test(String(question));
+  const vocabulary = vocabularyResolver?.({ question }) ?? {};
+  const topN = vocabulary.topN ?? resolveTopN(question);
+  const timeGrain = inferTimeGrain(question, vocabularyResolver);
   return {
     metrics: inferredMetrics,
     dimensions: inferredDimensions,

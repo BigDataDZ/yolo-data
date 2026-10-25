@@ -1,4 +1,4 @@
-export function resolveMemoryPreInject({
+export async function resolveMemoryPreInject({
   config,
   userMemories,
   userId,
@@ -13,7 +13,7 @@ export function resolveMemoryPreInject({
   if (!q) {
     return null;
   }
-  const hits = userMemories.search(userId, themeId, q, cfg.topN);
+  const hits = await userMemories.searchAsync(userId, themeId, q, cfg.topN);
   if (!hits || hits.length === 0) {
     return null;
   }
@@ -29,9 +29,4 @@ export function resolveMemoryPreInject({
     total += line.length;
   }
   return blocks.length > 0 ? blocks.join('\n\n') : null;
-}
-
-export function resolveSupersonicEnabled(service) {
-  const stored = service?.database?.getPlatformSetting?.('supersonic.enabled', true);
-  return service?.getSupersonicEnabled?.() ?? Boolean(stored?.value ?? stored);
 }

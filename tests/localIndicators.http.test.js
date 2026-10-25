@@ -6,12 +6,12 @@ const valid = { name: '销售额', bizName: 'sales_amount', indicatorLevel: 'ATO
 
 test('local indicator writes reject malformed payloads without changing catalog or audit history', async () => {
   await withSkillServer(async ({ application, request, login }) => {
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const cookie = await login('admin');
     const created = await request('/api/local-indicators', { cookie, method: 'POST', body: valid });
     assert.equal(created.response.status, 200);
     const route = `/api/local-indicators/${encodeURIComponent(created.data.id)}`;
-    const before = application.database.localIndicators.get(created.data.id);
+    const before = await application.database.localIndicators.getAsync(created.data.id);
     const auditCount = () => application.database.db.prepare('SELECT COUNT(*) AS count FROM audit_logs').get().count;
     const originalAudits = auditCount();
     const malformed = [null, [], 'text', 123, {},
@@ -28,8 +28,8 @@ test('local indicator writes reject malformed payloads without changing catalog 
       for (const [url, method] of [['/api/local-indicators', 'POST'], [route, 'PUT']]) {
         const result = await request(url, { cookie, method, body });
         assert.equal(result.response.status, 400, `${method}: ${JSON.stringify(body)}`);
-        assert.equal(application.database.localIndicators.count(), 1);
-        assert.deepEqual(application.database.localIndicators.get(created.data.id), before);
+        assert.equal(await application.database.localIndicators.countAsync(), 1);
+        assert.deepEqual(await application.database.localIndicators.getAsync(created.data.id), before);
         assert.equal(auditCount(), originalAudits);
       }
     }
@@ -38,7 +38,7 @@ test('local indicator writes reject malformed payloads without changing catalog 
 
 test('local indicator lifecycle normalizes numeric statuses and enforces session ACL and online mode', async () => {
   await withSkillServer(async ({ application, request, login }) => {
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const admin = await login('admin');
     const analyst = await login('east_manager');
     const created = await request('/api/local-indicators', {
@@ -54,27 +54,27 @@ test('local indicator lifecycle normalizes numeric statuses and enforces session
       const denied = await request(url, { cookie: analyst, method, body: valid, headers: { 'x-user-id': '1' } });
       assert.equal(denied.response.status, 403);
     }
-    assert.equal(application.database.localIndicators.get(created.data.id).status, 0);
+    assert.equal((await application.database.localIndicators.getAsync(created.data.id)).status, 0);
     for (const status of [1, '0', '1', 0]) {
       const updated = await request(route, { cookie: admin, method: 'PUT', body: { ...valid, status } });
       assert.equal(updated.response.status, 200);
       assert.equal(updated.data.status, Number(status));
     }
-    application.database.savePlatformSetting('supersonic.enabled', true);
+    application.database.savePlatformSetting('本地指标目录.enabled', true);
     for (const [url, method] of [['/api/local-indicators', 'POST'], [route, 'PUT'], [route, 'DELETE']]) {
       const blocked = await request(url, { cookie: admin, method, body: valid });
       assert.equal(blocked.response.status, 409);
     }
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     assert.equal((await request(route, { cookie: admin, method: 'DELETE' })).response.status, 200);
-    assert.equal(application.database.localIndicators.count(), 0);
+    assert.equal(await application.database.localIndicators.countAsync(), 0);
     assert.equal((await request(route, { cookie: admin, method: 'PUT', body: valid })).response.status, 404);
   });
 });
 
 test('mounting an existing indicator only updates theme indicatorIds', async () => {
   await withSkillServer(async ({ application, request, login }) => {
-    application.database.savePlatformSetting('supersonic.enabled', false);
+    application.database.savePlatformSetting('本地指标目录.enabled', false);
     const admin = await login('admin');
     const created = await request('/api/local-indicators', {
       cookie: admin, method: 'POST', body: valid,

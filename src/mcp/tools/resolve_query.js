@@ -51,7 +51,9 @@ export function registerResolveQuery(server, ctx) {
       }
       let resolved;
       try {
-        resolved = agent.resolveContext(args.userId, args.themeId);
+        resolved = agent.resolveContextAsync
+          ? await agent.resolveContextAsync(args.userId, args.themeId)
+          : agent.resolveContext(args.userId, args.themeId);
       } catch (error) {
         throw fail(-32002, error?.message ?? '解析上下文失败');
       }
@@ -63,10 +65,12 @@ export function registerResolveQuery(server, ctx) {
       let dataset = null;
       if (args.sourceType === 'INDICATOR') {
         indicator = args.indicatorId
-          ? await agent.indicatorClient.getIndicator(args.indicatorId).catch(() => null)
+          ? await agent.indicatorService.getIndicator(args.indicatorId).catch(() => null)
           : null;
       } else {
-        dataset = database.getBusinessDataset(args.datasetId);
+        dataset = database.getBusinessDatasetAsync
+          ? await database.getBusinessDatasetAsync(args.datasetId)
+          : database.getBusinessDataset(args.datasetId);
       }
       const contract = buildQueryContract({
         indicatorId: args.indicatorId,
@@ -85,7 +89,7 @@ export function registerResolveQuery(server, ctx) {
       }
       const contractId = `mcq_${randomBytes(16).toString('hex')}`;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      database.saveMcpQueryContract({
+      await database.saveMcpQueryContract({
         contractId,
         tenantId: requestContext.tenantId ?? 'default',
         userId: args.userId,

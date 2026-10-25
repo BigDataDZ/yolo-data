@@ -66,7 +66,6 @@ html,
 body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
   color: var(--text);
   background: var(--bg);
   font-family: var(--font);
@@ -74,6 +73,17 @@ body {
   line-height: 1.55;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 横向溢出统一交给 body 裁切：html 保持 overflow:visible 时，body 的 overflow
+   会「传播到视口」由视口负责裁切，body 自身的 used overflow 变回 visible，
+   不会变成独立滚动容器 —— .sidebar 的 position: sticky 才能按视口吸附。
+   反例（本文件曾如此）：给 html 也写 overflow-x: hidden，传播链被打断，
+   body 变成滚动容器（另一轴被计算成 auto），sticky 相对 body 的内容高度计算、
+   永远不会触发，表现为整条侧栏连同底部用户信息随整页滚走。
+   改动前请确认所有页面的横向溢出仍被视口裁切。 */
+body {
+  overflow-x: hidden;
 }
 
 body,

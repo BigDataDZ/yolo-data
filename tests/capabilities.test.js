@@ -20,7 +20,7 @@ function testConfig() {
     projectRoot: process.cwd(),
     port: 0,
     dbPath: path.join(directory, 'test.db'),
-    supersonic: { baseUrl: '', token: '', timeoutMs: 5_000 },
+    本地指标目录: { baseUrl: '', token: '', timeoutMs: 5_000 },
     deepseek: {
       baseUrl: 'https://api.deepseek.com/v1',
       apiKey: '',
@@ -103,11 +103,11 @@ test('P0-1 startup neither clears nor writes the indicator catalog', async () =>
     await application.init();
     assert.deepEqual(calls, []);
     assert.equal(application.database.indicatorCacheStats().count, 0);
-    const health = application.currentHealth();
+    const health = await application.currentHealth();
     assert.ok(['LIVE', 'SNAPSHOT', 'UNAVAILABLE'].includes(health.source.indicatorSource));
     assert.equal(health.source.indicatorSource, 'LIVE');
   } finally {
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -124,7 +124,7 @@ test('P0-1 explicit sync persists a snapshot and snapshot reads are marked', asy
     const options = application.database.listDatasetOptions();
     assert.equal(options.source, 'SNAPSHOT');
   } finally {
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 
@@ -151,7 +151,7 @@ test('P0-4 traceId threads through plan, audit and emitted events', async () => 
     assert.ok(evidence.counts.audit >= 1);
     assert.ok(evidence.queryPlans.every((plan) => plan.compilerVersion));
   } finally {
-    application.database.close();
+    await application.database.closeAsync();
   }
 });
 

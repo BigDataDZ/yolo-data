@@ -152,7 +152,7 @@ function cellXml(reference, value, style, textValue = false) {
   if (value === null || value === undefined || value === '') {
     return '';
   }
-  if (textValue || typeof value === 'boolean' || Number.isNaN(Number(value))) {
+  if (textValue || typeof value !== 'number' || Number.isNaN(value)) {
     return `<c r="${reference}" s="${style}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`;
   }
   return `<c r="${reference}" s="${style}"><v>${Number(value)}</v></c>`;

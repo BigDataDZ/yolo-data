@@ -5,7 +5,7 @@ import { runWithTrace } from '../src/trace.js';
 
 function fixture(t) {
   const database = new PlatformDatabase(':memory:');
-  t.after(() => database.close());
+  t.after(async () => database.closeAsync());
   const user = database.getUserByUsername('admin');
   const source = database.saveDataSource({ code: 'log_source', name: 'Log source',
     dbType: 'MYSQL', host: 'never-connect.invalid', username: 'reader' });
@@ -69,6 +69,22 @@ test('log listing keeps newest-first ordering, limits, failure fields and explic
   assert.deepEqual(database.listAuditLogs(10).map(row => row.id), [3, 2, 1]);
   assert.deepEqual(database.listDatasetQueryLogs(10, { traceId: 'trace_missing' }), []);
   assert.deepEqual(database.listAuditLogs(10, { traceId: 'trace_missing' }), []);
+});
+
+test('Knex-backed asynchronous log reads preserve the synchronous response shape', async (t) => {
+  const { database, user, dataset } = fixture(t);
+  database.logDatasetQuery({ userId: user.id, datasetId: dataset.id,
+    traceId: 'async_trace', sqlText: 'SELECT 2', success: true });
+  database.addAuditLog({ userId: user.id, traceId: 'async_trace',
+    action: 'ASYNC_READ', detail: { source: 'knex' } });
+  database.logLlmCall({ userId: user.id, traceId: 'async_trace', callType: 'ANSWER',
+    tokenUsage: { total_tokens: 2 }, success: true });
+  assert.deepEqual(await database.listDatasetQueryLogsAsync(10, { traceId: 'async_trace' }),
+    database.listDatasetQueryLogs(10, { traceId: 'async_trace' }));
+  assert.deepEqual(await database.listAuditLogsAsync(10, { traceId: 'async_trace' }),
+    database.listAuditLogs(10, { traceId: 'async_trace' }));
+  assert.deepEqual(await database.listLlmLogsAsync(10, { traceId: 'async_trace' }),
+    database.listLlmLogs(10, { traceId: 'async_trace' }));
 });
 
 test('LLM log statistics, token budgets, digest bounds and damaged JSON remain compatible', t => {

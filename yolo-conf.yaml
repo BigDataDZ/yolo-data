@@ -1,0 +1,176 @@
+# YOLO Data configuration / YOLO Data 配置
+# Environment variables with non-empty values override this file; blank values use defaults.
+# 非空环境变量优先于本文件；留空时使用程序默认值。密钥等机密请用环境变量提供。
+# Only registered keys take effect. See src/configFile.js for YAML-key/environment-variable mappings.
+# 仅登记过的配置键会生效；YAML 字段与环境变量的映射见 src/configFile.js。
+
+# HTTP server / HTTP 服务
+server:
+  # Listening port / 监听端口
+  port: 8088
+  # Bind address; blank selects the address based on auth mode / 绑定地址；留空时根据鉴权模式决定
+  host: ""
+
+# Authentication / 身份认证
+auth:
+  # dev (trusted-network testing) | session (require login) / dev（可信网络体验）| session（强制登录）
+  mode: ""
+  # Session lifetime in hours / 会话有效期（小时）
+  sessionTtlHours: 12
+  # Secure cookie flag; blank is secure in production / Cookie Secure 标志；留空时生产环境启用
+  secureCookies: ""
+  # Password for initialized built-in accounts; secret, prefer environment variable / 初始化内置账号口令；机密，建议用环境变量
+  defaultUserPassword: ""
+  # OIDC settings reserved for future use; currently do not enable SSO / OIDC 预留配置；目前填写也不会启用 SSO
+  oidc:
+    issuer: ""
+    clientId: ""
+    audience: ""
+    jwksUri: ""
+
+# Platform state database / 平台状态数据库
+platformDatabase:
+  # sqlite | mysql / 数据库类型：sqlite 或 mysql
+  backend: mysql
+  # SQLite file path / SQLite 数据库文件路径
+  path: ./data/platform.db
+  # Load bundled starter resources on first launch / 首次启动是否导入预置用户、主题和模型等资源
+  bootstrapResources: true
+  mysql:
+    # MySQL connection settings / MySQL 连接参数
+    host: "10.0.76.148"
+    port: 3306
+    database: yolo-data
+    user: datagrouptest
+    password: "OUl2u82p83$#2"
+    charset: utf8mb4
+    initialize: true
+    initSqlPath: ./config/platform/mysql-init.sql
+
+skills:
+  # Additional Skills directories; empty uses the installation's skills directory / 额外 Skills 目录；留空使用安装目录下的 skills
+  directories: []
+
+models:
+  # OpenAI-compatible API endpoint / OpenAI 兼容接口地址，生产环境请切换为自己的大模型API和Key
+  baseUrl: https://open.bigmodel.cn/api/paas/v4
+  # API credential (secret); blank uses local-rule / API 密钥（机密）；有频次限制，并发数1，生产环境请切换为自己的大模型API和Key
+  apiKey: "ENC:/bszXtHZ7XnHkcMg:gwPywjcEmRiC0Cn0faoqMg==:KvPhaz+DQlu+Jx/ng56YhSt9XPwN4/ssYOP6OYIkgUxNd7jAZEcM3Csuz7vGsObZNA=="
+  # Model identifier / 模型标识
+  model: GLM-4.7-Flash
+  # Sampling temperature / 采样温度
+  temperature: 0
+  # Maximum output tokens; 0 uses provider default / 最大输出 Token 数；0 使用服务商默认值
+  maxTokens: 0
+  # Request timeout in milliseconds / 请求超时（毫秒）
+  timeoutMs: 180000
+  # Maximum tool-call rounds / 最大工具调用轮数
+  maxToolRounds: 12
+
+# Conversation context / 对话上下文
+chat:
+  # Number of recent messages retained / 保留的近期消息数
+  memoryMessageLimit: 20
+
+# Long-term user memory / 用户长期记忆
+userMemory:
+  # Consolidate memory after this many new messages / 新增多少条消息后整理记忆
+  autoConsolidateAt: 8
+  # Target compacted-to-original size ratio / 压缩后与原内容的目标比例
+  compactRatio: 0.8
+  # Background maintenance interval in milliseconds / 后台维护间隔（毫秒）
+  maintenanceIntervalMs: 900000
+  # Delay before maintenance starts / 启动维护前的延迟（毫秒）
+  maintenanceStartupDelayMs: 60000
+  # Maximum records handled per maintenance batch / 每批维护的最大记录数
+  maintenanceBatchSize: 20
+  preInject:
+    # Inject relevant memories into prompts / 是否向提示词注入相关记忆
+    enabled: true
+    # Maximum memories to inject / 最多注入的记忆条数
+    topN: 6
+    # Maximum injected characters / 注入内容最大字符数
+    maxChars: 1200
+
+# Answer reflection and replanning / 答案反思与重规划
+reflection:
+  # Enable reflection / 是否启用反思
+  enabled: true
+  # Maximum replans (0 means reflect without rerunning) / 最大重规划次数（0 表示只反思、不重跑）
+  maxReplan: 2
+  # Judge timeout in milliseconds / 评估超时（毫秒）
+  judgeTimeoutMs: 20000
+
+# Code execution / 代码执行
+codeExecution:
+  # Workspace for code execution / 代码执行工作目录
+  root: ./data/code-runs
+  # Python executable; blank enables automatic detection / Python 解释器；留空时自动探测
+  pythonBin: ""
+  sandbox:
+    # inprocess (not a security boundary) | container | podman / 执行方式：inprocess（非安全边界）| container | podman
+    backend: inprocess
+    # Container image / 容器镜像
+    image: "python:3.12-slim"
+    # Optional seccomp profile / 可选的 seccomp 配置文件
+    seccomp: ""
+
+# Daily token spending limits; 0 means unlimited / 每日 Token 预算；0 表示不限制
+tokenBudget:
+  # Token 成本预算闸门，按日滚动；0 表示不限制（主题级可在主题配置的 budgetTokens 覆盖）
+  userDaily: 0
+  themeDaily: 0
+
+distributedLock:
+  # Redis URL for multi-instance locking; blank uses single-process mode / 多实例锁使用的 Redis URL；留空为单进程模式
+  redisUrl: ""
+
+uploads:
+  # Maximum upload size in bytes / 单文件最大上传字节数
+  maxBytes: 8388608
+  # Maximum files per session / 每个会话最多上传文件数
+  maxFilesPerSession: 20
+  # Maximum total uploaded bytes per session / 每个会话累计上传字节数上限
+  maxTotalBytesPerSession: 41943040
+  # Maximum rows accepted from an uploaded table / 上传表格最大行数
+  maxTableRows: 50000
+  # Allowed file extensions / 允许的文件扩展名
+  allowedExtensions:
+    - csv
+    - xls
+    - xlsx
+
+datasource:
+  # Encryption key for data-source credentials; blank generates data/.datasource-key / 数据源凭据加密密钥；留空时自动生成到 data/.datasource-key
+  secretKey: ""
+
+bootstrapDatasource:
+  # Optional Doris bootstrap; enabled creates the source and datasets on startup / 可选 Doris 初始化；开启后启动时创建数据源和数据集
+  enabled: false
+  host: ""
+  port: 9030
+  username: ""
+  password: ""
+  database: ""
+  salesTable: ""
+  goodsTable: ""
+
+  # Demo data: create tables, load rows, and register datasets on startup / 演示数据：启动时建表、灌数并注册数据集
+  demo:
+    enabled: true
+    loadData: true
+    appendToExisting: false
+    rows: 5000
+    seed: 20261022
+    startDate: 2024-11-01
+    endDate: 2026-10-20
+    # Default target is platform_mysql (requires MySQL platform database) / 默认写入 platform_mysql（要求平台数据库为 MySQL）
+    datasourceCode: platform_mysql
+    # Optional standalone demo database / 可选的独立演示数据库连接
+    db:
+      type: MYSQL
+      host: ""
+      port: 3306
+      database: ""
+      user: ""
+      password: ""

@@ -27,7 +27,7 @@ test('live PostgreSQL: authenticated Agent contract, row policy, audit and same-
           assert.equal(result.response.status, 200, JSON.stringify(result.data));
           return result.data;
         };
-        application.database.savePlatformSetting('supersonic.enabled', false);
+        application.database.savePlatformSetting('本地指标目录.enabled', false);
         const source = await post('/api/data-sources', {
           name: 'Acceptance PostgreSQL', dbType: 'POSTGRESQL',
           host: process.env.PGHOST ?? '127.0.0.1', port: Number(process.env.PGPORT ?? 5432),

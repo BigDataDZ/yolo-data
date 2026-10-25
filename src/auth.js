@@ -64,50 +64,32 @@ export function resolveAuthMode(config) {
   return explicit || (nodeEnv === 'production' ? 'session' : 'dev');
 }
 
-export function ensureAuthSchema(database) {
-  database.ensureColumn('app_users', 'password_hash', 'TEXT');
-  database.db.exec(`
-    CREATE TABLE IF NOT EXISTS user_sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      token_hash TEXT NOT NULL UNIQUE,
-      user_id INTEGER NOT NULL,
-      created_at TEXT NOT NULL,
-      last_seen_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES app_users(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at);
-  `);
-}
-
 // 历史库中的用户没有口令，这里按默认口令补齐，保证首次登录可用。
-export function seedDefaultPasswords(database, defaultPassword) {
+export async function seedDefaultPasswordsAsync(database, defaultPassword) {
   const fallback = String(defaultPassword ?? process.env.DEFAULT_USER_PASSWORD ?? '').trim()
     || DEFAULT_PASSWORD;
-  const rows = database.db.prepare(`
+  const rows = await database.query(`
     SELECT id FROM app_users
     WHERE password_hash IS NULL OR password_hash = ''
-  `).all();
+  `);
   if (rows.length === 0) {
     return 0;
   }
-  const update = database.db.prepare(
-    'UPDATE app_users SET password_hash = ?, updated_at = ? WHERE id = ?',
-  );
   const timestamp = new Date().toISOString();
   for (const row of rows) {
-    update.run(hashPassword(fallback), timestamp, row.id);
+    await database.execute('UPDATE app_users SET password_hash = ?, updated_at = ? WHERE id = ?',
+      [hashPassword(fallback), timestamp, row.id]);
   }
   return rows.length;
 }
 
-export function setUserPassword(database, userId, password) {
+export async function setUserPasswordAsync(database, userId, password) {
   const plain = assertPasswordUsable(password);
-  const result = database.db.prepare(
+  const result = await database.execute(
     'UPDATE app_users SET password_hash = ?, updated_at = ? WHERE id = ?',
-  ).run(hashPassword(plain), new Date().toISOString(), Number(userId));
-  return Number(result.changes) > 0;
+    [hashPassword(plain), new Date().toISOString(), Number(userId)],
+  );
+  return Number(result.affectedRows) > 0;
 }
 
 export function defaultPassword() {
@@ -115,86 +97,60 @@ export function defaultPassword() {
   return configured.length >= MIN_PASSWORD_LENGTH ? configured : DEFAULT_PASSWORD;
 }
 
-export function setDefaultUserPassword(database, userId) {
-  return setUserPassword(database, userId, defaultPassword());
+export function setDefaultUserPasswordAsync(database, userId) {
+  return setUserPasswordAsync(database, userId, defaultPassword());
 }
 
-export function hasPassword(database, userId) {
-  const row = database.db.prepare(
+export async function checkUserPasswordAsync(database, user, password) {
+  if (!user) return false;
+  const rows = await database.query(
     'SELECT password_hash AS passwordHash FROM app_users WHERE id = ?',
-  ).get(Number(userId));
-  return Boolean(row?.passwordHash);
+    [Number(user.id)],
+  );
+  return verifyPassword(password, rows[0]?.passwordHash);
 }
 
-export function checkUserPassword(database, user, password) {
-  if (!user) {
-    return false;
-  }
-  const row = database.db.prepare(
-    'SELECT password_hash AS passwordHash FROM app_users WHERE id = ?',
-  ).get(Number(user.id));
-  return verifyPassword(password, row?.passwordHash);
-}
-
-export function pruneExpiredSessions(database) {
-  database.db.prepare('DELETE FROM user_sessions WHERE expires_at <= ?')
-    .run(new Date().toISOString());
-}
-
-export function createSession(database, userId, ttlHours = 12) {
-  pruneExpiredSessions(database);
+export async function createSessionAsync(database, userId, ttlHours = 12) {
   const hours = Number.isFinite(Number(ttlHours)) && Number(ttlHours) > 0
-    ? Number(ttlHours)
-    : 12;
+    ? Number(ttlHours) : 12;
   const token = crypto.randomBytes(32).toString('base64url');
   const now = Date.now();
   const timestamp = new Date(now).toISOString();
   const expiresAt = new Date(now + hours * 3600 * 1000).toISOString();
-  database.db.prepare(`
-    INSERT INTO user_sessions (token_hash, user_id, created_at, last_seen_at, expires_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(sha256(token), Number(userId), timestamp, timestamp, expiresAt);
+  await database.execute('DELETE FROM user_sessions WHERE expires_at <= ?', [timestamp]);
+  await database.execute(`INSERT INTO user_sessions
+    (token_hash, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)`,
+  [sha256(token), Number(userId), timestamp, timestamp, expiresAt]);
   return { token, expiresAt, maxAgeSeconds: Math.round(hours * 3600) };
 }
 
-export function resolveSession(database, token) {
-  if (!token) {
-    return null;
-  }
-  const row = database.db.prepare(`
-    SELECT id, user_id AS userId, expires_at AS expiresAt
-    FROM user_sessions WHERE token_hash = ?
-  `).get(sha256(token));
-  if (!row) {
-    return null;
-  }
+export async function resolveSessionAsync(database, token) {
+  if (!token) return null;
+  const rows = await database.query(`SELECT id, user_id AS userId, expires_at AS expiresAt
+    FROM user_sessions WHERE token_hash = ?`, [sha256(token)]);
+  const row = rows[0];
+  if (!row) return null;
   if (Date.parse(row.expiresAt) <= Date.now()) {
-    database.db.prepare('DELETE FROM user_sessions WHERE id = ?').run(row.id);
+    await database.execute('DELETE FROM user_sessions WHERE id = ?', [row.id]);
     return null;
   }
-  database.db.prepare('UPDATE user_sessions SET last_seen_at = ? WHERE id = ?')
-    .run(new Date().toISOString(), row.id);
-  const user = database.getUser(row.userId);
-  if (!user || Number(user.status ?? 1) === 0) {
-    return null;
-  }
-  return user;
+  await database.execute('UPDATE user_sessions SET last_seen_at = ? WHERE id = ?',
+    [new Date().toISOString(), row.id]);
+  const user = await database.userRepository.getUserAsync(row.userId);
+  return !user || Number(user.status ?? 1) === 0 ? null : user;
 }
 
-export function deleteSession(database, token) {
-  if (!token) {
-    return;
-  }
-  database.db.prepare('DELETE FROM user_sessions WHERE token_hash = ?').run(sha256(token));
+export async function deleteSessionAsync(database, token) {
+  if (token) await database.execute('DELETE FROM user_sessions WHERE token_hash = ?', [sha256(token)]);
 }
 
-export function deleteUserSessions(database, userId, keepToken = null) {
+export async function deleteUserSessionsAsync(database, userId, keepToken = null) {
   if (keepToken) {
-    database.db.prepare('DELETE FROM user_sessions WHERE user_id = ? AND token_hash != ?')
-      .run(Number(userId), sha256(keepToken));
-    return;
+    await database.execute('DELETE FROM user_sessions WHERE user_id = ? AND token_hash != ?',
+      [Number(userId), sha256(keepToken)]);
+  } else {
+    await database.execute('DELETE FROM user_sessions WHERE user_id = ?', [Number(userId)]);
   }
-  database.db.prepare('DELETE FROM user_sessions WHERE user_id = ?').run(Number(userId));
 }
 
 export function readCookie(request, name = SESSION_COOKIE) {

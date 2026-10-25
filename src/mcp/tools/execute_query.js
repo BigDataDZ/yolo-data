@@ -55,7 +55,9 @@ export function registerExecuteQuery(server, ctx) {
   }, wrapToolHandler(async (args) => {
     const { agent, database, requestContext, auditToolCall } = ctx;
     return auditToolCall(database, buildMeta('execute_query', requestContext, args), async () => {
-      const record = database.getMcpQueryContract(args.contractId);
+      const record = database.getMcpQueryContractAsync
+        ? await database.getMcpQueryContractAsync(args.contractId)
+        : database.getMcpQueryContract(args.contractId);
       if (!record) throw fail(MCP_ERROR.CONTRACT_NOT_FOUND, '查询契约不存在，请重新执行 resolve_query');
       if (record.expiresAt && new Date(record.expiresAt).getTime() < Date.now()) {
         throw fail(MCP_ERROR.CONTRACT_EXPIRED, '查询契约已过期，请重新编译契约');
@@ -65,7 +67,9 @@ export function registerExecuteQuery(server, ctx) {
 
       let resolved;
       try {
-        resolved = agent.resolveContext(record.userId, record.themeId);
+        resolved = agent.resolveContextAsync
+          ? await agent.resolveContextAsync(record.userId, record.themeId)
+          : agent.resolveContext(record.userId, record.themeId);
       } catch (error) {
         throw fail(-32002, error?.message ?? '解析上下文失败');
       }
@@ -77,10 +81,12 @@ export function registerExecuteQuery(server, ctx) {
       let dataset = null;
       if (record.sourceType === 'INDICATOR') {
         indicator = record.indicatorId
-          ? await agent.indicatorClient.getIndicator(record.indicatorId).catch(() => null)
+          ? await agent.indicatorService.getIndicator(record.indicatorId).catch(() => null)
           : null;
       } else {
-        dataset = database.getBusinessDataset(record.datasetId);
+        dataset = database.getBusinessDatasetAsync
+          ? await database.getBusinessDatasetAsync(record.datasetId)
+          : database.getBusinessDataset(record.datasetId);
       }
       const review = agent.queryContractCompiler.review(contract, { indicator, dataset, theme, scope });
       if (!review || review.valid === false) {
@@ -90,7 +96,7 @@ export function registerExecuteQuery(server, ctx) {
       let result;
       if (record.sourceType === 'INDICATOR') {
         const window = (contract.timeWindows && contract.timeWindows[0]) || contract.dateInfo;
-        result = await agent.indicatorClient.queryIndicator({
+        result = await agent.indicatorService.queryIndicator({
           metricNames: contract.metrics ?? [],
           dimensionNames: contract.dimensions ?? [],
           filters: (contract.filters ?? []).map((f) => ({
@@ -102,7 +108,9 @@ export function registerExecuteQuery(server, ctx) {
           limit: contract.limit ?? 200,
         });
       } else {
-        const fields = agent.businessDatasets.getDatasetFields(record.datasetId, true);
+        const fields = agent.businessDatasets.getDatasetFieldsAsync
+          ? await agent.businessDatasets.getDatasetFieldsAsync(record.datasetId, true)
+          : agent.businessDatasets.getDatasetFields(record.datasetId, true);
         const request = buildDatasetRequest(contract, fields);
         result = await agent.businessDatasets.executeQuery({
           datasetId: record.datasetId,

@@ -30,10 +30,10 @@ test('core tool labels cover every required tool', () => {
   assert.deepEqual(missingCoreToolLabels(), []);
 });
 
-test('catalog lists core tools and public skills with usage', () => {
+test('catalog lists core tools and public skills with usage', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  const result = catalog.list();
+  const result = await catalog.list();
   assert.equal(result.core.length, 9);
   assert.ok(result.core.every((tool) => tool.name && tool.description));
 
@@ -46,84 +46,84 @@ test('catalog lists core tools and public skills with usage', () => {
   assert.ok(search.referencedBy.includes(theme.name));
 });
 
-test('disabling a public skill removes it from every theme', () => {
+test('disabling a public skill removes it from every theme', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  catalog.setStatus('trend_analysis', 0);
+  await catalog.setStatus('trend_analysis', 0);
   assert.ok(
     !database.listSkills().some((skill) => skill.code === 'trend_analysis'),
     '停用后 listSkills 应过滤掉该 Skill',
   );
   assert.ok(
-    catalog.list().skills.some((skill) => skill.code === 'trend_analysis' && skill.status === 0),
+    (await catalog.list()).skills.some((skill) => skill.code === 'trend_analysis' && skill.status === 0),
     '管理目录仍应展示停用态',
   );
-  catalog.setStatus('trend_analysis', 1);
+  await catalog.setStatus('trend_analysis', 1);
   assert.ok(database.listSkills().some((skill) => skill.code === 'trend_analysis'));
 });
 
-test('builtin skills can be disabled but not deleted', () => {
+test('builtin skills can be disabled but not deleted', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  assert.throws(
-    () => catalog.remove('trend_analysis'),
+  await assert.rejects(
+    catalog.remove('trend_analysis'),
     (error) => error.statusCode === 400,
   );
   assert.ok(database.getSkill('trend_analysis'));
 });
 
-test('external skills are removable and report their references', () => {
+test('external skills are removable and report their references', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
   const theme = database.listThemes()[0];
-  catalog.saveUpload({ content: skillContent('uploaded-method'), fileName: 'uploaded.md' });
+  await catalog.saveUpload({ content: skillContent('uploaded-method'), fileName: 'uploaded.md' });
   database.replaceThemeSkills(Number(theme.id), ['upload:uploaded-method']);
 
-  const listed = catalog.list().skills.find((skill) => skill.code === 'upload:uploaded-method');
+  const listed = (await catalog.list()).skills.find((skill) => skill.code === 'upload:uploaded-method');
   assert.equal(listed.removable, true);
   assert.equal(listed.usage, 1);
 
-  const result = catalog.remove('upload:uploaded-method');
+  const result = await catalog.remove('upload:uploaded-method');
   assert.equal(result.deleted, 1);
   assert.ok(result.referencedBy.includes(theme.name));
   assert.equal(database.getSkill('upload:uploaded-method'), null);
 });
 
-test('uploaded skills survive an external SKILL_MD sync', () => {
+test('uploaded skills survive an external SKILL_MD sync', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  catalog.saveUpload({ content: skillContent('kept-method'), fileName: 'kept.md' });
+  await catalog.saveUpload({ content: skillContent('kept-method'), fileName: 'kept.md' });
   assert.ok(database.getSkill('upload:kept-method'));
 
   // 管理员点「同步外部 Skill」时若目录里扫不到任何东西，
   // syncExternalSkills 会按 source='SKILL_MD' 做差量删除。
   // 上传的 Skill 必须因为独立 source 而躲过这次清理。
-  database.syncExternalSkills([]);
+  await database.syncExternalSkills([]);
   assert.ok(
     database.getSkill('upload:kept-method'),
     '上传的 Skill 不能被 SKILL_MD 差量删除误删',
   );
 });
 
-test('uploading the same skill twice updates instead of duplicating', () => {
+test('uploading the same skill twice updates instead of duplicating', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  const first = catalog.saveUpload({ content: skillContent('repeat-method') });
-  const second = catalog.saveUpload({
+  const first = await catalog.saveUpload({ content: skillContent('repeat-method') });
+  const second = await catalog.saveUpload({
     content: `${skillContent('repeat-method')}\n3. 补一段新步骤`,
   });
   assert.equal(first.code, second.code);
-  const rows = catalog.list().skills.filter((skill) => skill.code === second.code);
+  const rows = (await catalog.list()).skills.filter((skill) => skill.code === second.code);
   assert.equal(rows.length, 1);
   assert.match(database.getSkill(second.code).content, /补一段新步骤/);
 });
 
-test('upload rejects empty content and oversized documents', () => {
+test('upload rejects empty content and oversized documents', async () => {
   const database = createDatabase();
   const catalog = new SkillCatalog(database);
-  assert.throws(() => catalog.saveUpload({ content: '  ' }), (error) => error.statusCode === 400);
-  assert.throws(
-    () => catalog.saveUpload({ content: `---\nname: big\n---\n${'x'.repeat(201 * 1024)}` }),
+  await assert.rejects(catalog.saveUpload({ content: '  ' }), (error) => error.statusCode === 400);
+  await assert.rejects(
+    catalog.saveUpload({ content: `---\nname: big\n---\n${'x'.repeat(201 * 1024)}` }),
     (error) => error.statusCode === 400,
   );
 });
