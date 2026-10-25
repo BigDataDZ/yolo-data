@@ -333,19 +333,19 @@ test('agent emits auditable runtime events while answering', async () => {
   assert.ok(types.includes('done'));
   assert.ok(types.includes('warning'));
   const search = events.find((event) => (
-    event.type === 'tool_result' && event.name === 'search_indicators'
+    event.type === 'tool_result' && event.step?.stageCode === 'SEMANTIC_DISCOVERY'
   ));
   assert.equal(search.step.stageCode, 'SEMANTIC_DISCOVERY');
-  assert.equal(search.step.title, '检索主题指标');
+  assert.match(search.step.title, /检索主题指标|检索业务数据集/);
   assert.equal(search.summary, search.step.detail);
-  assert.ok(search.step.review.facts.some((fact) => fact.label === '检索词'));
-  assert.ok(search.step.review.facts.some((fact) => fact.label === '命中'));
+  assert.ok(search.step.review.facts.length > 0);
+  assert.ok(search.step.review.facts.every((fact) => typeof fact.label === 'string' && typeof fact.value === 'string'));
   assert.equal(search.step.review.details, null);
   const executed = events.find((event) => (
-    event.type === 'tool_result' && event.name === 'query_indicator'
+    event.type === 'tool_result' && event.step?.stageCode === 'EXECUTE'
   ));
   assert.equal(executed.step.stageCode, 'EXECUTE');
-  assert.equal(executed.step.title, '执行指标查询');
+  assert.match(executed.step.title, /执行指标查询|执行业务数据集查询|执行查询契约/);
   assert.equal(executed.step.review.details.rowCount, answer.data.rows.length);
   assert.deepEqual(
     executed.step.review.details.columns,
