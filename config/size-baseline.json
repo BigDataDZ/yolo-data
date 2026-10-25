@@ -64,7 +64,7 @@
   "src/chartIntent.js": 122,
   "src/chatAttachments.js": 79,
   "src/chatStreamPresenter.js": 123,
-  "src/codeExecution.js": 697,
+  "src/codeExecution.js": 692,
   "src/columnSemantics.js": 95,
   "src/conditionBindings.js": 64,
   "src/config.js": 184,
@@ -227,5 +227,6 @@
   "src/mcp/tools/snapshotAccess.js": 41,
   "src/mcp/configDefaults.js": 15,
   "src/mcp/runtimePolicy.js": 46,
-  "src/datasetQueryBuilder.js": 204
+  "src/datasetQueryBuilder.js": 204,
+  "src/codeGateAudit.js": 22
 }
