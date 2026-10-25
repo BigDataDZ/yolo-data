@@ -46,7 +46,7 @@
   "scripts/run-eval.mjs": 369,
   "scripts/run-query-smoke.mjs": 745,
   "scripts/setup.mjs": 103,
-  "src/agent.js": 6162,
+  "src/agent.js": 5864,
   "src/analysisArtifact.js": 82,
   "src/analysisContract.js": 309,
   "src/analysisIntent.js": 37,
@@ -228,5 +228,6 @@
   "src/mcp/configDefaults.js": 15,
   "src/mcp/runtimePolicy.js": 46,
   "src/datasetQueryBuilder.js": 204,
-  "src/codeGateAudit.js": 22
+  "src/codeGateAudit.js": 22,
+  "src/agentToolPresentation.js": 255
 }
