@@ -58,7 +58,7 @@
   "src/application.js": 455,
   "src/artifactCapabilities.js": 98,
   "src/auth.js": 287,
-  "src/businessDatasets.js": 950,
+  "src/businessDatasets.js": 823,
   "src/businessLexicon.js": 189,
   "src/chart.js": 198,
   "src/chartIntent.js": 122,
@@ -226,5 +226,6 @@
   "src/mcp/tools/contractExecution.js": 39,
   "src/mcp/tools/snapshotAccess.js": 41,
   "src/mcp/configDefaults.js": 15,
-  "src/mcp/runtimePolicy.js": 46
+  "src/mcp/runtimePolicy.js": 46,
+  "src/datasetQueryBuilder.js": 204
 }
