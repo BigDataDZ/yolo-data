@@ -131,7 +131,7 @@
   "src/mcp/auth.js": 54,
   "src/mcp/config.js": 57,
   "src/mcp/connectorPackage.js": 115,
-  "src/mcp/index.js": 93,
+  "src/mcp/index.js": 56,
   "src/mcp/modeGate.js": 46,
   "src/mcp/rateLimit.js": 17,
   "src/mcp/requestContext.js": 22,
@@ -225,5 +225,6 @@
   "src/processArtifactDraft.js": 119,
   "src/mcp/tools/contractExecution.js": 39,
   "src/mcp/tools/snapshotAccess.js": 41,
-  "src/mcp/configDefaults.js": 15
+  "src/mcp/configDefaults.js": 15,
+  "src/mcp/runtimePolicy.js": 46
 }
