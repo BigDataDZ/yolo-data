@@ -23,6 +23,21 @@ const {
 
 const PROFILE_ROLE_OPTIONS = ['TIME', 'METRIC', 'DIMENSION', 'IDENTIFIER'];
 const PROFILE_AGGREGATOR_OPTIONS = ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT', 'COUNT_DISTINCT', 'NONE'];
+const PROFILE_ROLE_LABELS = {
+  TIME: '时间字段',
+  METRIC: '指标字段',
+  DIMENSION: '维度字段',
+  IDENTIFIER: '标识字段',
+};
+const PROFILE_AGGREGATOR_LABELS = {
+  SUM: '求和',
+  AVG: '平均值',
+  MIN: '最小值',
+  MAX: '最大值',
+  COUNT: '计数',
+  COUNT_DISTINCT: '去重计数',
+  NONE: '不聚合',
+};
 
 function profileRoleTagClass(role) {
   if (role === 'METRIC') {
@@ -92,10 +107,10 @@ async function openDatasetProfiler(datasetId) {
                   <td><span class="tag ${profileRoleTagClass(field.currentRole)}">${escapeHtml(field.currentRole)}</span><div class="muted mono">${escapeHtml(field.currentAggregator)}</div></td>
                   <td>
                     <select class="select" data-profile-role style="max-width:112px">
-                      ${PROFILE_ROLE_OPTIONS.map((role) => `<option value="${role}"${role === field.suggestedRole ? ' selected' : ''}>${role}</option>`).join('')}
+                      ${PROFILE_ROLE_OPTIONS.map((role) => `<option value="${role}"${role === field.suggestedRole ? ' selected' : ''}>${PROFILE_ROLE_LABELS[role]}</option>`).join('')}
                     </select>
                     <select class="select" data-profile-aggregator style="max-width:132px"${field.suggestedRole === 'METRIC' ? '' : ' disabled'}>
-                      ${PROFILE_AGGREGATOR_OPTIONS.map((item) => `<option value="${item}"${item === field.suggestedAggregator ? ' selected' : ''}>${item}</option>`).join('')}
+                      ${PROFILE_AGGREGATOR_OPTIONS.map((item) => `<option value="${item}"${item === field.suggestedAggregator ? ' selected' : ''}>${PROFILE_AGGREGATOR_LABELS[item]}</option>`).join('')}
                     </select>
                   </td>
                   <td class="profile-reason">

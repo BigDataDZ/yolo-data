@@ -53,6 +53,33 @@ test('harness factory builds an agent-scoped model runtime', async () => {
   delete process.env.TEST_AGENT_LLM_KEY;
 });
 
+test('yolo-conf default model is throttled to one request per second', async () => {
+  const startedAt = [];
+  const factory = new HarnessFactory({
+    baseUrl: 'https://api.deepseek.com/v1',
+    apiKey: 'default-key',
+    model: 'deepseek-chat',
+    timeoutMs: 5_000,
+  }, async () => {
+    startedAt.push(Date.now());
+    return new Response(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  const harness = factory.forTheme({
+    model: 'deepseek-chat',
+    baseUrl: 'https://api.deepseek.com/v1',
+    isDefaultConfModel: true,
+  });
+  await Promise.all([
+    harness.chat([], []),
+    harness.chat([], []),
+  ]);
+  assert.equal(startedAt.length, 2);
+  assert.ok(startedAt[1] - startedAt[0] >= 950);
+});
+
 test('harness factory decrypts a theme-scoped API key', async () => {
   let authorization = null;
   const factory = new HarnessFactory({
