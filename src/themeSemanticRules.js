@@ -211,11 +211,18 @@ function buildMetricRule(content, index, issues) {
 
 function buildFieldRule(content, index, kind, issues) {
   const arrow = splitArrow(content);
-  if (!arrow) {
-    issues.push(`${kind === 'dimension' ? '维度' : '过滤'}规则缺少 "->"：${content}`);
+  let namesPart;
+  let targetPart;
+  if (arrow) {
+    [namesPart, targetPart] = arrow;
+  } else if (kind === 'filter' && splitAssignment(content)) {
+    // 简写：过滤: 字段 = 值（枚举值本身作为可匹配的过滤名称）。
+    namesPart = splitAssignment(content)[1];
+    targetPart = content;
+  } else {
+    issues.push(`${kind === 'dimension' ? '维度' : '过滤'}规则需要使用 "->"，过滤规则也可写成 "字段 = 值"：${content}`);
     return null;
   }
-  const [namesPart, targetPart] = arrow;
   const names = splitNames(namesPart);
   if (names.length === 0 || !targetPart) {
     issues.push(`规则不完整：${content}`);
@@ -248,11 +255,16 @@ function buildFieldRule(content, index, kind, issues) {
 
 function buildEnumGroup(content, index, issues) {
   const arrow = splitArrow(content);
-  if (!arrow) {
-    issues.push(`枚举组规则缺少 "->"：${content}`);
+  const [namesPart, targetPart] = arrow
+    ?? (() => {
+      // 简写：枚举组: 字段 = 值1, 值2（字段名同时作为组名）。
+      const assignment = splitAssignment(content);
+      return assignment ? [assignment[0], content] : [content, ''];
+    })();
+  if (!targetPart) {
+    issues.push(`枚举组规则需要使用 "->"，或写成 "字段 = 值1, 值2"：${content}`);
     return null;
   }
-  const [namesPart, targetPart] = arrow;
   const names = splitNames(namesPart);
   const assignment = splitAssignment(targetPart);
   if (names.length === 0 || !assignment || !assignment[0] || !assignment[1]) {
