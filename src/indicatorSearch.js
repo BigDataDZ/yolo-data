@@ -11,6 +11,37 @@ export function normalizeBusinessTerm(value) {
   return compactText(value);
 }
 
+// Chinese business terms often differ by one character (for example
+// “销售额” and “销售金额”). Keep this deterministic and explainable instead
+// of requiring an embedding/vector service for a small lexical variation.
+function longestCommonSubstringLength(left, right) {
+  const a = normalizeBusinessTerm(left);
+  const b = normalizeBusinessTerm(right);
+  if (!a || !b) return 0;
+  let previous = new Array(b.length + 1).fill(0);
+  let longest = 0;
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = new Array(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j += 1) {
+      if (a[i - 1] === b[j - 1]) {
+        current[j] = previous[j - 1] + 1;
+        longest = Math.max(longest, current[j]);
+      }
+    }
+    previous = current;
+  }
+  return longest;
+}
+
+function fuzzyTermMatch(query, term) {
+  const left = normalizeBusinessTerm(query);
+  const right = normalizeBusinessTerm(term);
+  if (left.length < 2 || right.length < 2) return 0;
+  const overlap = longestCommonSubstringLength(left, right);
+  const threshold = Math.max(2, Math.ceil(Math.min(left.length, right.length) * 0.5));
+  return overlap >= threshold ? overlap : 0;
+}
+
 function indicatorValues(indicator) {
   return [
     indicator?.name,
@@ -33,9 +64,33 @@ function indicatorValues(indicator) {
   ].filter(Boolean).map(normalizeBusinessTerm);
 }
 
-export function scoreIndicator(indicator, question, lexicon = null) {
+function promptMetricAliases(prompt) {
+  const text = String(prompt ?? '');
+  const aliases = [];
+  for (const line of text.split(/\r?\n/)) {
+    if (!/指标同义词/.test(line)) continue;
+    const expression = line.slice(line.indexOf('：') >= 0 ? line.indexOf('：') + 1 : line.indexOf(':') + 1);
+    for (const mapping of expression.split(/[；;，,]/)) {
+      const match = mapping.match(/^\s*([^=＝]+?)\s*[=＝]\s*(.+?)\s*$/);
+      if (!match) continue;
+      const alias = normalizeBusinessTerm(match[1]);
+      const target = normalizeBusinessTerm(match[2]);
+      if (alias && target) aliases.push({ alias, target });
+    }
+  }
+  return aliases;
+}
+
+export function scoreIndicator(indicator, question, lexicon = null, prompt = '') {
   const text = normalizeBusinessTerm(question);
   const values = indicatorValues(indicator);
+  for (const { alias, target } of promptMetricAliases(prompt)) {
+    // Require an exact configured target to avoid treating "不含税..." as
+    // the configured "含税..." metric merely because it contains the text.
+    if (text.includes(alias) && values.some((value) => value === target)) {
+      values.push(alias);
+    }
+  }
   const tax = (lexicon ?? getPlatformLexicon()).taxPrefixes;
   const excludedPrefixes = tax.excluded.map((prefix) => normalizeBusinessTerm(prefix));
   const allPrefixes = tax.all.map((prefix) => normalizeBusinessTerm(prefix));
@@ -63,6 +118,17 @@ export function scoreIndicator(indicator, question, lexicon = null) {
         ? (noTaxRequested ? 18 : 5)
         : (noTaxRequested ? 5 : 18);
     }
+    // Fuzzy-match the metric core so common variants such as “销售额” /
+    // “销售金额” still resolve, while preserving the tax preference.
+    if (coreValue && !text.includes(coreValue)) {
+      const overlap = fuzzyTermMatch(text, coreValue);
+      if (overlap > 0) {
+        const excludesTax = isExcluded(value);
+        score += excludesTax
+          ? (noTaxRequested ? 12 : 3)
+          : (noTaxRequested ? 3 : 12);
+      }
+    }
     for (const token of value.split(/[\s,，、;；/]+/).filter((item) => item.length >= 2)) {
       if (text.includes(token)) {
         score += Math.min(token.length, 6);
@@ -72,12 +138,12 @@ export function scoreIndicator(indicator, question, lexicon = null) {
   return score;
 }
 
-export function rankIndicators(indicators, question, limit = 6, lexicon = null) {
+export function rankIndicators(indicators, question, limit = 6, lexicon = null, prompt = '') {
   const safeLimit = Math.max(1, Math.min(Number(limit) || 6, 20));
   return (indicators ?? [])
     .map((indicator) => ({
       indicator,
-      score: scoreIndicator(indicator, question, lexicon),
+      score: scoreIndicator(indicator, question, lexicon, prompt),
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => (
