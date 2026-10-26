@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ANALYSIS_RESULT_FILE } from '../src/analysisContract.js';
-import { validateAnalysisOutputs } from '../src/analysisArtifact.js';
+import { validateAnalysisOutputs, validateAnalysisOutputsAsync } from '../src/analysisArtifact.js';
 
 function fakeWorkspace(contents) {
   return {
@@ -28,6 +28,42 @@ const VALID_ANALYSIS = JSON.stringify({
     { key: '华南', label: '华南', base: 50, current: 60, delta: 10, contribution: 10, share: -0.2 },
   ],
   claims: [{ code: 'ADDITIVE' }, { code: 'SHARE_SUM' }, { code: 'DELTA_CONSISTENT' }],
+});
+
+test('async analysis validation matches synchronous validation for valid and unreadable outputs', async () => {
+  for (const content of [VALID_ANALYSIS, '{bad json', '', null, '{}']) {
+    const workspace = {
+      getArtifact: () => ({ payload: { content } }),
+      getArtifactAsync: async () => ({ payload: { content } }),
+    };
+    assert.deepEqual(
+      await validateAnalysisOutputsAsync({ workspace, outputs: OUTPUTS }),
+      validateAnalysisOutputs({ workspace, outputs: OUTPUTS }),
+    );
+  }
+  const workspace = {
+    getArtifact() { throw new Error('not readable'); },
+    async getArtifactAsync() { throw new Error('not readable'); },
+  };
+  assert.deepEqual(
+    await validateAnalysisOutputsAsync({ workspace, outputs: OUTPUTS }),
+    validateAnalysisOutputs({ workspace, outputs: OUTPUTS }),
+  );
+  assert.equal(await validateAnalysisOutputsAsync({ workspace, outputs: [] }), null);
+});
+
+test('async validation awaits async-only artifact access and preserves the legacy content fallback', async () => {
+  const workspace = {
+    getArtifact() { throw new Error('sync artifact access forbidden'); },
+    async getArtifactAsync({ artifactId }) {
+      assert.equal(artifactId, 'a1');
+      return { content: VALID_ANALYSIS };
+    },
+  };
+  const result = await validateAnalysisOutputsAsync({ workspace, outputs: OUTPUTS });
+  assert.equal(result.valid, true);
+  assert.match(result.summary, /总变化：-50/);
+  assert.equal((await validateAnalysisOutputsAsync({ outputs: OUTPUTS })).issues[0].code, 'ANALYSIS-UNREADABLE');
 });
 
 test('no contract artifact means nothing to validate', () => {
