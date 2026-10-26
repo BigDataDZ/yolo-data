@@ -45,6 +45,7 @@ if [[ -x "$venv_python" ]] && "$venv_python" -c 'import pandas, openpyxl' >/dev/
   python_ready=true
 fi
 
+# 初始化状态只在这里分支一次：就绪时跳过，否则初始化后继续启动。
 if [[ "$node_ready" == true && "$python_ready" == true ]]; then
   echo "项目已初始化，跳过依赖安装。"
 else
