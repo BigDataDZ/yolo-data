@@ -836,6 +836,10 @@ function setActivePage(page) {
       );
     });
   }
+  const workspaceToggle = document.getElementById('workspaceToggle');
+  if (workspaceToggle) {
+    workspaceToggle.hidden = page !== 'query';
+  }
   // 合并入口的导航高亮：/guide 归「帮助中心」，/models、/skills 与主题编辑页归「智能体」。
   const navPageMap = { themeEditor: 'themes', models: 'themes', skills: 'themes', guide: 'help' };
   const activeNavPage = navPageMap[page] ?? page;

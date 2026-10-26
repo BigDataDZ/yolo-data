@@ -115,3 +115,44 @@ test('semantic fast path defers analytical and trend questions', () => {
   assert.equal(attribution.eligible, false);
   assert.equal(attribution.reason, 'attribution_requires_full_workflow');
 });
+
+test('semantic fast path maps a prompt metric synonym to a unique dataset metric field', () => {
+  const plan = buildSemanticFastPathDraft({
+    question: '上个月的销售额是多少',
+    theme: {
+      systemPrompt: '## 固定业务规则\n**税口径**：用户明确含税/未税按用户；未指定默认含税。',
+      semanticPolicy: {},
+    },
+    datasetFields: [
+      { fieldName: 'sale_amt', displayName: '含税销售额', role: 'METRIC', aggregator: 'SUM' },
+      { fieldName: 'sale_cost', displayName: '含税销售成本', role: 'METRIC', aggregator: 'SUM' },
+      { fieldName: 'sales_date', displayName: '销售日期', role: 'TIME', aggregator: 'NONE' },
+    ],
+    now: new Date('2026-10-23T03:00:00Z'),
+  });
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.draft.metricFields[0].field, 'sale_amt');
+  assert.equal(plan.draft.metricFields[0].aggregator, 'SUM');
+  assert.equal(plan.timeMentions[0].dateInfo.startDate, '2026-09-01');
+  assert.equal(plan.timeMentions[0].dateInfo.endDate, '2026-09-30');
+});
+
+test('semantic fast path accepts the public dataset-definition field shape', () => {
+  const plan = buildSemanticFastPathDraft({
+    question: '上个月的销售额是多少',
+    theme: {
+      systemPrompt: '## 固定业务规则\n**指标同义词**：销售额=含税销售额；业绩=含税销售额；收入=含税销售额',
+      semanticPolicy: {},
+    },
+    datasetFields: [
+      { name: 'sale_amt', displayName: '含税销售额', role: 'METRIC', aggregator: 'SUM' },
+      { name: 'sales_date', displayName: '销售日期', role: 'TIME', aggregator: 'NONE' },
+    ],
+    now: new Date('2026-10-23T03:00:00Z'),
+  });
+
+  assert.equal(plan.eligible, true);
+  assert.equal(plan.draft.metricFields[0].field, 'sale_amt');
+  assert.equal(plan.metricMatches[0].field, 'sale_amt');
+});
