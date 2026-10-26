@@ -88,6 +88,20 @@ test('result operations explicitly become follow-up context', () => {
   assert.equal(context.reason, 'result_operation');
 });
 
+test('group-by follow-up inherits prior metric and time without parsing “组” as a dimension', () => {
+  const context = resolveConversationContext('按省区分组呢', [
+    { role: 'user', content: '上个月的销售额是多少' },
+    { role: 'assistant', content: '上个月含税销售额为 100。' },
+  ]);
+
+  assert.equal(context.mode, 'FOLLOW_UP');
+  assert.equal(context.inheritQueryContext, true);
+  assert.deepEqual(context.explicitSlots.dimensions.map((item) => item.value), ['省区']);
+  assert.equal(context.inheritedSlots.time[0].value, '上个月');
+  assert.match(context.question, /按省区分组呢/);
+  assert.match(context.question, /上个月/);
+});
+
 test('prompt-owned filters stay out of deterministic compiler defaults', () => {
   const indicatorDimensions = [
     {

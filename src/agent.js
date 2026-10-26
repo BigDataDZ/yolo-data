@@ -1589,9 +1589,12 @@ ${rowPolicyLines}
 2. 只能使用当前主题和权限范围内已确认的指标、字段和业务数据集。
 3. 指标问题必须先调用 search_indicators，再调用 get_indicator 确认本地指标、维度和业务口径。
 4. 数据集取数必须先确认业务数据集字段和默认值域，再编译 BUSINESS_DATASET 查询契约。
+4a. “确认字段口径”是确认字段存在、业务含义、类型和聚合方式；数值指标的默认值域/枚举与无筛选的汇总查询无关，不得因其为空、未加载或加载失败而拒绝查询。只有用户筛选枚举字段时，才要求确认该字段的值域。
+4b. 本地指标已确认后，若所选数据集存在同名/同义的 METRIC 字段且聚合方式兼容，应将本地指标口径映射到该数据集字段并继续查询；不得仅因本地指标与数据集字段来自不同目录而拒绝。
 5. 数据库取数统一使用业务数据集查询契约，不得声称执行未配置的数据源查询。
 6. 过滤条件只能使用实时语义字段，不得使用 SQL_PART。
 7. 如果用户问题缺少时间范围，默认使用近 7 天。
+7a. “上个月/上月”表示上一完整自然月（上月 1 日至上月最后一日），不是本月；只有“本月/本周/今年至今”等未完结周期才将结束日期截到昨天。
 8. “趋势/走势”是展示意图，必须使用 RESULT_ACTION 条件并绑定时间维度，不得归入 CALCULATION；涉及排名、对比或分布时选择合理业务维度。图表一律由平台在页面上原生渲染：不得用代码生成或引用图表图片（png/svg 等），不得使用 Markdown 图片语法表达图表；用户只要求更换图表类型（折线/柱状/饼图/表格）时属于展示层操作，平台会复用已锁定结果重新渲染，不要为此重新取数、执行代码或转换文件。
 9. 回答只讲用户问到的结果：先给结论，再给必要依据；不要复述查询过程、契约、字段名或校验步骤。
 10. 业务数据集是唯一数据库取数来源；本地指标用于口径管理和主题挂载。
@@ -1677,6 +1680,13 @@ export class MetricAgentService {
   }
 
   async resolveThemeModel(theme, modelIdOverride = null) {
+    const configuredModel = String(this.config?.deepseek?.model ?? '').trim();
+    const configuredBaseUrl = String(this.config?.deepseek?.baseUrl ?? '').replace(/\/+$/, '');
+    const isDefaultConfModel = (model) => Boolean(
+      configuredModel
+      && String(model?.modelName ?? model?.model ?? '').trim() === configuredModel
+      && (!configuredBaseUrl || String(model?.baseUrl ?? '').replace(/\/+$/, '') === configuredBaseUrl),
+    );
     const modelIds = (theme?.modelIds ?? []).map(Number).filter(Number.isFinite);
     const requestedModelId = modelIdOverride
       ? Number(modelIdOverride)
@@ -1697,7 +1707,12 @@ export class MetricAgentService {
         : this.database?.getModel?.(modelId))
       : null;
     if (!model) {
-      return theme?.llmConfig ?? {};
+      const fallback = theme?.llmConfig ?? {};
+      return {
+        ...fallback,
+        isDefaultConfModel: isDefaultConfModel(fallback)
+          || (!String(fallback.model ?? '').trim() && !String(fallback.baseUrl ?? '').trim()),
+      };
     }
     return {
       provider: model.provider || 'deepseek',
@@ -1709,6 +1724,7 @@ export class MetricAgentService {
       maxTokens: model.maxTokens ?? 0,
       timeoutMs: model.timeoutMs ?? 60_000,
       maxToolRounds: model.maxToolRounds ?? 12,
+      isDefaultConfModel: isDefaultConfModel(model),
     };
   }
 
@@ -2679,7 +2695,13 @@ export class MetricAgentService {
     const searchIndicators = (keyword, limit = 6) => {
       startWorkflowStage('SEMANTIC_DISCOVERY', '检索主题指标');
       confirmationState.indicatorSearchCompleted = true;
-      const ranked = rankIndicators(allowedIndicators, keyword, limit, resolveBusinessLexicon(theme));
+      const ranked = rankIndicators(
+        allowedIndicators,
+        keyword,
+        limit,
+        resolveBusinessLexicon(theme),
+        theme.systemPrompt,
+      );
 
       const list = (
         ranked.length > 0
@@ -3557,28 +3579,41 @@ export class MetricAgentService {
         semanticPolicy: theme.semanticPolicy,
         scope,
       });
-      const fields = this.semanticValues
-        ? await this.runtimeCache.semanticContexts.getOrSet(
-          'semantic-context',
-          `dataset:${semanticKey}`,
-          async () => this.semanticValues.initializeDataset(
-            dataset,
-            rawFields,
-            theme.systemPrompt,
-            (field) => this.businessDatasets.listDistinctFieldValues(
-              dataset.id,
-              field.fieldName,
-              { limit: 200 },
+      let fields = rawFields;
+      if (this.semanticValues) {
+        try {
+          fields = await this.runtimeCache.semanticContexts.getOrSet(
+            'semantic-context',
+            `dataset:${semanticKey}`,
+            async () => this.semanticValues.initializeDataset(
+              dataset,
+              rawFields,
+              theme.systemPrompt,
+              (field) => this.businessDatasets.listDistinctFieldValues(
+                dataset.id,
+                field.fieldName,
+                { limit: 200 },
+              ),
+              theme.semanticValueConfig,
+              theme.id,
+              true,
+              theme.semanticPolicy,
+              scope,
             ),
-            theme.semanticValueConfig,
-            theme.id,
-            true,
-            theme.semanticPolicy,
-            scope,
-          ),
-          { ttlMs: 300_000 },
-        )
-        : rawFields;
+            { ttlMs: 300_000 },
+          );
+        } catch (error) {
+          // Field metadata (name/type/role/aggregator) is sufficient for a
+          // plain metric aggregation. Optional enum/value-domain enrichment
+          // must not hide the underlying dataset schema from the agent.
+          emit({
+            type: 'warning',
+            code: 'SEMANTIC_VALUE_DOMAIN_UNAVAILABLE',
+            message: `数据集字段元数据已读取；默认值域补充暂不可用：${error.message}`,
+          });
+          fields = rawFields;
+        }
+      }
       confirmationState.confirmedDatasetIds.add(String(dataset.id));
       confirmationState.datasetDefinitions.set(String(dataset.id), {
         dataset,
@@ -5260,24 +5295,31 @@ export class MetricAgentService {
     }
     let harnessResult;
     let semanticFastPathUsed = false;
-    const canUseSemanticFastPath = activeHarness.mode !== 'local-rule'
-      && businessDatasets.length > 0
+    let semanticFastPathError = null;
+    const canUseSemanticFastPath = businessDatasets.length > 0
       && !reuseArtifactsOnly
       && conversationContext.turnType !== TURN_TYPES.INSTRUCTION
       && ['NEW_TOPIC', 'INDEPENDENT'].includes(conversationContext.mode);
     if (canUseSemanticFastPath) {
-      const fastPath = buildSemanticFastPathDraft({
-        question: resolvedQuestion,
-        theme,
-      });
       const preferredDataset = businessDatasets.find(
         (dataset) => Number(dataset.id) === Number(primaryBusinessDatasetId),
       );
       const fastDataset = preferredDataset
         ?? (businessDatasets.length === 1 ? businessDatasets[0] : null);
-      if (fastPath.eligible && fastDataset) {
+      if (fastDataset) {
         const fastPathStartedAt = Date.now();
         try {
+          const definition = await getBusinessDatasetDefinition({
+            datasetId: fastDataset.id,
+          });
+          const fastPath = buildSemanticFastPathDraft({
+            question: resolvedQuestion,
+            theme,
+            datasetFields: definition.fields ?? [],
+          });
+          if (!fastPath.eligible) {
+            throw Object.assign(new Error(fastPath.reason), { semanticFastPathIneligible: true });
+          }
           startWorkflowStage('SEMANTIC_DISCOVERY', '语义快车道检索业务数据集');
           completeWorkflowStage('SEMANTIC_DISCOVERY', {
             summary: `语义包唯一命中，优先使用数据集「${fastDataset.name}」`,
@@ -5288,9 +5330,6 @@ export class MetricAgentService {
             metric: fastPath.metricMatches[0].concept,
             datasetId: fastDataset.id,
             reason: fastPath.reason,
-          });
-          await getBusinessDatasetDefinition({
-            datasetId: fastDataset.id,
           });
           const compiled = await compileQueryContract({
             ...fastPath.draft,
@@ -5321,11 +5360,14 @@ export class MetricAgentService {
             });
           }
         } catch (error) {
-          emit({
-            type: 'warning',
-            code: 'SEMANTIC_FAST_PATH_FAILED',
-            message: `语义快车道执行失败，已回退到 DataAgent 工作流：${error.message}`,
-          });
+          if (!error.semanticFastPathIneligible) {
+            semanticFastPathError = error;
+            emit({
+              type: 'warning',
+              code: 'SEMANTIC_FAST_PATH_FAILED',
+              message: `语义快车道执行失败，已回退到 DataAgent 工作流：${error.message}`,
+            });
+          }
         }
       }
     }
@@ -5513,7 +5555,13 @@ export class MetricAgentService {
     toolTrace.push(...(harnessResult.trace ?? []));
     const canRunDeterministicFallback = false;
     if (canRunDeterministicFallback && allowedIndicators.length > 0) {
-      const candidates = rankIndicators(allowedIndicators, resolvedQuestion, 3, resolveBusinessLexicon(theme));
+      const candidates = rankIndicators(
+        allowedIndicators,
+        resolvedQuestion,
+        3,
+        resolveBusinessLexicon(theme),
+        theme.systemPrompt,
+      );
       for (const candidate of candidates) {
         try {
           if (!confirmationState.indicatorSearchCompleted) {
@@ -5772,6 +5820,9 @@ export class MetricAgentService {
         { allowed: valueClarificationAllowed },
       );
     const baseFinalMessage = deterministicMessage
+      || (semanticFastPathError && queryExecutions.length === 0
+        ? `本轮无法完成数据集查询：${semanticFastPathError.message}`
+        : '')
       || (clarificationExhausted
         ? '本轮归因问题已达到澄清上限，系统不会继续逐项反问。请补齐主题提示词中的归因公式、同期规则或候选归因维度后重新执行。'
         : harnessResult.content)
@@ -6052,6 +6103,44 @@ export class MetricAgentService {
       answer.message,
       answer,
     );
+    if (workspace && String(answer.message ?? '').trim()) {
+      const markdown = String(answer.message);
+      const analysisTitle = String(answer.resolvedQuestion ?? answer.question ?? '问数结果')
+        .replace(/[\\/:*?"<>|]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 72) || '问数结果';
+      const analysisArtifact = this.workspace.createFileArtifactAsync
+        ? await this.workspace.createFileArtifactAsync({
+          workspaceId: workspace.id,
+          userId: user.id,
+          sessionId: session.id,
+          messageId: assistantMessage.id,
+          title: `分析结果 - ${analysisTitle}.md`,
+          content: markdown,
+          format: 'md',
+          mimeType: 'text/markdown; charset=utf-8',
+          purpose: '问数分析结果',
+          size: Buffer.byteLength(markdown, 'utf8'),
+          source: { type: 'ANALYSIS_MARKDOWN', messageId: assistantMessage.id },
+        })
+        : this.workspace.createFileArtifact({
+          workspaceId: workspace.id,
+          userId: user.id,
+          sessionId: session.id,
+          messageId: assistantMessage.id,
+          title: `分析结果 - ${analysisTitle}.md`,
+          content: markdown,
+          format: 'md',
+          mimeType: 'text/markdown; charset=utf-8',
+          purpose: '问数分析结果',
+          size: Buffer.byteLength(markdown, 'utf8'),
+          source: { type: 'ANALYSIS_MARKDOWN', messageId: assistantMessage.id },
+        });
+      if (analysisArtifact?.id) {
+        generatedWorkspaceArtifactIds.push(analysisArtifact.id);
+      }
+    }
     const queryArtifact = lastLockedExecution?.queryArtifactId
       ? (this.workspace?.getArtifactAsync ? await this.workspace.getArtifactAsync({
         artifactId: lastLockedExecution.queryArtifactId,
