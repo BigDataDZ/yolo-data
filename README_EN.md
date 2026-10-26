@@ -1,27 +1,26 @@
 [简体中文](README.md) | English
 
-# YOLO Data | Enterprise Conversational Analytics Platform
+# YOLO Data Agent | Governed Enterprise Analytics Platform
 
-Make data analysis as simple as a conversation and its results as trustworthy as a governed process.
+Ask business questions in natural language, then continue exploring the results in the same conversation—with business definitions, permissions, and execution rules managed by the platform.
 
-YOLO Data combines years of data-analysis practice with large language models to simplify complex enterprise data workflows and deliver fast, stable business insights. Business users can ask follow-up questions in the same conversation, while the platform requests clarification whenever the business intent is ambiguous.
+YOLO Data is a self-service analytics platform for business teams. Users can ask follow-up questions, compare and break down results, while the platform can request clarification when key intent is ambiguous.
 
-Beyond conversational Q&A, YOLO Data brings LLMs, metric definitions, business datasets, data permissions, layered memory, answer reflection, and workspace artifacts into one auditable and reproducible workflow.
+It brings language models, metric definitions, business datasets, data permissions, conversation memory, workspace artifacts, feedback, and audit records into a governed analytics workflow.
 
-## Problems It Solves
+## How It Differs from a General-Purpose Agent
 
-1. **Accuracy:** conventional Text-to-SQL systems can produce inconsistent answers. YOLO Data uses governed contracts and deterministic execution to reduce hallucinations and target 95%+ accuracy.
-2. **Consistency:** a unified semantic layer prevents teams from using conflicting definitions for the same business concept.
-3. **Efficiency:** the path from data retrieval to attribution, decision, and action is shortened from hours to minutes.
+General-purpose agents are designed for open-ended tasks and may choose among tools dynamically. YOLO Data focuses on governed business-data analysis: the model interprets and explains, while the platform controls the available semantics, data scope, query validation, and execution.
 
-## Positioning
+| Dimension | General-purpose agent (typical) | YOLO Data Agent |
+| --- | --- | --- |
+| Scope | Open-ended tasks and flexible tool use | Business questions within configured topics, metrics, and datasets |
+| Data semantics | May infer meaning from schemas at runtime | Administrators configure field semantics, metric definitions, defaults, and topic scope |
+| Query execution | May generate SQL or invoke general data tools | Contract-first: the model proposes structured intent; the platform validates and compiles read-only queries, without exposing raw SQL to the model |
+| Access control | Often delegated to prompts, tool setup, or upstream services | Topic/metric/dataset grants and row/column policies are enforced server-side |
+| Continuity and evidence | Often centered on conversation context and transient tool output | Conversations, result snapshots, workspace artifacts, feedback, and audit records support follow-up and review |
 
-Enterprise analytics requires more than sending database schemas to an LLM. The model must understand context and decompose complex questions, while the platform must produce precise data and support insight and attribution analysis.
-
-1. The model interprets user questions, metric definitions, and fields.
-2. The platform handles time parsing, field mapping, query contracts, permissions, and result stabilization.
-3. Queries execute only against governed metrics or business datasets.
-4. Every critical step retains evidence for auditing, reproduction, and replay.
+YOLO Data is not intended to replace general agents for every task. It provides a dedicated execution framework for analytics where definitions should be consistent, access must be governed, and results need to be reviewable. Skills and MCP extend integrations without bypassing query validation or data permissions.
 
 ## Screenshots
 
@@ -74,6 +73,16 @@ Enterprise analytics requires more than sending database schemas to an LLM. The 
 - **Production hardening**
   - Prompt-injection sanitization, daily token budgets, session authentication, and Docker/Podman plus seccomp execution isolation.
   - The default `inprocess` backend is suitable only for trusted environments. Multi-tenant deployments should use `SANDBOX_BACKEND=container` or `podman`.
+
+## Core Workflow
+
+```text
+Business question → topic and semantic resolution → structured query contract
+                   → field/time/permission validation → metric or read-only dataset execution
+                   → stable result and explanation → memory, workspace, feedback, and audit
+```
+
+The governing principle is “model proposes, platform decides”: the model helps interpret and plan, while platform rules control the query contract, authorized scope, and execution.
 
 ## Business Rules and Prompts
 
@@ -200,7 +209,7 @@ curl -N -X POST http://localhost:8088/api/chat/query/stream \
 
 - `docker compose up -d` defaults to `AUTH_MODE=session` and binds only to `127.0.0.1`. External deployments must still change the default password and run behind an HTTPS reverse proxy. Direct HTTP access with `NODE_ENV=production` will fail login because Secure cookies are required.
 - `SANDBOX_BACKEND=inprocess` is not a security boundary. Untrusted environments should use Docker or Podman with seccomp, no network, and a read-only root filesystem.
-- Platform state currently uses SQLite; deploy a single instance. `DATABASE_BACKEND` and `REDIS_URL` are not wired into application startup, so setting them does not switch platform storage or enable distributed session locks. Multiple instances still require integration of an external platform database and locking. PostgreSQL business-data sources do not provide PostgreSQL storage for platform state.
+- Platform state currently uses SQLite; deploy a single instance. `PLATFORM_DB_BACKEND=mysql` is not yet enabled in the application store. PostgreSQL business-data sources do not provide PostgreSQL storage for platform state.
 - `REFLECTION_ENABLED` and `REFLECTION_MAX_REPLAN` control answer reflection. Run `npm run eval` or use `/api/eval` for L1/L2/L3 regression evaluation.
 
 ## Documentation

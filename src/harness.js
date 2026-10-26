@@ -140,6 +140,7 @@ export class OpenAICompatibleDeepSeekHarness {
     fetchImpl = fetch,
     provider = 'deepseek',
     onCall = null,
+    rateLimitMs = 0,
   }) {
     this.baseUrl = String(baseUrl).replace(/\/+$/, '');
     this.apiKey = apiKey;
@@ -151,6 +152,9 @@ export class OpenAICompatibleDeepSeekHarness {
     this.fetchImpl = fetchImpl;
     this.provider = provider;
     this.onCall = onCall;
+    this.rateLimitMs = Math.max(0, Number(rateLimitMs) || 0);
+    this.rateLimitTail = Promise.resolve();
+    this.lastRequestAt = 0;
     this.mode = 'deepseek';
     this.capabilities = {
       toolCalling: true,
@@ -258,6 +262,18 @@ export class OpenAICompatibleDeepSeekHarness {
   }
 
   async chat(messages, tools, metadata = {}) {
+    if (this.rateLimitMs > 0) {
+      let release;
+      const previous = this.rateLimitTail;
+      this.rateLimitTail = new Promise((resolve) => { release = resolve; });
+      await previous;
+      const waitMs = Math.max(0, this.lastRequestAt + this.rateLimitMs - Date.now());
+      if (waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      this.lastRequestAt = Date.now();
+      release();
+    }
     const startedAt = Date.now();
     const timeoutController = new AbortController();
     const timeout = setTimeout(
@@ -783,6 +799,7 @@ export class HarnessFactory {
           ? String(process.env[themeConfig.apiKeyEnv] ?? '').trim()
           : this.baseConfig.apiKey),
       provider: themeConfig.provider || 'deepseek',
+      rateLimitMs: themeConfig.isDefaultConfModel === true ? 1000 : 0,
     };
     if (!merged.apiKey) {
       if (!this.cache.has('local-rule')) {
@@ -797,6 +814,7 @@ export class HarnessFactory {
       maxTokens: merged.maxTokens,
       maxToolRounds: merged.maxToolRounds,
       provider: merged.provider,
+      rateLimitMs: merged.rateLimitMs,
       apiKeyFingerprint: crypto
         .createHash('sha256')
         .update(String(merged.apiKey))
@@ -808,6 +826,7 @@ export class HarnessFactory {
         ...merged,
         fetchImpl: this.fetchImpl,
         onCall: this.onCall,
+        rateLimitMs: merged.rateLimitMs,
       }));
     }
     return this.cache.get(cacheKey);

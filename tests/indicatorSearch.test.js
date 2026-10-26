@@ -25,11 +25,40 @@ test('indicator ranking is stable and prefers the semantic match', () => {
   );
 });
 
-test('synonym expansion is not hardcoded into indicator search', () => {
+test('unrelated business terms are not inferred as metric synonyms', () => {
   const ranked = rankIndicators([
     { id: '6', name: '不含税销售金额' },
     { id: '2', name: '含税销售金额' },
-  ], '本月重点客户组业务的销售额', 2);
+  ], '本月重点客户组的业绩', 2);
 
   assert.equal(ranked.length, 0);
+});
+
+test('prompt metric synonyms expand indicator search', () => {
+  const ranked = rankIndicators([
+    { id: '6', name: '不含税销售金额' },
+    { id: '2', name: '含税销售金额' },
+  ], '上个月的销售额是多少', 2, null,
+  '**指标同义词**：销售额=含税销售金额；业绩=含税销售金额');
+
+  assert.equal(ranked[0].indicator.name, '含税销售金额');
+});
+
+test('prompt metric aliases resolve business terms to the configured metric', () => {
+  const ranked = rankIndicators([
+    { id: '6', name: '不含税销售额' },
+    { id: '2', name: '含税销售额' },
+  ], '上个月的业绩是多少', 2, null,
+  '**指标同义词**：业绩=含税销售额；收入=含税销售额');
+
+  assert.equal(ranked[0].indicator.name, '含税销售额');
+});
+
+test('fuzzy metric matching resolves common amount term variants', () => {
+  const ranked = rankIndicators([
+    { id: '6', name: '不含税销售金额' },
+    { id: '2', name: '含税销售金额' },
+  ], '上个月的销售额是多少', 2);
+
+  assert.equal(ranked[0].indicator.name, '含税销售金额');
 });

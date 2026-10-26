@@ -4,7 +4,6 @@ import * as core from '../core/runtime.js';
 import { renderDataTable } from './table.js';
 
 const {
-  icon,
   escapeHtml,
   escapeAttr,
   formatDurationSeconds,
@@ -64,6 +63,9 @@ function workspaceArtifactFileMeta(artifact) {
   if (String(metadata.source?.type ?? '').toUpperCase() === 'UPLOAD_FILE') {
     return { iconName: 'file-spreadsheet', label: '本地文件解析表', className: 'is-excel' };
   }
+  if (String(metadata.source?.type ?? '').toUpperCase() === 'ANALYSIS_MARKDOWN') {
+    return { iconName: 'file-text', label: '分析结果 Markdown', className: 'is-text' };
+  }
   const source = [
     artifact?.artifactType,
     metadata.format,
@@ -104,44 +106,27 @@ function renderArtifactCard(artifact, lineage) {
   const meta = processMeta(artifact);
   const downloadable = artifact.artifactType !== 'CODE';
   const hasTable = Number(artifact.metadata?.columnCount ?? 0) > 0;
+  const isFile = artifact.artifactType === 'FILE';
   const subtitle = process
     ? meta.label
-    : `${file.label} · ${artifact.metadata?.rowCount ?? 0} 行 · v${artifact.currentVersion}`;
+    : isFile
+      ? `${file.label}${artifact.metadata?.purpose ? ` · ${artifact.metadata.purpose}` : ''}`
+      : `${file.label} · ${artifact.metadata?.rowCount ?? 0} 行 · v${artifact.currentVersion}`;
   return `
       <article class="workspace-artifact-card" data-artifact-id="${escapeAttr(artifact.id)}">
-        <span class="workspace-artifact-file-icon ${escapeAttr(file.className)}">
-          ${icon(file.iconName, file.label)}
-        </span>
         <div class="workspace-artifact-copy">
-          <strong title="${escapeAttr(artifact.title || '问数产物')}">${escapeHtml(artifact.title || '问数产物')}</strong>
+          <a class="workspace-artifact-link" href="#" data-artifact-view="${escapeAttr(artifact.id)}"
+            title="${escapeAttr(artifact.title || '问数产物')}">${escapeHtml(artifact.title || '问数产物')}</a>
           <small title="${escapeAttr(subtitle)}">${escapeHtml(subtitle)}</small>
           ${lineage ? `<small class="workspace-artifact-lineage">上游：${escapeHtml(lineage)}</small>` : ''}
         </div>
-        <div class="workspace-artifact-actions">
-          <button class="btn btn-quiet btn-icon workspace-action-icon" type="button"
-            data-artifact-view="${escapeAttr(artifact.id)}"
-            title="查看产物" aria-label="查看产物">
-            ${icon('eye', '查看产物')}
-          </button>
-          ${downloadable && hasTable ? `
-          <button class="btn btn-quiet btn-icon workspace-action-icon is-csv" type="button"
-            data-artifact-download="${escapeAttr(artifact.id)}" data-format="xlsx"
-            title="下载 Excel 文件" aria-label="下载 Excel 文件">
-            ${icon('file-spreadsheet', '下载 Excel 文件')}
-          </button>
-          <button class="btn btn-quiet btn-icon workspace-action-icon is-csv" type="button"
-            data-artifact-download="${escapeAttr(artifact.id)}" data-format="csv"
-            title="下载 CSV 文件" aria-label="下载 CSV 文件">
-            ${icon('file-spreadsheet', '下载 CSV 文件')}
-          </button>
-          ` : ''}
-          ${downloadable ? `
-          <button class="btn btn-quiet btn-icon workspace-action-icon is-json" type="button"
-            data-artifact-download="${escapeAttr(artifact.id)}" data-format="json"
-            title="下载 JSON 文件" aria-label="下载 JSON 文件">
-            ${icon('file-json', '下载 JSON 文件')}
-          </button>
-          ` : ''}
+        <div class="workspace-artifact-links">
+          ${isFile
+            ? `<a class="workspace-artifact-download" href="#" data-artifact-download="${escapeAttr(artifact.id)}" data-format="${escapeAttr(artifact.metadata?.format ?? 'json')}">下载</a>`
+            : downloadable && hasTable
+              ? `<a class="workspace-artifact-download" href="#" data-artifact-download="${escapeAttr(artifact.id)}" data-format="xlsx">Excel</a>
+                 <a class="workspace-artifact-download" href="#" data-artifact-download="${escapeAttr(artifact.id)}" data-format="csv">CSV</a>`
+              : ''}
         </div>
       </article>
     `;
