@@ -384,6 +384,50 @@ test('agent rejects indicator execution when the theme has a business dataset', 
   ).businessDatasetIds[0]);
 });
 
+test('dataset definition remains available when optional semantic value enrichment fails', async () => {
+  const application = await createApplication(testConfig(), new FakeIndicatorClient());
+  await application.init();
+  const user = application.database.getUserByUsername('east_manager');
+  const dataset = createBusinessDataset(application, user);
+  const theme = application.database.listThemes().find((item) => item.name === '经营总览');
+  application.agent.semanticValues.initializeDataset = async () => {
+    throw new Error('semantic value store unavailable');
+  };
+  let definition = null;
+  const events = [];
+  application.agent.harnessFactory = {
+    forTheme: () => ({
+      mode: 'test-agent',
+      model: 'test-model',
+      capabilities: {},
+      run: async ({ executeTool }) => {
+        definition = await executeTool('get_business_dataset_definition', {
+          datasetId: dataset.id,
+        });
+        return { content: 'schema received', trace: [] };
+      },
+    }),
+  };
+
+  const answer = await application.agent.answer({
+    userId: user.id,
+    themeId: theme.id,
+    question: '上个月销售额是多少',
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.ok(definition.fields.some((field) => (
+    field.name === 'sale_amt'
+    && field.displayName === '销售额'
+    && field.role === 'METRIC'
+    && field.aggregator === 'SUM'
+  )));
+  assert.ok(events.some((event) => event.code === 'SEMANTIC_VALUE_DOMAIN_UNAVAILABLE'));
+  assert.equal(answer.message, 'schema received');
+  await application.businessDatasets.close();
+  await application.database.closeAsync();
+});
+
 for (const dbType of ['DORIS', 'MYSQL', 'TIDB', 'POSTGRESQL']) {
 test(`agent routes and labels the authorized ${dbType} dataset executor`, async () => {
   const application = await createApplication(testConfig());
