@@ -3722,6 +3722,10 @@ body {
   background: var(--surface-3);
 }
 
+.density-seg[hidden] {
+  display: none !important;
+}
+
 .density-option {
   min-height: 26px;
   padding: 4px 12px;
@@ -4104,6 +4108,10 @@ body {
 
   .density-seg {
     display: none;
+  }
+
+  body.is-query-page .density-seg:not([hidden]) {
+    display: inline-flex;
   }
 }
 

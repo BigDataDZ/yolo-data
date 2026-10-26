@@ -576,9 +576,22 @@ export class BusinessDatasetService {
     if (!dataset) {
       throw new Error('dataset not found');
     }
+    const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
+    return this.buildQueryFromMetadata(dataset, fields, request, { probeLimit });
+  }
+
+  async buildQueryAsync(datasetId, request, { probeLimit = false } = {}) {
+    const dataset = await this.getDatasetAsync(datasetId);
+    if (!dataset) {
+      throw new Error('dataset not found');
+    }
+    const fields = await this.getDatasetFieldsAsync(dataset.id, true);
+    return this.buildQueryFromMetadata(dataset, fields, request, { probeLimit });
+  }
+
+  buildQueryFromMetadata(dataset, fields, request, { probeLimit = false } = {}) {
     const dialect = getDialect(dataset.dbType);
     const quoteIdentifier = dialect.quoteIdentifier;
-    const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
     const fieldsByName = new Map(fields.map((field) => [field.fieldName, field]));
     const dimensions = [...new Set((request.dimensions ?? []).map(String))]
       .map((name) => fieldsByName.get(name))
@@ -825,7 +838,7 @@ export class BusinessDatasetService {
     );
     // 多取一行只用于判断「是否真的还有下一行」。恰好返回 limit 行时结果
     // 已经完整，不能把它误报成截断并阻断合计/归因。
-    const compiled = this.buildQuery(datasetId, effectiveRequest, { probeLimit: true });
+    const compiled = await this.buildQueryAsync(datasetId, effectiveRequest, { probeLimit: true });
     const startedAt = Date.now();
     try {
       const [probeRows, fieldPackets] = await (await this.getPoolByIdAsync(compiled.dataset.datasourceId)).query({
