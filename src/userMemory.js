@@ -173,18 +173,13 @@ export class UserMemoryStore {
     const timestamp = nowIso();
     const values = [Number(userId), themeId ? Number(themeId) : null, memoryScopeKey(themeId),
       this.summaryBudget, this.contentBudget, timestamp, timestamp];
-    await this.database.transaction(async (tx) => {
-      const [current] = await tx.query(
-        'SELECT id FROM user_memory_documents WHERE user_id = ? AND scope_key = ?',
-        [Number(userId), memoryScopeKey(themeId)],
-      );
-      if (!current) {
-        await tx.execute(`INSERT INTO user_memory_documents
-          (user_id, theme_id, scope_key, scope_label, summary, content, version, status,
-           summary_budget, content_budget, created_at, updated_at)
-          VALUES (?, ?, ?, '', '', '', 0, 1, ?, ?, ?, ?)`, values);
-      }
-    });
+    const conflict = this.database.backend === 'mysql'
+      ? 'ON DUPLICATE KEY UPDATE id = id'
+      : 'ON CONFLICT (user_id, scope_key) DO NOTHING';
+    await this.database.execute(`INSERT INTO user_memory_documents
+      (user_id, theme_id, scope_key, scope_label, summary, content, version, status,
+       summary_budget, content_budget, created_at, updated_at)
+      VALUES (?, ?, ?, '', '', '', 0, 1, ?, ?, ?, ?) ${conflict}`, values);
     return this.getDocumentByScopeAsync(userId, themeId);
   }
 
