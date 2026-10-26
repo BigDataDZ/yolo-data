@@ -110,7 +110,7 @@ flowchart LR
 - Node.js `>= 22.5`
 - 平台配置： MySQL（默认）或SQLite；通过 `PLATFORM_DB_BACKEND` 选择。MySQL 模式还需配置 `PLATFORM_DB_*`相关参数。
 - npm 或 pnpm
-- Python 3：用于高级数据处理和文件生成。`npm run setup` 会自动初始化环境
+- Python 3.11+： 必须是python3.11以上，用于高级数据处理和文件生成。`npm run setup` 会自动初始化环境
 - 或：Docker + Docker Compose，一条命令启动完整平台，无需本机 Node/Python（见 [Docker 一键部署](#docker-一键部署)）
 - 可选外部服务：
   - Doris 或 MySQL 兼容业务数据库
