@@ -38,7 +38,7 @@ platformDatabase:
   bootstrapResources: true
   mysql:
     # MySQL connection settings / MySQL 连接参数
-    host: "10.0.76.148"
+    host: ""
     port: 3306
     database: yolo-data
     user: datagrouptest
@@ -55,7 +55,7 @@ models:
   # OpenAI-compatible API endpoint / OpenAI 兼容接口地址，生产环境请切换为自己的大模型API和Key
   baseUrl: https://open.bigmodel.cn/api/paas/v4
   # API credential (secret); blank uses local-rule / API 密钥（机密）；有频次限制，并发数1，生产环境请切换为自己的大模型API和Key
-  apiKey: "ENC:/bszXtHZ7XnHkcMg:gwPywjcEmRiC0Cn0faoqMg==:KvPhaz+DQlu+Jx/ng56YhSt9XPwN4/ssYOP6OYIkgUxNd7jAZEcM3Csuz7vGsObZNA=="
+  apiKey: ""  # 留空：模型 Key 在「模型管理」里维护；不要提交 ENC 密文（换机器解不开）
   # Model identifier / 模型标识
   model: GLM-4.7-Flash
   # Sampling temperature / 采样温度

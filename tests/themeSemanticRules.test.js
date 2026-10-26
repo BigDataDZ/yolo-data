@@ -78,6 +78,21 @@ test('malformed lines are reported instead of silently dropped', () => {
   assert.match(issues[3], /无法识别的规则行/);
 });
 
+test('prompt semantics accepts concise field-assignment filters and enum groups', () => {
+  const { policy, issues } = parseSemanticBlock([
+    '```semantics',
+    '过滤: 城市 = 上海、杭州',
+    '枚举组: 业务类型 = 业务1、业务2、业务3',
+    '```',
+  ].join('\n'));
+  assert.deepEqual(issues, []);
+  assert.equal(policy.filters[0].field, '城市');
+  assert.deepEqual(policy.filters[0].aliases, ['上海', '杭州']);
+  assert.deepEqual(policy.filters[0].value, ['上海', '杭州']);
+  assert.equal(policy.enumGroups[0].field, '业务类型');
+  assert.deepEqual(policy.enumGroups[0].values, ['业务1', '业务2', '业务3']);
+});
+
 test('a prompt without the block keeps the stored policy', () => {
   const stored = { metrics: [{ concept: '旧', aliases: ['旧'], target: { type: 'FIELD', field: 'f' } }] };
   const merged = mergeThemeSemanticPolicy('没有声明块的提示词', stored);
