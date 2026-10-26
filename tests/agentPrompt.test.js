@@ -53,3 +53,27 @@ test('session directives are injected into the execution prompt', () => {
   assert.match(prompt, /会话级输出指令/);
   assert.match(prompt, /本会话金额默认按万元展示/);
 });
+
+test('dataset semantic confirmation does not block unfiltered metric aggregation', () => {
+  const prompt = buildSystemPrompt({
+    user: { displayName: 'Tester', username: 'tester' },
+    theme: {
+      name: 'Test theme',
+      systemPrompt: '',
+      description: '',
+      examples: [],
+      semanticPolicy: {},
+    },
+    scope: { rowPolicies: [] },
+    indicators: [],
+    skills: [],
+    analysisMode: { mode: 'METRIC_QUERY' },
+    clarificationPolicy: { allowed: true },
+    taskState: null,
+    question: '上个月的销售额是多少',
+  });
+
+  assert.match(prompt, /数值指标的默认值域\/枚举与无筛选的汇总查询无关/);
+  assert.match(prompt, /“上个月\/上月”表示上一完整自然月/);
+  assert.match(prompt, /本地指标已确认后，若所选数据集存在同名\/同义的 METRIC 字段/);
+});

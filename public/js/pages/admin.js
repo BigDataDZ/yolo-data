@@ -3,6 +3,7 @@ import { renderDataTable } from '../components/table.js';
 import { openDatasetProfiler } from '../components/datasetProfiler.js';
 import { openDatasetFields } from '../components/datasetFields.js';
 import { openUserEditor } from '../components/userEditor.js';
+import { mountPermissionUserList } from '../components/permissionUserList.js';
 import { openDatasourceEditor } from '../components/datasourceEditor.js';
 import { bindDatasetSource } from '../components/datasourceForm.js';
 
@@ -73,34 +74,29 @@ async function renderPermissionsPage(root) {
     state.permissionUserId = users[0]?.id ?? null;
   }
   root.innerHTML = `
-    <div class="two-column">
+    <div class="two-column permissions-layout">
         <aside class="list-pane">
           <div class="list-pane-head">
             <strong>平台用户</strong>
             <span class="list-pane-head-actions">
-              <span class="tag">${users.length}</span>
+              <span class="tag" id="permissionUserCount">${users.length}</span>
               <button class="btn btn-quiet btn-small" id="addUserBtn" type="button">新增用户</button>
             </span>
           </div>
-          <div class="user-list">
-            ${users.map((user) => `
-              <button class="user-item${Number(user.id) === Number(state.permissionUserId) ? ' is-active' : ''}" data-permission-user="${user.id}" type="button">
-                <span class="user-avatar">${escapeHtml(initials(user.displayName))}</span>
-                <span class="user-copy"><strong>${escapeHtml(user.displayName)}</strong><small>${escapeHtml(user.username)} · ${escapeHtml(user.role)}${Number(user.status) === 0 ? ' · 已停用' : ''}</small></span>
-              </button>
-            `).join('')}
-          </div>
+          <div class="permission-user-search-wrap"><input class="field" id="permissionUserSearch" type="search" placeholder="搜索姓名、用户名或角色" aria-label="搜索平台用户" /></div>
+          <div id="permissionUserResults"></div>
         </aside>
         <section class="section-band" id="permissionEditor">
           <div class="loading-state"><span class="spinner"></span>正在读取用户权限</div>
         </section>
     </div>
   `;
-  root.querySelectorAll('[data-permission-user]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.permissionUserId = Number(button.dataset.permissionUser);
-      renderPermissionsPage(root);
-    });
+  mountPermissionUserList(root, users, state, {
+    escapeHtml, initials, formatDate,
+    onSelectionChange: async () => {
+      if (state.permissionUserId) await loadPermissionEditor();
+      else document.getElementById('permissionEditor').innerHTML = emptyState('没有匹配的用户', 'users');
+    },
   });
   document.getElementById('addUserBtn').addEventListener('click', () => openUserEditor(null, {
     onSaved: async () => {
@@ -108,7 +104,8 @@ async function renderPermissionsPage(root) {
       renderPage();
     },
   }));
-  await loadPermissionEditor();
+  if (state.permissionUserId) await loadPermissionEditor();
+  else document.getElementById('permissionEditor').innerHTML = emptyState('暂无平台用户', 'users');
 }
 
 async function renderDatasetsPage(root) {
