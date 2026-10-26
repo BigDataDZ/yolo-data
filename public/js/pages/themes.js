@@ -65,6 +65,8 @@ const {
   visibleExecutionStages,
 } = core;
 
+let themeEditorActionsObserver;
+
 async function renderThemesPage(root) {
   const canManage = isAdminUser();
   root.innerHTML = `
@@ -370,6 +372,16 @@ async function renderThemeEditorPage(root, theme) {
       </footer>
     </div>
   `;
+  themeEditorActionsObserver?.disconnect();
+  const editorPage = root.querySelector('.theme-editor-page');
+  const syncEditorActionsBounds = () => {
+    const bounds = editorPage.getBoundingClientRect();
+    editorPage.style.setProperty('--theme-editor-actions-left', `${bounds.left}px`);
+    editorPage.style.setProperty('--theme-editor-actions-width', `${bounds.width}px`);
+  };
+  syncEditorActionsBounds();
+  themeEditorActionsObserver = new ResizeObserver(syncEditorActionsBounds);
+  themeEditorActionsObserver.observe(editorPage);
   bindSectionTabs(root, navigate, {
     onActiveTab: (tabId) => {
       if (tabId === 'themes') {

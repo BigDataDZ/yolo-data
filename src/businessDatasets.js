@@ -570,6 +570,17 @@ export class BusinessDatasetService {
     const dataset = this.database.getBusinessDataset(datasetId);
     if (!dataset) throw new Error('dataset not found');
     const fields = this.database.listDatasetFields(dataset.id, { enabledOnly: true });
+    return this.buildQueryFromMetadata(dataset, fields, request, options);
+  }
+
+  async buildQueryAsync(datasetId, request, options = {}) {
+    const dataset = await this.getDatasetAsync(datasetId);
+    if (!dataset) throw new Error('dataset not found');
+    const fields = await this.getDatasetFieldsAsync(dataset.id, true);
+    return this.buildQueryFromMetadata(dataset, fields, request, options);
+  }
+
+  buildQueryFromMetadata(dataset, fields, request, options = {}) {
     return buildDatasetQuery(dataset, fields, request, options);
   }
 
@@ -623,7 +634,7 @@ export class BusinessDatasetService {
     );
     // 多取一行只用于判断「是否真的还有下一行」。恰好返回 limit 行时结果
     // 已经完整，不能把它误报成截断并阻断合计/归因。
-    const compiled = buildDatasetQuery(dataset, fields, effectiveRequest, { probeLimit: true });
+    const compiled = await this.buildQueryAsync(datasetId, effectiveRequest, { probeLimit: true });
     const startedAt = Date.now();
     try {
       const [probeRows, fieldPackets] = await (await this.getPoolByIdAsync(compiled.dataset.datasourceId)).query({
