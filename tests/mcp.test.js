@@ -229,6 +229,19 @@ test('async-only platform store supports the complete MCP API key lifecycle', as
   assert.equal(await revokeApiKeyAsync(database, created.keyId), false);
 });
 
+test('MCP key creation preserves explicit scopes on synchronous and SQLite fallback paths', async () => {
+  for (const create of [generateApiKey, generateApiKeyAsync]) {
+    for (const scopes of [['mcp:read'], [], 'custom']) {
+      const db = makeFakeDatabase();
+      const { rawKey } = await create(db, { name: 'scoped', tenantId: 'acme', scopes });
+      assert.deepEqual(validateApiKey(db, rawKey).scopes, scopes);
+    }
+    const db = makeFakeDatabase();
+    const { rawKey } = await create(db, { name: 'default' });
+    assert.equal(validateApiKey(db, rawKey).scopes, 'mcp');
+  }
+});
+
 test('MCP API key list route uses the async-only platform database contract', async () => {
   const table = createRouteTable();
   registerMcpAdminRoutes(table);
