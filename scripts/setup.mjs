@@ -41,7 +41,7 @@ function assertNodeVersion() {
 function installDependencies() {
   info('安装依赖（含 MySQL/Doris 驱动 mysql2）');
   // Windows cannot reliably spawn .cmd files directly (Node may return EINVAL).
-  // Invoke npm.cmd through cmd.exe there; keep direct execution on POSIX.
+  // Run npm.cmd through cmd.exe there; keep direct execution on POSIX.
   const command = process.platform === 'win32'
     ? (process.env.ComSpec || 'cmd.exe')
     : 'npm';
