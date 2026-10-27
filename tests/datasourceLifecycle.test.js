@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PlatformDatabase } from '../src/database.js';
 import { BusinessDatasetService } from '../src/businessDatasets.js';
+import { getActivePoolAsync } from '../src/datasourcePool.js';
 
 const payload = {
   code: 'source', name: 'Source', dbType: 'POSTGRESQL', host: 'old.example',
@@ -17,6 +18,45 @@ function fixture(t) {
   service.createPool = source => ({ host: source.host, end: async () => { closed.push(source.host); } });
   t.after(async () => { await service.close(); await database.closeAsync(); });
   return { database, service, closed };
+}
+
+for (const [mode, getPool] of [
+  ['sync', (service, source) => service.getPool(source)],
+  ['async', (service, source) => {
+    // The in-memory fixture has separate native/async connections; expose its
+    // real persisted rows through the asynchronous repository contract.
+    service.database.dataSourceRepository.getDataSourceAsync = async id => service.database.getDataSource(id);
+    return getActivePoolAsync(service, source);
+  }],
+]) {
+  for (const [field, value] of Object.entries({
+    dbType: 'MYSQL', host: 'new.example', port: 5433, databaseName: 'other',
+    username: 'other', encryptedPassword: 'new-ciphertext', options: { ssl: false },
+  })) {
+    test(`${mode} pool refreshes after another writer changes datasource ${field}`, async t => {
+      const { database, service, closed } = fixture(t);
+      service.createPool = source => ({ source, end: async () => { closed.push(source.host); } });
+      const original = database.saveDataSource(payload);
+      const oldPool = await getPool(service, original);
+      database.saveDataSource({ ...payload, [field]: value }, original.id);
+      const refreshed = await getPool(service, original);
+      assert.notEqual(refreshed, oldPool);
+      assert.deepEqual(refreshed.source[field], value);
+      assert.deepEqual(closed, ['old.example']);
+      assert.equal(await getPool(service, original), refreshed);
+      assert.equal(service.pools.size, 1);
+    });
+  }
+
+  test(`${mode} pool survives non-connection edits from another writer`, async t => {
+    const { database, service, closed } = fixture(t);
+    const original = database.saveDataSource(payload);
+    const pool = await getPool(service, original);
+    database.updateDataSourceTest(original.id, { ok: true, message: 'passed' });
+    database.saveDataSource({ ...payload, name: 'Renamed', options: { ca: 'test-ca', ssl: true } }, original.id);
+    assert.equal(await getPool(service, original), pool);
+    assert.deepEqual(closed, []);
+  });
 }
 
 test('changing a datasource code releases its original connection pool', t => {
