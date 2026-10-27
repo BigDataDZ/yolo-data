@@ -1,13 +1,11 @@
+import { createMcpRuntime } from './runtimePolicy.js';
 // MCP 模块入口：对外暴露 { handle, isEnabled, close }。
 // 负责 API Key 鉴权、Origin 校验、速率限制、请求级上下文注入、原始 body 读取，
 // 并把请求委派给 transport 层。路由处理器只需 await mcp.handle(ctx)。
 import { randomUUID } from 'node:crypto';
-import { createMcpSessionManager } from './transport.js';
-import { createMcpServer } from './server.js';
 import { getMcpConfig, getMcpConfigAsync } from './config.js';
-import { createMcpRateLimiter } from './rateLimit.js';
-import { validateApiKey, validateApiKeyAsync, isOriginAllowed } from './auth.js';
-import { MCP_ERROR, auditToolCall } from './audit.js';
+import { validateApiKeyAsync, isOriginAllowed } from './auth.js';
+import { MCP_ERROR } from './audit.js';
 
 function jsonRpcError(res, status, code, message) {
   res.writeHead(status, { 'content-type': 'application/json' });
@@ -15,43 +13,8 @@ function jsonRpcError(res, status, code, message) {
 }
 
 export function createMcpModule(application) {
-  const { database, agent, workspace, config } = application;
-  let rateLimiter = null;
-  let manager = null;
-  let managerMode = null;
-
-  function ensureRateLimiter(cfg) {
-    if (!rateLimiter) {
-      rateLimiter = createMcpRateLimiter({
-        rpm: cfg.rateLimit?.rpm ?? 60,
-        burst: cfg.rateLimit?.burst ?? 10,
-      });
-    }
-    return rateLimiter;
-  }
-
-  function ensureManager(cfg) {
-    if (!manager || managerMode !== cfg.sessionMode) {
-      rateLimiter = ensureRateLimiter(cfg);
-      manager = createMcpSessionManager({
-        sessionMode: cfg.sessionMode,
-        buildServer: (deps) => createMcpServer({ config: cfg, deps }),
-        buildDeps: () => ({
-          agent,
-          workspace,
-          database,
-          config,
-          rateLimiter,
-          auditToolCall,
-          requestContext: {
-            tenantId: 'default', keyId: null, scopes: ['mcp'], tenantScope: [], requestId: null,
-          },
-        }),
-      });
-      managerMode = cfg.sessionMode;
-    }
-    return manager;
-  }
+  const { database } = application;
+  const runtime = createMcpRuntime(application);
 
   async function handle(ctx) {
     const cfg = await getMcpConfigAsync(database);
@@ -67,7 +30,7 @@ export function createMcpModule(application) {
     if (!isOriginAllowed(ctx.request.headers.origin, cfg.allowedOrigins)) {
       return jsonRpcError(ctx.response, 403, MCP_ERROR.FORBIDDEN, 'Origin 不被允许');
     }
-    const limiter = ensureRateLimiter(cfg);
+    const limiter = runtime.ensureRateLimiter(cfg);
     if (!limiter.check(keyInfo.keyId)) {
       return jsonRpcError(ctx.response, 429, MCP_ERROR.RATE_LIMITED, '请求过于频繁，请稍后重试');
     }
@@ -78,7 +41,7 @@ export function createMcpModule(application) {
       tenantScope: cfg.tenantScope ?? [],
       requestId: randomUUID(),
     };
-    const m = ensureManager(cfg);
+    const m = runtime.ensureManager(cfg);
     // 不预读 body：交由 SDK 的 StreamableHTTPServerTransport 自行读取请求流，
     // 避免流被消费后 SDK 解析到空 body（Parse error）。
     await m.handle(ctx.request, ctx.response, requestContext);
@@ -87,6 +50,6 @@ export function createMcpModule(application) {
   return {
     handle,
     isEnabled: () => getMcpConfig(database).enabled,
-    close: () => manager?.closeAll(),
+    close: () => runtime.close(),
   };
 }
