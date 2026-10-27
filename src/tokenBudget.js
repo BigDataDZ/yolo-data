@@ -1,3 +1,5 @@
+import { readInt, budgetUsageQuery, summarizeBudget } from './tokenBudgetPolicy.js';
+
 // 按用户 / 主题的 Token 成本预算闸门（P0-4）。
 //
 // 现状：LlmAuditService 只把每次调用的 tokenUsage 落库（记录），并不拦截。
@@ -11,11 +13,6 @@
 //   - 依赖 database.sumTokenUsage（见 database.js），与现有审计表共用同一数据源。
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
-
-function readInt(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? '').trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 export class TokenBudgetService {
   constructor(database, { env = process.env, now = () => Date.now() } = {}) {
@@ -40,54 +37,24 @@ export class TokenBudgetService {
   check({ userId, themeId = null, userLimit = 0, themeLimit = 0 } = {}) {
     const limit = this.resolveLimit({ userLimit, themeLimit });
     if (!limit) {
-      return { ok: true, limit: 0, used: 0, remaining: Infinity, enforced: false };
+      return summarizeBudget(limit);
     }
-    const sinceIso = new Date(this.now() - WINDOW_MS).toISOString();
-    const used = this.database.sumTokenUsage({
-      userId: userId ?? null,
-      themeId: themeId ?? null,
-      sinceIso,
-    });
-    const remaining = limit - used;
-    return {
-      ok: remaining > 0,
-      limit,
-      used,
-      remaining: Math.max(0, remaining),
-      enforced: true,
-      window: 'daily',
-    };
+    const used = this.database.sumTokenUsage(
+      budgetUsageQuery(userId, themeId, this.now(), WINDOW_MS),
+    );
+    return summarizeBudget(limit, used);
   }
 
   async checkAsync({ userId, themeId = null, userLimit = 0, themeLimit = 0 } = {}) {
     const limit = this.resolveLimit({ userLimit, themeLimit });
     if (!limit) {
-      return { ok: true, limit: 0, used: 0, remaining: Infinity, enforced: false };
+      return summarizeBudget(limit);
     }
-    const sinceIso = new Date(this.now() - WINDOW_MS).toISOString();
-    const used = await this.database.sumTokenUsageAsync({
-      userId: userId ?? null,
-      themeId: themeId ?? null,
-      sinceIso,
-    });
-    const remaining = limit - used;
-    return {
-      ok: remaining > 0,
-      limit,
-      used,
-      remaining: Math.max(0, remaining),
-      enforced: true,
-      window: 'daily',
-    };
+    const used = await this.database.sumTokenUsageAsync(
+      budgetUsageQuery(userId, themeId, this.now(), WINDOW_MS),
+    );
+    return summarizeBudget(limit, used);
   }
 }
 
-export function tokenBudgetError(used, limit) {
-  const error = new Error(
-    `当前账户/主题的 Token 预算已用尽（已用 ${used} / 限额 ${limit}，按日滚动）。`
-    + '请联系管理员调整预算，或等待周期重置。',
-  );
-  error.statusCode = 429;
-  error.code = 'TOKEN_BUDGET_EXCEEDED';
-  return error;
-}
+export { tokenBudgetError } from './tokenBudgetPolicy.js';
