@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { DEFAULT_PYTHON_BIN } from './config.js';
-import { incrementCounter } from './metrics.js';
+import { recordCodeGateBlock } from './codeGateAudit.js';
 
 const BLOCKED_IMPORTS = [
   'ctypes',
@@ -595,20 +595,7 @@ export class CodeExecutionService {
       validateCode(code);
     } catch (error) {
       // CODE-001 is a hard, auditable gate: record the block before surfacing it.
-      incrementCounter('gate_block_total', {
-        gateId: 'CODE-001',
-        phase: 'EXECUTE',
-        blocking: 'true',
-      });
-      this.database?.addAuditLog?.({
-        userId,
-        action: 'CODE_GATE_BLOCK',
-        detail: {
-          sessionId: sessionId ?? null,
-          code: error.code ?? 'CODE_DATASOURCE_ACCESS_FORBIDDEN',
-          message: error.message,
-        },
-      });
+      await recordCodeGateBlock(this.database, { userId, sessionId, error });
       throw error;
     }
     const runId = crypto.randomUUID();

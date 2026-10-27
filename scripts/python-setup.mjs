@@ -49,6 +49,17 @@ function pythonVersion(pythonBin) {
   return result.status === 0 ? String(result.stdout ?? '').trim() || null : null;
 }
 
+function pythonMeetsMinimum(pythonBin, minimumMajor = 3, minimumMinor = 9) {
+  const result = spawnSync(
+    pythonBin,
+    ['-c', 'import sys; print("%s.%s" % sys.version_info[:2])'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+  if (result.status !== 0) return false;
+  const [major, minor] = String(result.stdout ?? '').trim().split('.').map(Number);
+  return major > minimumMajor || (major === minimumMajor && minor >= minimumMinor);
+}
+
 function createVenv(projectRoot, basePython, onInfo) {
   const venvPath = path.join(projectRoot, VENV_DIRECTORY);
   onInfo(`创建项目 Python 虚拟环境 ${VENV_DIRECTORY}`);
@@ -98,6 +109,14 @@ export function ensurePythonAnalysisRuntime({ projectRoot, confPath, onInfo = ()
     if (!canRunPython(pythonBin)) {
       throw new Error(`虚拟环境已创建，但无法运行 ${pythonBin}。`);
     }
+  }
+
+  if (!pythonMeetsMinimum(pythonBin)) {
+    throw new Error(
+      `当前项目虚拟环境使用 Python ${pythonVersion(pythonBin) ?? '未知版本'}，`
+      + 'pandas 2.3.2 要求 Python >= 3.9。请先将现有 .venv 移走，'
+      + '再用 PYTHON_BIN=/usr/local/python3.11/bin/python3.11 npm run setup 重建。',
+    );
   }
 
   const digest = requirementsDigest(requirementsPath);

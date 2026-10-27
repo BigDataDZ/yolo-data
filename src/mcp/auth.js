@@ -31,8 +31,8 @@ export async function validateApiKeyAsync(database, rawKey) {
   return { keyId: info.keyId, tenantId: info.tenantId, scopes: info.scopes };
 }
 
-export function generateApiKey(database, { name, tenantId, createdBy } = {}) {
-  return database.createMcpApiKey({ name, tenantId, createdBy });
+export function generateApiKey(database, { name, tenantId, createdBy, scopes = 'mcp' } = {}) {
+  return database.createMcpApiKey({ name, tenantId, createdBy, scopes });
 }
 
 export async function generateApiKeyAsync(database, { name, tenantId, createdBy, scopes = 'mcp' } = {}) {
@@ -40,7 +40,7 @@ export async function generateApiKeyAsync(database, { name, tenantId, createdBy,
     if (database?.isAsyncPlatformStore) {
       throw new Error('Async platform database is missing createMcpApiKeyAsync()');
     }
-    return generateApiKey(database, { name, tenantId, createdBy });
+    return generateApiKey(database, { name, tenantId, createdBy, scopes });
   }
   const rawKey = `mcp_${crypto.randomBytes(24).toString('hex')}`;
   const keyHash = hashApiKey(rawKey);
